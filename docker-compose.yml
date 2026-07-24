@@ -1,0 +1,11 @@
+services:
+  marquee:
+    build: .
+    container_name: ${CONTAINER_NAME:-marquee}
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./data:/app/data

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{SITE_NAME}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- SIGN-IN SCREEN -->
+<div id="signin-screen" class="screen">
+  <div class="signin-card">
+    <div class="wordmark">{{SITE_NAME}}</div>
+    <p class="tagline">Uplink to the home network.</p>
+    <button id="plex-signin-btn" class="btn-primary">
+      <span class="signal-dot"></span> Sign in with Plex
+    </button>
+    <p id="signin-status" class="signin-status"></p>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard-screen" class="screen hidden">
+  <div class="frame">
+
+    <!-- HERO MASTHEAD -->
+    <div class="hero">
+      <div class="hero-top">
+        <div class="logo">{{SITE_NAME}}</div>
+        <div class="hero-icons">
+          <button id="search-btn" class="icon-btn" aria-label="Request something">+</button>
+          <div class="avatar-chip">
+            <div class="avatar"></div>
+            <div><div class="avatar-name" id="whoami"></div><div class="avatar-role">Signed in</div></div>
+          </div>
+          <button id="logout-btn" class="icon-btn" aria-label="Sign out">&#8594;</button>
+        </div>
+      </div>
+      <div class="hero-mid">
+        <div>
+          <div class="hero-headline" id="hero-headline">Loading…</div>
+          <div class="hero-sub" id="live-indicator">CH.01 &middot; ON AIR</div>
+        </div>
+        <div class="date-pill">
+          <div class="date-num" id="date-num"></div>
+          <div class="date-txt" id="date-txt"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BENTO GRID -->
+    <div class="bento">
+
+      <section class="card span2" id="panel-now-playing">
+        <div class="card-label"><span class="chan chan-teal">CH.01</span> Now Playing</div>
+        <div id="now-playing-body"><p class="empty-state">Loading…</p></div>
+      </section>
+
+      <section class="card span2" id="panel-airing-today">
+        <div class="card-label"><span class="chan">CH.03</span> Airing Today</div>
+        <div class="poster-grid" id="airing-today-body"><p class="empty-state">Loading…</p></div>
+      </section>
+
+      <section class="card span4" id="panel-recently-added">
+        <div class="card-label"><span class="chan chan-teal">CH.02</span> Recently Added</div>
+        <div id="recently-added-body"><p class="empty-state">Loading…</p></div>
+      </section>
+
+      <section class="card span4" id="panel-upcoming">
+        <div class="card-label"><span class="chan">CH.04</span> Releasing Soon</div>
+        <div class="poster-grid poster-grid-scroll" id="upcoming-body"><p class="empty-state">Loading…</p></div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- REQUEST MODAL -->
+<div id="request-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>Request something</h3>
+      <button id="close-modal-btn" class="btn-ghost">&#10005;</button>
+    </div>
+    <input id="search-input" type="text" placeholder="Search a movie or show…" autocomplete="off">
+    <div id="search-results" class="search-results"></div>
+  </div>
+</div>
+
+<!-- MEDIA INFO MODAL -->
+<div id="info-modal" class="modal hidden">
+  <div class="modal-card info-card">
+    <button id="close-info-btn" class="btn-ghost info-close">&#10005;</button>
+    <div class="info-layout">
+      <img id="info-poster" class="info-poster" src="" onerror="this.style.visibility='hidden'">
+      <div class="info-body">
+        <span id="info-badge" class="chan"></span>
+        <h3 id="info-title"></h3>
+        <p id="info-meta" class="info-meta"></p>
+        <p id="info-overview" class="info-overview"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
