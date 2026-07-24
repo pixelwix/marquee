@@ -1,0 +1,22 @@
+FROM node:20-alpine
+
+RUN apk add --no-cache tzdata
+
+WORKDIR /app
+
+COPY package.json ./
+# connect-sqlite3 pulls in sqlite3, a native module with no prebuilt musl/alpine
+# binary — build it here, then drop the toolchain so it doesn't bloat the image.
+RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+  && npm install --omit=dev \
+  && apk del .build-deps
+
+COPY . .
+
+ENV PORT=4000
+EXPOSE 4000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+  CMD wget -qO- http://localhost:4000/api/auth/me >/dev/null 2>&1 || exit 0
+
+CMD ["node", "server.js"]
