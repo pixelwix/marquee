@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const requireAuth = require('./requireAuth');
+const { imageUrl } = require('../lib/plexImage');
 const router = express.Router();
 
 // Uses the signed-in user's own Plex token (not the admin token) so each family
@@ -17,8 +18,8 @@ router.get('/on-deck', requireAuth, async (req, res) => {
       overview: i.summary || '',
       // For episodes, show the series poster (grandparentThumb) rather than the
       // individual episode still.
-      thumb: (i.grandparentThumb || i.thumb) ? `/api/plex/image?path=${encodeURIComponent(i.grandparentThumb || i.thumb)}` : null,
-      art: (i.grandparentArt || i.art) ? `/api/plex/image?path=${encodeURIComponent(i.grandparentArt || i.art)}` : null,
+      thumb: imageUrl(i.grandparentThumb || i.thumb),
+      art: imageUrl(i.grandparentArt || i.art),
       progress: i.viewOffset && i.duration ? Math.round((i.viewOffset / i.duration) * 100) : 0
     }));
     res.json(items);

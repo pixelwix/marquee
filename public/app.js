@@ -114,7 +114,7 @@ function renderNowPlaying(sessions) {
       <img class="thumb" src="${s.thumb || ''}" onerror="this.style.visibility='hidden'">
       <div style="flex:1; min-width:0;">
         <div class="now-title">${escapeHtml(s.title)}</div>
-        <div class="now-meta"><span class="state-dot ${s.state === 'paused' ? 'paused' : ''}"></span>${escapeHtml(s.user || '')} · ${s.quality || ''} · <span class="state-word">${s.state}</span></div>
+        <div class="now-meta"><span class="${dotClass(s.state === 'paused')}"></span>${escapeHtml(s.user || '')} · ${s.quality || ''} · <span class="state-word">${s.state}</span></div>
         <div class="bar"><div class="bar-fill" style="width:${s.progress}%"></div></div>
       </div>
     </div>
@@ -145,7 +145,7 @@ async function loadContinueWatching() {
           <img class="poster-img" src="${i.thumb || ''}" onerror="this.style.visibility='hidden'">
           <span class="poster-badge">${escapeHtml(i.subtitle || '')}</span>
           <div class="poster-overlay"><span class="poster-overlay-text">${escapeHtml(i.title)}</span></div>
-          <div class="poster-progress"><div class="poster-progress-fill" style="width:${i.progress}%"></div></div>
+          <div class="bar poster-progress"><div class="bar-fill" style="width:${i.progress}%"></div></div>
         </div>
       </div>
     `).join('');
@@ -247,7 +247,7 @@ async function loadDownloads() {
         <div class="dl-row-body">
           <div class="now-title">${escapeHtml(d.name)}</div>
           <div class="now-meta">
-            <span class="state-dot ${d.state === 'downloading' ? '' : 'paused'}"></span>
+            <span class="${dotClass(d.state !== 'downloading')}"></span>
             ${d.type === 'torrent' ? 'Torrent' : 'Usenet'} · ${titleCase(d.state)}${d.speedKbps ? ' · ' + formatSpeed(d.speedKbps) : ''}${d.etaSeconds != null ? ' · ' + formatEta(d.etaSeconds) : ''}
           </div>
           <div class="bar"><div class="bar-fill" style="width:${d.progress}%"></div></div>
@@ -281,7 +281,7 @@ async function loadOwnerStatus() {
         <div class="ups-status">
           <div class="now-title">${escapeHtml(ups.model || 'UPS')}</div>
           <div class="now-meta">
-            <span class="state-dot ${onBattery ? 'paused' : ''}"></span>
+            <span class="${dotClass(onBattery)}"></span>
             ${escapeHtml(formatUpsStatus(ups.status))}${ups.loadPercent != null ? ' · ' + ups.loadPercent + '% load' : ''}${ups.batteryRuntimeSeconds != null ? ' · ' + formatEta(ups.batteryRuntimeSeconds) + ' runtime' : ''}
           </div>
           ${ups.batteryChargePercent != null ? `<div class="bar"><div class="bar-fill" style="width:${ups.batteryChargePercent}%"></div></div>` : ''}
@@ -290,7 +290,7 @@ async function loadOwnerStatus() {
     }
     if (monitors.length) {
       html += `<div class="monitor-pills">${monitors.map(m => `
-        <span class="monitor-pill ${m.status}"><span class="state-dot ${m.status !== 'up' ? 'paused' : ''}"></span>${escapeHtml(m.name)}</span>
+        <span class="monitor-pill ${m.status}"><span class="${dotClass(m.status !== 'up')}"></span>${escapeHtml(m.name)}</span>
       `).join('')}</div>`;
     }
     body.innerHTML = html || '<p class="empty-state">Nothing configured.</p>';
@@ -477,6 +477,9 @@ document.getElementById('upcoming-body').addEventListener('click', e => {
 });
 
 // ---------- Helpers ----------
+function dotClass(bad) {
+  return 'state-dot' + (bad ? ' paused' : '');
+}
 function escapeHtml(str = '') {
   return str.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

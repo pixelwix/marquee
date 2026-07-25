@@ -165,8 +165,8 @@ body {
   padding: 0.18rem 0.4rem; border-radius: 5px; background: rgba(255,255,255,0.85); color: #12151A;
 }
 .poster-meta { font-size: 0.72rem; color: var(--muted); font-family: var(--mono); margin-top: 0.4rem; }
-.poster-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(0,0,0,0.35); }
-.poster-progress-fill { height: 100%; background: var(--amber); }
+/* Positioning modifier for .bar when it overlays a poster instead of sitting inline */
+.poster-progress { position: absolute; left: 0; right: 0; bottom: 0; margin-top: 0; border-radius: 0; height: 4px; background: rgba(0,0,0,0.35); }
 .subsection-label {
   font-family: var(--display); font-size: 0.85rem; font-weight: 600; color: var(--text);
   margin: 0 0 0.6rem; padding-top: 0.2rem;
