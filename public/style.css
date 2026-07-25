@@ -153,16 +153,29 @@ body {
   display: block; font-size: 1.3rem; margin-bottom: 0.3rem;
   filter: drop-shadow(0 2px 3px rgba(224,162,30,0.45));
 }
-.top-month-label { font-family: var(--mono); font-size: 0.64rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.65rem; }
-.top-month-title { font-size: 0.85rem; font-weight: 600; margin-top: 0.2rem; line-height: 1.25; }
+.top-month-label {
+  font-family: var(--mono); font-size: 0.64rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+  margin-top: 0.65rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Fixed to one line so a long title doesn't push that tile's medal rows down
+   relative to the other three — otherwise the silver/bronze rows drift out of
+   alignment across the row of tiles. */
+.top-month-title {
+  font-size: 0.85rem; font-weight: 600; margin-top: 0.2rem; line-height: 1.25;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .top-month-plays { font-family: var(--mono); font-size: 0.7rem; color: var(--gold); margin-top: 0.2rem; }
 
-.medal-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; margin-top: 0.5rem; text-align: left; }
-.medal-row .medal-badge { flex-shrink: 0; font-size: 0.85rem; }
-.medal-row .medal-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.medal-row .medal-plays { font-family: var(--mono); color: var(--muted); flex-shrink: 0; }
-.medal-row.silver .medal-name { color: var(--silver); }
-.medal-row.bronze .medal-name { color: var(--bronze); }
+/* Silver and bronze share a single grid (not two independent flex rows), so the
+   badge/name/plays columns are sized once across both rows and land at
+   identical widths — two separate rows each auto-sizing off their own content
+   is what made them look out of place relative to each other. */
+.medal-rows { display: grid; grid-template-columns: 1.1em 1fr auto; align-items: center; column-gap: 0.4rem; row-gap: 0.4rem; font-size: 0.72rem; margin-top: 0.5rem; text-align: left; }
+.medal-badge { font-size: 0.85rem; text-align: center; }
+.medal-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.medal-plays { font-family: var(--mono); color: var(--muted); }
+.medal-name.silver { color: var(--silver); }
+.medal-name.bronze { color: var(--bronze); }
 
 @media (max-width: 900px) {
   .top-month-grid { grid-template-columns: repeat(2, 1fr); row-gap: 1.5rem; }

@@ -87,28 +87,31 @@ router.get('/recently-added', requireAuth, async (req, res) => {
 
 // Rolling 30-day leaderboard, top 3 (gold/silver/bronze) each: viewer, movie, TV
 // show, anime. Tautulli's top_tv stat combines every "show"-type library
-// together, so TV and Anime are split out here by section_id from that same
-// result rather than two separate API calls.
+// together, so TV and Anime are split out here by section_id rather than two
+// separate calls. Anime gets its own wider 90-day/larger-pool call — it's much
+// lower-volume than regular TV, so a 30-day top-20 combined list usually
+// surfaces only one anime title (regular TV dominates the shared ranking).
 router.get('/top-of-month', requireAuth, async (req, res) => {
   try {
-    const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
-      params: { apikey: process.env.TAUTULLI_API_KEY, cmd: 'get_home_stats', time_range: 30, stats_type: 'plays', stats_count: 20 }
+    const homeStats = (timeRange, statsCount) => axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
+      params: { apikey: process.env.TAUTULLI_API_KEY, cmd: 'get_home_stats', time_range: timeRange, stats_type: 'plays', stats_count: statsCount }
     });
-    const stats = data.response.data || [];
-    const rowsFor = statId => stats.find(s => s.stat_id === statId)?.rows || [];
+    const [main, animeExtended] = await Promise.all([homeStats(30, 20), homeStats(90, 50)]);
+    const rowsFor = (payload, statId) => (payload.data.response.data || []).find(s => s.stat_id === statId)?.rows || [];
     const { TAUTULLI_SECTION_TV, TAUTULLI_SECTION_ANIME } = process.env;
 
-    const tvRows = rowsFor('top_tv');
+    const tvRows = rowsFor(main, 'top_tv');
     const topTv = (TAUTULLI_SECTION_TV
       ? tvRows.filter(r => String(r.section_id) === TAUTULLI_SECTION_TV)
       : tvRows
     ).slice(0, 3);
+    const animeRows = rowsFor(animeExtended, 'top_tv');
     const topAnime = (TAUTULLI_SECTION_ANIME
-      ? tvRows.filter(r => String(r.section_id) === TAUTULLI_SECTION_ANIME)
+      ? animeRows.filter(r => String(r.section_id) === TAUTULLI_SECTION_ANIME)
       : []
     ).slice(0, 3);
-    const topMovies = rowsFor('top_movies').slice(0, 3);
-    const topUsers = rowsFor('top_users').slice(0, 3);
+    const topMovies = rowsFor(main, 'top_movies').slice(0, 3);
+    const topUsers = rowsFor(main, 'top_users').slice(0, 3);
 
     res.json({
       user: topUsers.map(u => ({

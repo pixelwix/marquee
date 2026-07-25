@@ -299,12 +299,12 @@ function renderTopMonthTile(label, items, isUser) {
     `;
   }
   const [first, second, third] = items;
-  const medalRow = (item, medal, cls) => item ? `
-    <div class="medal-row ${cls}">
-      <span class="medal-badge">${medal}</span>
-      <span class="medal-name">${escapeHtml(item.name || item.title)}</span>
-      <span class="medal-plays">${item.plays}</span>
-    </div>
+  // Silver and bronze are flat children of one .medal-rows grid (not two nested
+  // rows) so their badge/name/plays columns are sized together and actually align.
+  const medalCells = (item, medal, cls) => item ? `
+    <span class="medal-badge">${medal}</span>
+    <span class="medal-name ${cls}">${escapeHtml(item.name || item.title)}</span>
+    <span class="medal-plays">${item.plays}</span>
   ` : '';
   return `
     <div class="top-month-tile ${isUser ? 'user' : ''}">
@@ -313,8 +313,10 @@ function renderTopMonthTile(label, items, isUser) {
       <div class="top-month-label">${label}</div>
       <div class="top-month-title">${escapeHtml(first.name || first.title)}</div>
       <div class="top-month-plays">${first.plays} play${first.plays === 1 ? '' : 's'}</div>
-      ${medalRow(second, '🥈', 'silver')}
-      ${medalRow(third, '🥉', 'bronze')}
+      <div class="medal-rows">
+        ${medalCells(second, '🥈', 'silver')}
+        ${medalCells(third, '🥉', 'bronze')}
+      </div>
     </div>
   `;
 }
