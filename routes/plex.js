@@ -15,7 +15,9 @@ router.get('/on-deck', requireAuth, async (req, res) => {
       subtitle: i.type === 'episode' ? `S${i.parentIndex}E${i.index}` : i.year,
       episodeTitle: i.type === 'episode' ? i.title : null,
       overview: i.summary || '',
-      thumb: i.thumb ? `/api/plex/image?path=${encodeURIComponent(i.thumb)}` : null,
+      // For episodes, show the series poster (grandparentThumb) rather than the
+      // individual episode still.
+      thumb: (i.grandparentThumb || i.thumb) ? `/api/plex/image?path=${encodeURIComponent(i.grandparentThumb || i.thumb)}` : null,
       art: (i.grandparentArt || i.art) ? `/api/plex/image?path=${encodeURIComponent(i.grandparentArt || i.art)}` : null,
       progress: i.viewOffset && i.duration ? Math.round((i.viewOffset / i.duration) * 100) : 0
     }));
