@@ -15,30 +15,35 @@ document.getElementById('plex-signin-btn').addEventListener('click', async () =>
   try {
     const { code, clientId } = await api('/api/auth/plex/pin', { method: 'POST' });
     const authUrl = `https://app.plex.tv/auth#?clientID=${clientId}&code=${code}&context[device][product]=skyn3t`;
-    window.open(authUrl, '_blank', 'width=480,height=700');
+    const popup = window.open(authUrl, '_blank', 'width=480,height=700');
     signinStatus.textContent = 'Waiting for approval in the Plex window…';
-    pollSignIn();
+    pollSignIn(popup);
   } catch (e) {
     signinStatus.textContent = 'Could not start sign-in. Try again.';
   }
 });
 
-function pollSignIn() {
+function pollSignIn(popup) {
+  // We can't reach into the popup's content (it's app.plex.tv, cross-origin), but
+  // closing a window you opened is always allowed regardless of origin — Plex's
+  // own page never closes it itself once approval is done, so we do it here.
   const interval = setInterval(async () => {
     try {
       const result = await api('/api/auth/plex/poll');
       if (result.status === 'ok') {
         clearInterval(interval);
+        popup?.close();
         signinStatus.textContent = `Welcome, ${result.user}.`;
         showDashboard(result.isOwner);
       }
     } catch (e) {
       clearInterval(interval);
+      popup?.close();
       signinStatus.textContent = e.message || 'This Plex account does not have access.';
     }
   }, 2000);
   // stop trying after 3 minutes
-  setTimeout(() => clearInterval(interval), 3 * 60 * 1000);
+  setTimeout(() => { clearInterval(interval); popup?.close(); }, 3 * 60 * 1000);
 }
 
 // ---------- Session check on load ----------
