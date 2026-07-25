@@ -17,7 +17,7 @@
 - [x] Now Playing: push updates via Plex WebSocket + SSE instead of 15s polling
 - [x] Download queue panel (qBittorrent / SABnzbd, filtered to in-progress/errored)
 - [ ] "Available now" notifications (Overseerr webhook -> toast / ntfy)
-- [ ] Owner-only controls (Uptime Kuma status, disk space via nut-webgui)
+- [x] Owner-only controls (Uptime Kuma monitor status + UPS status via NUT protocol)
 - [ ] PWA / installable
 
 ## Phase 3 — hardening once public
