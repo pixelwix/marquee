@@ -80,7 +80,7 @@ async function loadNowPlaying() {
   const headline = document.getElementById('hero-headline');
   const indicator = document.getElementById('live-indicator');
   try {
-    const sessions = await api('/api/plex/now-playing');
+    const sessions = await api('/api/tautulli/now-playing');
     store.nowPlaying = sessions;
     headline.textContent = sessions.length
       ? `${sessions.length} stream${sessions.length === 1 ? '' : 's'} live right now`
@@ -243,13 +243,50 @@ document.getElementById('search-results').addEventListener('click', async e => {
 // ---------- Media info modal ----------
 const infoModal = document.getElementById('info-modal');
 
-function openInfo({ poster, title, badge, meta, overview }) {
+function openInfo({ poster, title, badge, meta, overview, stream }) {
   document.getElementById('info-poster').src = poster || '';
   document.getElementById('info-title').textContent = title || '';
   document.getElementById('info-badge').textContent = badge || '';
   document.getElementById('info-meta').textContent = meta || '';
   document.getElementById('info-overview').textContent = overview || 'No synopsis available.';
+
+  const streamEl = document.getElementById('info-stream');
+  if (stream) {
+    streamEl.innerHTML = renderStreamInfo(stream);
+    streamEl.classList.remove('hidden');
+  } else {
+    streamEl.innerHTML = '';
+    streamEl.classList.add('hidden');
+  }
+
   infoModal.classList.remove('hidden');
+}
+
+// Stream info shown on a Now Playing item — sourced from Tautulli, deliberately
+// excludes ip_address (this modal is visible to any signed-in family member).
+function renderStreamInfo(stream) {
+  const rows = [];
+  if (stream.player) {
+    rows.push(['Player', [stream.player, stream.product].filter(Boolean).join(' · ')]);
+  }
+  if (stream.decision) rows.push(['Playback', titleCase(stream.decision)]);
+  const video = [stream.streamResolution, stream.videoCodec?.toUpperCase()].filter(Boolean).join(' ');
+  if (video) {
+    const downscaled = stream.originalResolution && stream.streamResolution && stream.originalResolution !== stream.streamResolution;
+    rows.push(['Video', downscaled ? `${video} (from ${stream.originalResolution})` : video]);
+  }
+  const audio = [stream.audioCodec?.toUpperCase(), stream.audioChannels].filter(Boolean).join(' ');
+  if (audio) rows.push(['Audio', audio]);
+  if (stream.bandwidthKbps) rows.push(['Bandwidth', `${(stream.bandwidthKbps / 1000).toFixed(1)} Mbps`]);
+  if (stream.location) rows.push(['Network', stream.location.toUpperCase()]);
+
+  return rows.map(([label, value]) => `
+    <dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>
+  `).join('');
+}
+
+function titleCase(str) {
+  return str.replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1));
 }
 document.getElementById('close-info-btn').addEventListener('click', () => infoModal.classList.add('hidden'));
 infoModal.addEventListener('click', e => { if (e.target === infoModal) infoModal.classList.add('hidden'); });
@@ -262,7 +299,8 @@ document.getElementById('now-playing-body').addEventListener('click', e => {
   openInfo({
     poster: s.thumb, title: s.title, badge: 'CH.01 · ON AIR',
     meta: `${s.user || ''} · ${s.quality || ''} · ${s.progress}% watched`,
-    overview: s.overview
+    overview: s.overview,
+    stream: s.stream
   });
 });
 
