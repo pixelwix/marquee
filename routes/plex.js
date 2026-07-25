@@ -3,6 +3,29 @@ const axios = require('axios');
 const requireAuth = require('./requireAuth');
 const router = express.Router();
 
+// Uses the signed-in user's own Plex token (not the admin token) so each family
+// member sees their own in-progress/up-next list, not the server owner's.
+router.get('/on-deck', requireAuth, async (req, res) => {
+  try {
+    const { data } = await axios.get(`${process.env.PLEX_SERVER_URL}/library/onDeck`, {
+      headers: { 'X-Plex-Token': req.session.user.plexToken, Accept: 'application/json' }
+    });
+    const items = (data.MediaContainer.Metadata || []).map(i => ({
+      title: i.grandparentTitle || i.title,
+      subtitle: i.type === 'episode' ? `S${i.parentIndex}E${i.index}` : i.year,
+      episodeTitle: i.type === 'episode' ? i.title : null,
+      overview: i.summary || '',
+      thumb: i.thumb ? `/api/plex/image?path=${encodeURIComponent(i.thumb)}` : null,
+      art: (i.grandparentArt || i.art) ? `/api/plex/image?path=${encodeURIComponent(i.grandparentArt || i.art)}` : null,
+      progress: i.viewOffset && i.duration ? Math.round((i.viewOffset / i.duration) * 100) : 0
+    }));
+    res.json(items);
+  } catch (err) {
+    console.error('plex on-deck error:', err.code || err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not reach Plex server' });
+  }
+});
+
 // Only actual Plex thumb/art paths are allowed through — anything else could be used
 // to make arbitrary authenticated GET requests to the Plex server with the admin token.
 const IMAGE_PATH_RE = /^\/library\/metadata\/\d+\/(thumb|art)\/\d+$/;
