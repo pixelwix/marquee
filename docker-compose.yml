@@ -10,7 +10,8 @@ services:
     volumes:
       - ./data:/app/data
       # Optional, for the owner-only status panel: read-only bind mount of Uptime
-      # Kuma's data directory (wherever it lives on your host), so this can read
-      # kuma.db directly. Set UPTIME_KUMA_DB_PATH in .env to match the destination
-      # below. Leave both commented out if you don't use Uptime Kuma.
-      # - /path/to/uptime-kuma/data:/app/uptime-kuma-data:ro
+      # Kuma's data directory, so the app can read kuma.db directly. Set
+      # UPTIME_KUMA_DATA_DIR in .env to Kuma's data dir on the host, and
+      # UPTIME_KUMA_DB_PATH=/app/uptime-kuma-data/kuma.db to match the destination
+      # below. Left unset, this harmlessly re-mounts ./data and the feature stays off.
+      - ${UPTIME_KUMA_DATA_DIR:-./data}:/app/uptime-kuma-data:ro
