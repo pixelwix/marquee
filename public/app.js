@@ -177,7 +177,7 @@ async function loadRecentlyAdded() {
 
     body.innerHTML = sections.map(s => `
       ${s.label ? `<div class="subsection-label">${s.label}</div>` : ''}
-      <div class="poster-grid poster-grid-6" style="margin-bottom:1rem;">
+      <div class="poster-grid" style="margin-bottom:1rem;">
         ${s.items.map((i, idx) => `
           <div class="poster-card" data-cat="${s.key}" data-idx="${idx}">
             <div class="poster-frame">

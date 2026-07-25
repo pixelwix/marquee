@@ -196,7 +196,6 @@ body {
 
 /* ---------- Poster grids ---------- */
 .poster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.85rem; }
-.poster-grid-6 { grid-template-columns: repeat(6, 1fr); }
 .poster-grid-scroll { display: flex; overflow-x: auto; gap: 0.9rem; padding-bottom: 0.3rem; }
 .poster-grid-scroll .poster-card { flex: 0 0 130px; }
 
@@ -228,7 +227,6 @@ body {
   .span1, .span2, .span4 { grid-column: span 4; }
   .bento { grid-template-columns: 1fr; }
   .frame { padding: 1.25rem; }
-  .poster-grid-6 { grid-template-columns: repeat(3, 1fr); }
 }
 
 /* ---------- Modals ---------- */
