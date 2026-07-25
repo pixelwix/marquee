@@ -56,7 +56,9 @@ async function fetchRecentlyAdded(sectionId) {
     type: i.media_type,
     overview: i.summary || '',
     addedAt: Number(i.added_at) * 1000,
-    thumb: i.thumb ? `/api/plex/image?path=${encodeURIComponent(i.thumb)}` : null
+    // For episodes, show the series poster (grandparent_thumb) rather than the
+    // individual episode still — matches what a "recently added" grid should read as.
+    thumb: (i.grandparent_thumb || i.thumb) ? `/api/plex/image?path=${encodeURIComponent(i.grandparent_thumb || i.thumb)}` : null
   }));
 }
 
