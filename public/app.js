@@ -30,7 +30,7 @@ function pollSignIn() {
       if (result.status === 'ok') {
         clearInterval(interval);
         signinStatus.textContent = `Welcome, ${result.user}.`;
-        showDashboard();
+        showDashboard(result.isOwner);
       }
     } catch (e) {
       clearInterval(interval);
@@ -46,13 +46,13 @@ function pollSignIn() {
   try {
     const me = await api('/api/auth/me');
     document.getElementById('whoami').textContent = me.username;
-    showDashboard();
+    showDashboard(me.isOwner);
   } catch (e) {
     signinScreen.classList.remove('hidden');
   }
 })();
 
-function showDashboard() {
+function showDashboard(isOwner) {
   signinScreen.classList.add('hidden');
   dashboardScreen.classList.remove('hidden');
   setHeroDate();
@@ -63,6 +63,11 @@ function showDashboard() {
   loadUpcoming();
   loadDownloads();
   setInterval(loadDownloads, 5000);
+  if (isOwner) {
+    document.getElementById('panel-owner').classList.remove('hidden');
+    loadOwnerStatus();
+    setInterval(loadOwnerStatus, 15000);
+  }
 }
 
 function setHeroDate() {
@@ -262,6 +267,45 @@ function formatEta(seconds) {
   if (seconds >= 3600) return `${Math.round(seconds / 3600)}h left`;
   if (seconds >= 60) return `${Math.round(seconds / 60)}m left`;
   return `${seconds}s left`;
+}
+
+// ---------- Owner Status (owner only — Uptime Kuma + UPS) ----------
+async function loadOwnerStatus() {
+  const body = document.getElementById('owner-body');
+  try {
+    const { monitors, ups } = await api('/api/owner/status');
+    let html = '';
+    if (ups) {
+      const onBattery = ups.status.includes('OB');
+      html += `
+        <div class="ups-status">
+          <div class="now-title">${escapeHtml(ups.model || 'UPS')}</div>
+          <div class="now-meta">
+            <span class="state-dot ${onBattery ? 'paused' : ''}"></span>
+            ${escapeHtml(formatUpsStatus(ups.status))}${ups.loadPercent != null ? ' · ' + ups.loadPercent + '% load' : ''}${ups.batteryRuntimeSeconds != null ? ' · ' + formatEta(ups.batteryRuntimeSeconds) + ' runtime' : ''}
+          </div>
+          ${ups.batteryChargePercent != null ? `<div class="bar"><div class="bar-fill" style="width:${ups.batteryChargePercent}%"></div></div>` : ''}
+        </div>
+      `;
+    }
+    if (monitors.length) {
+      html += `<div class="monitor-pills">${monitors.map(m => `
+        <span class="monitor-pill ${m.status}"><span class="state-dot ${m.status !== 'up' ? 'paused' : ''}"></span>${escapeHtml(m.name)}</span>
+      `).join('')}</div>`;
+    }
+    body.innerHTML = html || '<p class="empty-state">Nothing configured.</p>';
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not reach status sources.</p>';
+  }
+}
+
+function formatUpsStatus(status) {
+  const flags = {
+    OL: 'Online', OB: 'On Battery', LB: 'Low Battery', CHRG: 'Charging', DISCHRG: 'Discharging',
+    RB: 'Replace Battery', BYPASS: 'Bypass', CAL: 'Calibrating', OFF: 'Offline', OVER: 'Overloaded',
+    TRIM: 'Trimming', BOOST: 'Boosting', FSD: 'Forced Shutdown'
+  };
+  return status.split(' ').map(f => flags[f] || f).join(' · ');
 }
 
 // ---------- Request modal ----------
