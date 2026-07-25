@@ -17,8 +17,15 @@ router.get('/queue', requireAuth, async (req, res) => {
   if (usenet.status === 'rejected') {
     console.error('sabnzbd queue error:', usenet.reason.code || usenet.reason.response?.status, usenet.reason.message);
   }
+  // qBittorrent's /torrents/info returns its entire history, including torrents
+  // finished long ago that are just sitting there seeding — only actually-in-
+  // progress items (or ones with a real problem) belong in a "queue" view.
+  // SABnzbd's queue endpoint doesn't have this issue: completed items move to
+  // its separate history endpoint automatically.
+  const torrentItems = (torrents.status === 'fulfilled' ? torrents.value : [])
+    .filter(t => t.progress < 100 || t.state === 'error');
   const items = [
-    ...(torrents.status === 'fulfilled' ? torrents.value : []),
+    ...torrentItems,
     ...(usenet.status === 'fulfilled' ? usenet.value : [])
   ];
   items.sort((a, b) => (STATE_RANK[a.state] ?? 3) - (STATE_RANK[b.state] ?? 3) || b.progress - a.progress);
