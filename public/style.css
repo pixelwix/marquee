@@ -140,8 +140,13 @@ body {
 
 /* Top of the Month leaderboard — #1 gets the big medal frame, #2/#3 are compact
    ranked rows underneath, each color-coded gold/silver/bronze. */
-.top-month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; }
-.top-month-tile { text-align: center; }
+.top-month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; align-items: stretch; }
+/* Flex column so .medal-rows (mt-auto below) can be pinned to the bottom of the
+   card — grid's align-items:stretch already equalizes card height per row, this
+   makes the runner-up list actually sit at that shared bottom edge instead of
+   trailing the artwork, which is what let a short avatar's rows sit higher than
+   a taller poster's rows in the same row of cards. */
+.top-month-tile { display: flex; flex-direction: column; text-align: center; }
 .top-month-frame {
   position: relative; width: 100%; max-width: 92px; aspect-ratio: 2/3; border-radius: 12px; overflow: hidden; margin: 0 auto;
   background: linear-gradient(160deg,#E4E9F2,#CBD6E8);
@@ -170,7 +175,7 @@ body {
    badge/name/plays columns are sized once across both rows and land at
    identical widths — two separate rows each auto-sizing off their own content
    is what made them look out of place relative to each other. */
-.medal-rows { display: grid; grid-template-columns: 1.1em 1fr auto; align-items: center; column-gap: 0.4rem; row-gap: 0.4rem; font-size: 0.72rem; margin-top: 0.5rem; text-align: left; }
+.medal-rows { display: grid; grid-template-columns: 1.1em 1fr auto; align-items: center; column-gap: 0.4rem; row-gap: 0.4rem; font-size: 0.72rem; margin-top: auto; padding-top: 0.5rem; text-align: left; }
 .medal-badge { font-size: 0.85rem; text-align: center; }
 .medal-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .medal-plays { font-family: var(--mono); color: var(--muted); }
