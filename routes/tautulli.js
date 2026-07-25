@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const requireAuth = require('./requireAuth');
+const nowPlaying = require('../lib/nowPlaying');
 const router = express.Router();
 
 // Helper: lists every Plex library Tautulli knows about, with its section_id.
@@ -22,45 +23,21 @@ router.get('/libraries', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/now-playing', requireAuth, async (req, res) => {
-  try {
-    const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
-      params: { apikey: process.env.TAUTULLI_API_KEY, cmd: 'get_activity' }
-    });
-    const sessions = (data.response.data.sessions || []).map(s => ({
-      sessionKey: s.session_key,
-      title: s.grandparent_title ? `${s.grandparent_title} — ${s.title}` : s.title,
-      subtitle: s.media_type === 'episode' ? `S${s.parent_media_index}E${s.media_index}` : s.year,
-      overview: s.summary || '',
-      user: s.friendly_name || s.user,
-      thumb: s.thumb ? `/api/plex/image?path=${encodeURIComponent(s.thumb)}` : null,
-      art: s.art ? `/api/plex/image?path=${encodeURIComponent(s.art)}` : null,
-      progress: Number(s.progress_percent) || 0,
-      state: s.state, // playing | paused | buffering
-      quality: s.stream_video_full_resolution || s.video_full_resolution,
-      // Deliberately excludes ip_address/ip_address_public and email — this is
-      // shown to any signed-in family member, not just the person streaming.
-      stream: {
-        player: s.player,
-        product: s.product,
-        platform: s.platform,
-        decision: s.transcode_decision, // "direct play" | "copy" | "transcode"
-        originalResolution: s.video_full_resolution,
-        streamResolution: s.stream_video_full_resolution,
-        videoCodec: s.stream_video_codec,
-        audioCodec: s.stream_audio_codec,
-        audioChannels: s.stream_audio_channel_layout,
-        container: s.stream_container,
-        bitrateKbps: Number(s.stream_bitrate) || null,
-        bandwidthKbps: Number(s.bandwidth) || null,
-        location: s.location // "wan" | "lan"
-      }
-    }));
-    res.json(sessions);
-  } catch (err) {
-    console.error('tautulli now-playing error:', err.code || err.response?.status, err.message);
-    res.status(502).json({ error: 'Could not reach Tautulli' });
-  }
+// Served from the shared now-playing cache (see lib/nowPlaying.js) rather than
+// hitting Tautulli directly — it's kept fresh by Plex's own push notifications,
+// so this is both instant and just as current.
+router.get('/now-playing', requireAuth, (req, res) => {
+  res.json(nowPlaying.getSnapshot());
+});
+
+// Live updates: an initial "full" event on connect, then "full" (session added/
+// removed) or "update" (progress/state change on an existing session) events as
+// they happen — no polling on the client.
+router.get('/now-playing/stream', requireAuth, (req, res) => {
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+  res.flushHeaders();
+  nowPlaying.addClient(res);
+  req.on('close', () => nowPlaying.removeClient(res));
 });
 
 async function fetchRecentlyAdded(sectionId) {

@@ -35,6 +35,8 @@ app.use(session({
   }
 }));
 
+require('./lib/nowPlaying').start();
+
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/plex', require('./routes/plex'));
 app.use('/api/tautulli', require('./routes/tautulli'));
