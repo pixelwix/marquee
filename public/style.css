@@ -262,6 +262,19 @@ body {
 .request-btn:hover:not(:disabled) { background: rgba(15,143,118,0.1); }
 .request-btn:disabled { border-color: rgba(20,25,35,0.15); color: var(--muted); cursor: default; }
 
+/* Season picker — shown instead of requesting a whole TV show outright */
+.season-picker.hidden { display: none; }
+.season-picker #season-picker-back { padding: 0; margin-bottom: 0.6rem; font-size: 0.8rem; }
+.season-picker h4 { font-family: var(--display); margin: 0 0 0.75rem; font-weight: 600; }
+.season-list { overflow-y: auto; max-height: 40vh; margin-bottom: 1rem; }
+.season-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.55rem 0; font-size: 0.85rem; }
+.season-row + .season-row { border-top: 1px solid rgba(20,25,35,0.08); }
+.season-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--teal); flex-shrink: 0; }
+.season-row-name { flex: 1; }
+.season-row-episodes { font-size: 0.75rem; color: var(--muted); font-family: var(--mono); }
+.season-row-status { font-size: 0.72rem; font-family: var(--mono); color: var(--muted); }
+.season-row.unavailable .season-row-name { color: var(--muted); }
+
 /* Media info modal */
 .info-card { width: min(620px, 92vw); padding: 0; overflow: hidden; position: relative; }
 .info-close { position: absolute; top: 0.85rem; right: 0.85rem; z-index: 2; }

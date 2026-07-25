@@ -368,10 +368,14 @@ function formatUpsStatus(status) {
 // ---------- Request modal ----------
 const modal = document.getElementById('request-modal');
 document.getElementById('search-btn').addEventListener('click', () => {
+  closeSeasonPicker();
   modal.classList.remove('hidden');
   document.getElementById('search-input').focus();
 });
-document.getElementById('close-modal-btn').addEventListener('click', () => modal.classList.add('hidden'));
+document.getElementById('close-modal-btn').addEventListener('click', () => {
+  modal.classList.add('hidden');
+  closeSeasonPicker();
+});
 
 let searchTimer;
 document.getElementById('search-input').addEventListener('input', e => {
@@ -389,7 +393,7 @@ document.getElementById('search-input').addEventListener('input', e => {
             <div class="result-title">${escapeHtml(r.title)}</div>
             <div class="result-year">${r.year || ''} · ${r.mediaType === 'tv' ? 'Series' : 'Movie'}</div>
           </div>
-          <button class="request-btn" data-id="${r.id}" data-type="${r.mediaType}" ${r.status ? 'disabled' : ''}>
+          <button class="request-btn" data-id="${r.id}" data-type="${r.mediaType}" data-title="${escapeHtml(r.title)}" ${r.status ? 'disabled' : ''}>
             ${r.status ? 'Requested' : 'Request'}
           </button>
         </div>
@@ -403,17 +407,98 @@ document.getElementById('search-input').addEventListener('input', e => {
 document.getElementById('search-results').addEventListener('click', async e => {
   const btn = e.target.closest('.request-btn');
   if (!btn || btn.disabled) return;
+  const id = Number(btn.dataset.id);
+  const mediaType = btn.dataset.type;
+
+  // TV shows go through the season picker instead of requesting the whole
+  // series outright — movies have no seasons, so those still request directly.
+  if (mediaType === 'tv') {
+    openSeasonPicker(id, btn.dataset.title, btn);
+    return;
+  }
   btn.disabled = true;
   btn.textContent = '…';
   try {
     await api('/api/overseerr/request', {
       method: 'POST',
-      body: JSON.stringify({ id: Number(btn.dataset.id), mediaType: btn.dataset.type })
+      body: JSON.stringify({ id, mediaType })
     });
     btn.textContent = 'Requested';
   } catch (e) {
     btn.disabled = false;
     btn.textContent = 'Failed — retry';
+  }
+});
+
+// ---------- Season picker ----------
+let seasonPickerContext = null; // { id, button }
+
+async function openSeasonPicker(id, title, button) {
+  const listEl = document.getElementById('season-picker-list');
+  const submitBtn = document.getElementById('season-picker-submit');
+
+  seasonPickerContext = { id, button };
+  document.getElementById('season-picker-title').textContent = title;
+  listEl.innerHTML = '<p class="empty-state">Loading seasons…</p>';
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Request Selected Seasons';
+  document.getElementById('search-results').classList.add('hidden');
+  document.getElementById('search-input').classList.add('hidden');
+  document.getElementById('season-picker').classList.remove('hidden');
+
+  try {
+    const data = await api(`/api/overseerr/tv/${id}`);
+    if (!data.seasons.length) {
+      listEl.innerHTML = '<p class="empty-state">No seasons found.</p>';
+      return;
+    }
+    // Already-available/already-requested seasons are shown but not selectable —
+    // everything else defaults to checked, so "request the whole thing" is still
+    // a single click, but individual seasons can be unchecked first.
+    listEl.innerHTML = data.seasons.map(s => {
+      const handled = s.available || s.requested;
+      const statusText = s.available ? 'Available' : s.requested ? 'Requested' : '';
+      return `
+        <div class="season-row ${handled ? 'unavailable' : ''}">
+          <input type="checkbox" value="${s.seasonNumber}" ${handled ? 'disabled' : 'checked'}>
+          <span class="season-row-name">${escapeHtml(s.name || `Season ${s.seasonNumber}`)}</span>
+          <span class="season-row-episodes">${s.episodeCount} ep</span>
+          ${statusText ? `<span class="season-row-status">${statusText}</span>` : ''}
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    listEl.innerHTML = '<p class="empty-state">Could not load seasons.</p>';
+  }
+}
+
+function closeSeasonPicker() {
+  document.getElementById('season-picker').classList.add('hidden');
+  document.getElementById('search-results').classList.remove('hidden');
+  document.getElementById('search-input').classList.remove('hidden');
+  seasonPickerContext = null;
+}
+
+document.getElementById('season-picker-back').addEventListener('click', closeSeasonPicker);
+
+document.getElementById('season-picker-submit').addEventListener('click', async () => {
+  if (!seasonPickerContext) return;
+  const checked = [...document.querySelectorAll('#season-picker-list input[type="checkbox"]:checked')].map(cb => Number(cb.value));
+  if (!checked.length) return;
+  const submitBtn = document.getElementById('season-picker-submit');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Requesting…';
+  try {
+    await api('/api/overseerr/request', {
+      method: 'POST',
+      body: JSON.stringify({ id: seasonPickerContext.id, mediaType: 'tv', seasons: checked })
+    });
+    seasonPickerContext.button.textContent = 'Requested';
+    seasonPickerContext.button.disabled = true;
+    closeSeasonPicker();
+  } catch (e) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Failed — retry';
   }
 });
 
