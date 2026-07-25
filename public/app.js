@@ -56,12 +56,11 @@ function showDashboard() {
   signinScreen.classList.add('hidden');
   dashboardScreen.classList.remove('hidden');
   setHeroDate();
-  loadNowPlaying();
+  connectNowPlayingStream();
   loadContinueWatching();
   loadRecentlyAdded();
   loadAiringToday();
   loadUpcoming();
-  setInterval(loadNowPlaying, 15000); // keep "live" panel fresh
 }
 
 function setHeroDate() {
@@ -76,35 +75,54 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 });
 
 // ---------- Now Playing ----------
-async function loadNowPlaying() {
+// Driven by Server-Sent Events instead of polling: the server keeps a live
+// connection to Plex's own notification stream, so updates arrive the instant
+// something changes rather than on a fixed interval. "full" events (a session
+// started/stopped) re-render the whole panel; "update" events (progress/state
+// on an existing session) patch just that row in place.
+function connectNowPlayingStream() {
+  const es = new EventSource('/api/tautulli/now-playing/stream');
+  es.addEventListener('full', e => renderNowPlaying(JSON.parse(e.data)));
+  es.addEventListener('update', e => patchNowPlayingRow(JSON.parse(e.data)));
+  // No reconnect logic needed here — EventSource retries automatically, and the
+  // server always sends a fresh "full" snapshot as soon as a connection opens.
+}
+
+function renderNowPlaying(sessions) {
   const body = document.getElementById('now-playing-body');
   const headline = document.getElementById('hero-headline');
   const indicator = document.getElementById('live-indicator');
-  try {
-    const sessions = await api('/api/tautulli/now-playing');
-    store.nowPlaying = sessions;
-    headline.textContent = sessions.length
-      ? `${sessions.length} stream${sessions.length === 1 ? '' : 's'} live right now`
-      : 'Nothing playing right now';
-    indicator.style.visibility = sessions.length ? 'visible' : 'hidden';
-    if (!sessions.length) {
-      body.innerHTML = '<p class="empty-state">Nothing playing right now.</p>';
-      return;
-    }
-    body.innerHTML = sessions.map((s, idx) => `
-      <div class="now-row" data-idx="${idx}">
-        <img class="thumb" src="${s.thumb || ''}" onerror="this.style.visibility='hidden'">
-        <div style="flex:1; min-width:0;">
-          <div class="now-title">${escapeHtml(s.title)}</div>
-          <div class="now-meta"><span class="state-dot ${s.state === 'paused' ? 'paused' : ''}"></span>${escapeHtml(s.user || '')} · ${s.quality || ''} · ${s.state}</div>
-          <div class="bar"><div class="bar-fill" style="width:${s.progress}%"></div></div>
-        </div>
-      </div>
-    `).join('');
-  } catch (e) {
-    headline.textContent = 'Could not reach Plex';
-    body.innerHTML = '<p class="empty-state">Could not reach Plex.</p>';
+
+  store.nowPlaying = sessions;
+  headline.textContent = sessions.length
+    ? `${sessions.length} stream${sessions.length === 1 ? '' : 's'} live right now`
+    : 'Nothing playing right now';
+  indicator.style.visibility = sessions.length ? 'visible' : 'hidden';
+  if (!sessions.length) {
+    body.innerHTML = '<p class="empty-state">Nothing playing right now.</p>';
+    return;
   }
+  body.innerHTML = sessions.map((s, idx) => `
+    <div class="now-row" data-idx="${idx}" data-session-key="${s.sessionKey}">
+      <img class="thumb" src="${s.thumb || ''}" onerror="this.style.visibility='hidden'">
+      <div style="flex:1; min-width:0;">
+        <div class="now-title">${escapeHtml(s.title)}</div>
+        <div class="now-meta"><span class="state-dot ${s.state === 'paused' ? 'paused' : ''}"></span>${escapeHtml(s.user || '')} · ${s.quality || ''} · <span class="state-word">${s.state}</span></div>
+        <div class="bar"><div class="bar-fill" style="width:${s.progress}%"></div></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function patchNowPlayingRow({ sessionKey, state, progress }) {
+  const s = store.nowPlaying.find(x => x.sessionKey === sessionKey);
+  const row = document.querySelector(`.now-row[data-session-key="${sessionKey}"]`);
+  if (!s || !row) return;
+  s.state = state;
+  s.progress = progress;
+  row.querySelector('.state-dot').classList.toggle('paused', state === 'paused');
+  row.querySelector('.state-word').textContent = state;
+  row.querySelector('.bar-fill').style.width = progress + '%';
 }
 
 // ---------- Continue Watching ----------
