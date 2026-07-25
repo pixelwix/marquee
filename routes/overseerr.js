@@ -1,33 +1,24 @@
 const express = require('express');
 const axios = require('axios');
 const requireAuth = require('./requireAuth');
+const overseerrSession = require('../lib/overseerrSession');
 const router = express.Router();
 
-const client = () => axios.create({
+// Search/discovery has no permission-sensitive behavior in Overseerr, so this
+// stays on the simple admin-key client. Request submission does not — see
+// requestAsUser below.
+const adminClient = () => axios.create({
   baseURL: `${process.env.OVERSEERR_URL}/api/v1`,
   headers: { 'X-Api-Key': process.env.OVERSEERR_API_KEY }
 });
 
-// Maps a signed-in Plex account id to its matching Overseerr user id, so requests and
-// "mine" queries can be attributed to the actual family member instead of the API
-// key's default account. Cached per-process since this mapping essentially never
-// changes; a restart is enough to pick up newly-added Overseerr users.
-const overseerrUserIdCache = new Map(); // plexUserId -> overseerrUserId
-
-async function getOverseerrUserId(plexUserId) {
-  const key = String(plexUserId);
-  if (overseerrUserIdCache.has(key)) return overseerrUserIdCache.get(key);
-
-  const { data } = await client().get('/user', { params: { take: 50, sort: 'created' } });
-  for (const u of data.results) {
-    if (u.plexId != null) overseerrUserIdCache.set(String(u.plexId), u.id);
-  }
-  return overseerrUserIdCache.get(key);
-}
-
 router.get('/search', requireAuth, async (req, res) => {
   try {
-    const { data } = await client().get('/search', { params: { query: req.query.q, page: 1 } });
+    // Built manually rather than via axios's `params` — its default serializer
+    // encodes spaces as "+", and this Overseerr instance's strict URL-encoding
+    // validation rejects that (requires literal %20), so any multi-word query
+    // was failing with a 400.
+    const { data } = await adminClient().get(`/search?query=${encodeURIComponent(req.query.q)}&page=1`);
     const results = data.results
       .filter(r => r.mediaType === 'movie' || r.mediaType === 'tv')
       .map(r => ({
@@ -46,13 +37,56 @@ router.get('/search', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/request', requireAuth, async (req, res) => {
-  const { id, mediaType } = req.body;
+// Season list for a TV show, so the request UI can offer specific seasons
+// instead of defaulting to the whole series. mediaInfo.seasons (present once
+// Overseerr knows about the title at all) tells us what's already
+// available/requested so those can be shown as already-handled rather than
+// offered again.
+router.get('/tv/:id', requireAuth, async (req, res) => {
   try {
-    // Ties the request to the signed-in family member for tracking; falls back to the
-    // API key's default account if this Plex user has no matching Overseerr user.
-    const userId = await getOverseerrUserId(req.session.user.id);
-    const { data } = await client().post('/request', { mediaId: id, mediaType, userId });
+    const { data } = await adminClient().get(`/tv/${req.params.id}`);
+    const seasons = (data.seasons || [])
+      .filter(s => s.seasonNumber > 0) // skip "Specials"
+      .map(s => {
+        const info = data.mediaInfo?.seasons?.find(ms => ms.seasonNumber === s.seasonNumber);
+        // Overseerr media status: 4 = partially available, 5 = available
+        const available = info?.status === 4 || info?.status === 5;
+        // 2 = pending, 3 = processing
+        const requested = info?.status === 2 || info?.status === 3;
+        return { seasonNumber: s.seasonNumber, name: s.name, episodeCount: s.episodeCount, available, requested };
+      });
+    res.json({ title: data.name, seasons });
+  } catch (err) {
+    console.error('overseerr tv details error', err.code || err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not reach Overseerr' });
+  }
+});
+
+// Submits the request through the signed-in user's own Overseerr session (not
+// the admin API key) so Overseerr's REQUEST/AUTO_APPROVE permission checks
+// apply to them, not to whoever generated the API key. Retries once with a
+// fresh session if the cached one has expired.
+async function requestAsUser(req, payload, retry = true) {
+  const session = await overseerrSession.getSession(req.session.user.id, req.session.user.plexToken);
+  try {
+    return await axios.post(`${process.env.OVERSEERR_URL}/api/v1/request`, payload, {
+      headers: { Cookie: session.cookie, 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    if (retry && err.response?.status === 401) {
+      overseerrSession.invalidate(req.session.user.id);
+      return requestAsUser(req, payload, false);
+    }
+    throw err;
+  }
+}
+
+router.post('/request', requireAuth, async (req, res) => {
+  const { id, mediaType, seasons } = req.body;
+  try {
+    const payload = { mediaId: id, mediaType };
+    if (mediaType === 'tv') payload.seasons = (seasons && seasons.length) ? seasons : 'all';
+    const { data } = await requestAsUser(req, payload);
     res.json({ status: 'requested', data });
   } catch (err) {
     console.error('overseerr request error', err.response?.data || err.message);
@@ -62,12 +96,11 @@ router.post('/request', requireAuth, async (req, res) => {
 
 router.get('/requests/mine', requireAuth, async (req, res) => {
   try {
-    const overseerrUserId = await getOverseerrUserId(req.session.user.id);
-    const params = { take: 20, sort: 'added' };
-    // If this Plex user has no matching Overseerr user, fall back to the previous
-    // behavior (everyone's requests) rather than erroring.
-    if (overseerrUserId != null) params.requestedBy = overseerrUserId;
-    const { data } = await client().get('/request', { params });
+    const session = await overseerrSession.getSession(req.session.user.id, req.session.user.plexToken);
+    const { data } = await axios.get(`${process.env.OVERSEERR_URL}/api/v1/request`, {
+      params: { take: 20, sort: 'added', requestedBy: session.overseerrUserId },
+      headers: { Cookie: session.cookie }
+    });
     res.json(data.results.map(r => ({
       title: r.media?.title,
       mediaType: r.media?.mediaType,
@@ -75,7 +108,7 @@ router.get('/requests/mine', requireAuth, async (req, res) => {
       requestedAt: r.createdAt
     })));
   } catch (err) {
-    console.error('overseerr requests error', err.message);
+    console.error('overseerr requests error', err.response?.data || err.message);
     res.status(502).json({ error: 'Could not reach Overseerr' });
   }
 });
