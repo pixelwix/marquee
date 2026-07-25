@@ -12,10 +12,6 @@
 - [x] Drop raw Plex `/api/users` XML (PII) from logs
 - [x] Publish as a general-purpose project ("Marquee") on GitHub
 
-## Open question
-- [ ] `example.com` currently routes to the other project (`skyn3t-media`), not
-      this dashboard. Decide before treating this as "live."
-
 ## Phase 2 — new features
 - [x] Continue Watching panel (Plex on-deck, personalized per signed-in user)
 - [x] Now Playing: push updates via Plex WebSocket + SSE instead of 15s polling
@@ -28,3 +24,7 @@
 - [ ] `COOKIE_SECURE=true` once behind HTTPS
 - [ ] Rate-limit `/api/auth/plex/pin` and `/plex/poll`
 - [ ] Drop unused `cors` dependency
+
+## Last: go live
+- [ ] `example.com` currently routes to the other project (`skyn3t-media`), not
+      this dashboard. Fix the routing once everything above is done and tested.
