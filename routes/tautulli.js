@@ -45,7 +45,7 @@ async function fetchRecentlyAdded(sectionId) {
   const params = {
     apikey: process.env.TAUTULLI_API_KEY,
     cmd: 'get_recently_added',
-    count: 12
+    count: 6
   };
   if (sectionId) params.section_id = sectionId;
   const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, { params });
