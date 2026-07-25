@@ -63,12 +63,12 @@ function showDashboard(isOwner) {
   setHeroDate();
   connectNowPlayingStream();
   loadContinueWatching();
+  loadTopOfMonth();
   loadRecentlyAdded();
   loadAiringToday();
   loadUpcoming();
   loadDownloads();
   setInterval(loadDownloads, 5000);
-  loadTopOfMonth();
   if (isOwner) {
     document.getElementById('panel-owner').classList.remove('hidden');
     loadOwnerStatus();
@@ -503,7 +503,7 @@ document.getElementById('recently-added-body').addEventListener('click', e => {
   const i = list[Number(card.dataset.idx)];
   if (!i) return;
   openInfo({
-    poster: i.thumb, title: i.title, badge: 'CH.03 · RECENTLY ADDED',
+    poster: i.thumb, title: i.title, badge: 'CH.04 · RECENTLY ADDED',
     meta: `${i.year || ''} · added ${timeAgo(i.addedAt)}`,
     overview: i.overview
   });
@@ -515,7 +515,7 @@ document.getElementById('airing-today-body').addEventListener('click', e => {
   const i = store.airingToday[Number(card.dataset.idx)];
   if (!i) return;
   openInfo({
-    poster: i.poster, title: `${i.series} — ${i.episode}`, badge: 'CH.04 · AIRING TODAY',
+    poster: i.poster, title: `${i.series} — ${i.episode}`, badge: 'CH.05 · AIRING TODAY',
     meta: `${i.title || ''} · ${i.hasFile ? 'Downloaded' : 'Airing'}`,
     overview: i.overview
   });
@@ -527,7 +527,7 @@ document.getElementById('upcoming-body').addEventListener('click', e => {
   const i = store.upcoming[Number(card.dataset.idx)];
   if (!i) return;
   openInfo({
-    poster: i.poster, title: i.title, badge: 'CH.05 · RELEASING SOON',
+    poster: i.poster, title: i.title, badge: 'CH.06 · RELEASING SOON',
     meta: `Releases ${formatDate(i.releaseDate)}`,
     overview: i.overview
   });
