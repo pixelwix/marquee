@@ -17,7 +17,7 @@
       this dashboard. Decide before treating this as "live."
 
 ## Phase 2 — new features
-- [ ] Continue Watching panel (Plex on-deck)
+- [x] Continue Watching panel (Plex on-deck, personalized per signed-in user)
 - [ ] Download queue panel (qBittorrent / SABnzbd)
 - [ ] "Available now" notifications (Overseerr webhook -> toast / ntfy)
 - [ ] Owner-only controls (Uptime Kuma status, disk space via nut-webgui)
