@@ -15,7 +15,7 @@
 ## Phase 2 — new features
 - [x] Continue Watching panel (Plex on-deck, personalized per signed-in user)
 - [x] Now Playing: push updates via Plex WebSocket + SSE instead of 15s polling
-- [ ] Download queue panel (qBittorrent / SABnzbd)
+- [x] Download queue panel (qBittorrent / SABnzbd, filtered to in-progress/errored)
 - [ ] "Available now" notifications (Overseerr webhook -> toast / ntfy)
 - [ ] Owner-only controls (Uptime Kuma status, disk space via nut-webgui)
 - [ ] PWA / installable
