@@ -207,3 +207,11 @@ body {
 .info-body h3 { font-family: var(--display); font-size: 1.3rem; font-weight: 600; margin: 0.6rem 0 0.3rem; }
 .info-meta { color: var(--muted); font-family: var(--mono); font-size: 0.78rem; margin: 0 0 0.85rem; }
 .info-overview { font-size: 0.9rem; line-height: 1.55; color: #2b3140; margin: 0; }
+.info-stream {
+  margin: 0.9rem 0 0; padding-top: 0.75rem; border-top: 1px solid rgba(20,25,35,0.1);
+  display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 0.75rem;
+  font-family: var(--mono); font-size: 0.76rem;
+}
+.info-stream.hidden { display: none; }
+.info-stream dt { color: var(--muted); }
+.info-stream dd { margin: 0; color: #2b3140; }
