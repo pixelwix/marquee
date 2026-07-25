@@ -61,6 +61,8 @@ function showDashboard() {
   loadRecentlyAdded();
   loadAiringToday();
   loadUpcoming();
+  loadDownloads();
+  setInterval(loadDownloads, 5000);
 }
 
 function setHeroDate() {
@@ -227,6 +229,39 @@ async function loadUpcoming() {
   } catch (e) {
     body.innerHTML = '<p class="empty-state">Could not reach Radarr.</p>';
   }
+}
+
+// ---------- Download Queue ----------
+async function loadDownloads() {
+  const body = document.getElementById('downloads-body');
+  try {
+    const items = await api('/api/downloads/queue');
+    if (!items.length) { body.innerHTML = '<p class="empty-state">Nothing downloading.</p>'; return; }
+    body.innerHTML = items.map(d => `
+      <div class="dl-row">
+        <div class="dl-row-body">
+          <div class="now-title">${escapeHtml(d.name)}</div>
+          <div class="now-meta">
+            <span class="state-dot ${d.state === 'downloading' ? '' : 'paused'}"></span>
+            ${d.type === 'torrent' ? 'Torrent' : 'Usenet'} · ${titleCase(d.state)}${d.speedKbps ? ' · ' + formatSpeed(d.speedKbps) : ''}${d.etaSeconds != null ? ' · ' + formatEta(d.etaSeconds) : ''}
+          </div>
+          <div class="bar"><div class="bar-fill" style="width:${d.progress}%"></div></div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not reach download clients.</p>';
+  }
+}
+
+function formatSpeed(kbps) {
+  return kbps >= 1024 ? `${(kbps / 1024).toFixed(1)} MB/s` : `${kbps} KB/s`;
+}
+
+function formatEta(seconds) {
+  if (seconds >= 3600) return `${Math.round(seconds / 3600)}h left`;
+  if (seconds >= 60) return `${Math.round(seconds / 60)}m left`;
+  return `${seconds}s left`;
 }
 
 // ---------- Request modal ----------

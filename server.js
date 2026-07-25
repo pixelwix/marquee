@@ -43,6 +43,7 @@ app.use('/api/tautulli', require('./routes/tautulli'));
 app.use('/api/sonarr', require('./routes/sonarr'));
 app.use('/api/radarr', require('./routes/radarr'));
 app.use('/api/overseerr', require('./routes/overseerr'));
+app.use('/api/downloads', require('./routes/downloads'));
 
 // index.html carries a {{SITE_NAME}} placeholder so this same image can show a generic
 // "Marquee" brand out of the box, or your own (e.g. via SITE_NAME=skyn3t in .env).
