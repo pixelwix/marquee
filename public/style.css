@@ -7,6 +7,9 @@
   --amber: #E08A1E;
   --teal: #0F8F76;
   --danger: #D64545;
+  --gold: #E0A21E;
+  --silver: #9AA3AF;
+  --bronze: #B87139;
   --display: 'Space Grotesk', sans-serif;
   --body: 'Inter', sans-serif;
   --mono: 'JetBrains Mono', monospace;
@@ -135,23 +138,32 @@ body {
 .dl-row:last-child { border-bottom: none; }
 .dl-row-body { flex: 1; min-width: 0; }
 
-/* Top of the Month leaderboard */
+/* Top of the Month leaderboard — #1 gets the big medal frame, #2/#3 are compact
+   ranked rows underneath, each color-coded gold/silver/bronze. */
 .top-month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; }
 .top-month-tile { text-align: center; }
 .top-month-frame {
   position: relative; width: 100%; aspect-ratio: 2/3; border-radius: 12px; overflow: hidden; margin: 0 auto;
   background: linear-gradient(160deg,#E4E9F2,#CBD6E8);
-  box-shadow: 0 0 0 2px rgba(224,138,30,0.55), 0 14px 26px -14px rgba(224,138,30,0.55);
+  box-shadow: 0 0 0 2px rgba(224,162,30,0.6), 0 14px 26px -14px rgba(224,162,30,0.6);
 }
 .top-month-tile.user .top-month-frame { border-radius: 50%; aspect-ratio: 1/1; width: 74%; }
 .top-month-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.top-month-crown {
+.top-month-medal {
   display: block; font-size: 1.3rem; margin-bottom: 0.3rem;
-  filter: drop-shadow(0 2px 3px rgba(224,138,30,0.4));
+  filter: drop-shadow(0 2px 3px rgba(224,162,30,0.45));
 }
 .top-month-label { font-family: var(--mono); font-size: 0.64rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.65rem; }
 .top-month-title { font-size: 0.85rem; font-weight: 600; margin-top: 0.2rem; line-height: 1.25; }
-.top-month-plays { font-family: var(--mono); font-size: 0.7rem; color: var(--amber); margin-top: 0.2rem; }
+.top-month-plays { font-family: var(--mono); font-size: 0.7rem; color: var(--gold); margin-top: 0.2rem; }
+
+.medal-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; margin-top: 0.5rem; text-align: left; }
+.medal-row .medal-badge { flex-shrink: 0; font-size: 0.85rem; }
+.medal-row .medal-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.medal-row .medal-plays { font-family: var(--mono); color: var(--muted); flex-shrink: 0; }
+.medal-row.silver .medal-name { color: var(--silver); }
+.medal-row.bronze .medal-name { color: var(--bronze); }
+
 @media (max-width: 900px) {
   .top-month-grid { grid-template-columns: repeat(2, 1fr); row-gap: 1.5rem; }
 }

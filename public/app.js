@@ -275,29 +275,48 @@ async function loadTopOfMonth() {
   const body = document.getElementById('top-month-body');
   try {
     const data = await api('/api/tautulli/top-of-month');
-    const tiles = [
-      { key: 'user', label: 'Top Viewer', item: data.user, isUser: true },
-      { key: 'movie', label: 'Top Movie', item: data.movie },
-      { key: 'tv', label: 'Top TV Show', item: data.tv },
-      { key: 'anime', label: 'Top Anime', item: data.anime }
+    const sections = [
+      { label: 'Top Viewer', items: data.user, isUser: true },
+      { label: 'Top Movie', items: data.movie },
+      { label: 'Top TV Show', items: data.tv },
+      { label: 'Top Anime', items: data.anime }
     ];
-    body.innerHTML = tiles.map(t => {
-      const img = t.item ? (t.isUser ? t.item.avatar : t.item.thumb) : null;
-      const name = t.item ? (t.item.name || t.item.title) : null;
-      return `
-        <div class="top-month-tile ${t.isUser ? 'user' : ''}">
-          ${t.item ? '<span class="top-month-crown">👑</span>' : ''}
-          <div class="top-month-frame"><img class="top-month-img" src="${img || ''}" onerror="this.style.visibility='hidden'"></div>
-          <div class="top-month-label">${t.label}</div>
-          ${t.item
-            ? `<div class="top-month-title">${escapeHtml(name)}</div><div class="top-month-plays">${t.item.plays} play${t.item.plays === 1 ? '' : 's'} this month</div>`
-            : '<div class="empty-state">No data yet</div>'}
-        </div>
-      `;
-    }).join('');
+    body.innerHTML = sections.map(s => renderTopMonthTile(s.label, s.items, s.isUser)).join('');
   } catch (e) {
     body.innerHTML = '<p class="empty-state">Could not reach Tautulli.</p>';
   }
+}
+
+// #1 gets the big medal frame; #2/#3 render as compact silver/bronze rows below it.
+function renderTopMonthTile(label, items, isUser) {
+  if (!items || !items.length) {
+    return `
+      <div class="top-month-tile ${isUser ? 'user' : ''}">
+        <div class="top-month-frame"><img class="top-month-img" src="" onerror="this.style.visibility='hidden'"></div>
+        <div class="top-month-label">${label}</div>
+        <div class="empty-state">No data yet</div>
+      </div>
+    `;
+  }
+  const [first, second, third] = items;
+  const medalRow = (item, medal, cls) => item ? `
+    <div class="medal-row ${cls}">
+      <span class="medal-badge">${medal}</span>
+      <span class="medal-name">${escapeHtml(item.name || item.title)}</span>
+      <span class="medal-plays">${item.plays}</span>
+    </div>
+  ` : '';
+  return `
+    <div class="top-month-tile ${isUser ? 'user' : ''}">
+      <span class="top-month-medal">🥇</span>
+      <div class="top-month-frame"><img class="top-month-img" src="${(isUser ? first.avatar : first.thumb) || ''}" onerror="this.style.visibility='hidden'"></div>
+      <div class="top-month-label">${label}</div>
+      <div class="top-month-title">${escapeHtml(first.name || first.title)}</div>
+      <div class="top-month-plays">${first.plays} play${first.plays === 1 ? '' : 's'}</div>
+      ${medalRow(second, '🥈', 'silver')}
+      ${medalRow(third, '🥉', 'bronze')}
+    </div>
+  `;
 }
 
 // ---------- Owner Status (owner only — Uptime Kuma + UPS) ----------

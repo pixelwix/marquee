@@ -85,10 +85,10 @@ router.get('/recently-added', requireAuth, async (req, res) => {
   }
 });
 
-// Rolling 30-day leaderboard: top viewer, top movie, top TV show, top anime.
-// Tautulli's top_tv stat combines every "show"-type library together, so TV and
-// Anime are split out here by section_id from that same result rather than two
-// separate API calls.
+// Rolling 30-day leaderboard, top 3 (gold/silver/bronze) each: viewer, movie, TV
+// show, anime. Tautulli's top_tv stat combines every "show"-type library
+// together, so TV and Anime are split out here by section_id from that same
+// result rather than two separate API calls.
 router.get('/top-of-month', requireAuth, async (req, res) => {
   try {
     const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
@@ -99,25 +99,27 @@ router.get('/top-of-month', requireAuth, async (req, res) => {
     const { TAUTULLI_SECTION_TV, TAUTULLI_SECTION_ANIME } = process.env;
 
     const tvRows = rowsFor('top_tv');
-    const topTv = TAUTULLI_SECTION_TV
-      ? tvRows.find(r => String(r.section_id) === TAUTULLI_SECTION_TV)
-      : tvRows[0];
-    const topAnime = TAUTULLI_SECTION_ANIME
-      ? tvRows.find(r => String(r.section_id) === TAUTULLI_SECTION_ANIME)
-      : null;
-    const topMovie = rowsFor('top_movies')[0];
-    const topUser = rowsFor('top_users')[0];
+    const topTv = (TAUTULLI_SECTION_TV
+      ? tvRows.filter(r => String(r.section_id) === TAUTULLI_SECTION_TV)
+      : tvRows
+    ).slice(0, 3);
+    const topAnime = (TAUTULLI_SECTION_ANIME
+      ? tvRows.filter(r => String(r.section_id) === TAUTULLI_SECTION_ANIME)
+      : []
+    ).slice(0, 3);
+    const topMovies = rowsFor('top_movies').slice(0, 3);
+    const topUsers = rowsFor('top_users').slice(0, 3);
 
     res.json({
-      user: topUser ? {
-        name: topUser.friendly_name || topUser.user,
-        plays: topUser.total_plays,
+      user: topUsers.map(u => ({
+        name: u.friendly_name || u.user,
+        plays: u.total_plays,
         // Already a public plex.tv avatar URL — no proxying needed.
-        avatar: topUser.user_thumb || null
-      } : null,
-      movie: topMovie ? { title: topMovie.title, plays: topMovie.total_plays, thumb: imageUrl(topMovie.thumb) } : null,
-      tv: topTv ? { title: topTv.title, plays: topTv.total_plays, thumb: imageUrl(topTv.thumb) } : null,
-      anime: topAnime ? { title: topAnime.title, plays: topAnime.total_plays, thumb: imageUrl(topAnime.thumb) } : null
+        avatar: u.user_thumb || null
+      })),
+      movie: topMovies.map(m => ({ title: m.title, plays: m.total_plays, thumb: imageUrl(m.thumb) })),
+      tv: topTv.map(t => ({ title: t.title, plays: t.total_plays, thumb: imageUrl(t.thumb) })),
+      anime: topAnime.map(t => ({ title: t.title, plays: t.total_plays, thumb: imageUrl(t.thumb) }))
     });
   } catch (err) {
     console.error('tautulli top-of-month error:', err.code || err.response?.status, err.message);
