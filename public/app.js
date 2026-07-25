@@ -244,7 +244,9 @@ document.getElementById('search-results').addEventListener('click', async e => {
 const infoModal = document.getElementById('info-modal');
 
 function openInfo({ poster, title, badge, meta, overview, stream }) {
-  document.getElementById('info-poster').src = poster || '';
+  const posterEl = document.getElementById('info-poster');
+  posterEl.style.visibility = ''; // undo a previous onerror hide before loading the next poster
+  posterEl.src = poster || '';
   document.getElementById('info-title').textContent = title || '';
   document.getElementById('info-badge').textContent = badge || '';
   document.getElementById('info-meta').textContent = meta || '';
