@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const requireAuth = require('./requireAuth');
 const nowPlaying = require('../lib/nowPlaying');
+const { imageUrl } = require('../lib/plexImage');
 const router = express.Router();
 
 // Helper: lists every Plex library Tautulli knows about, with its section_id.
@@ -58,7 +59,7 @@ async function fetchRecentlyAdded(sectionId) {
     addedAt: Number(i.added_at) * 1000,
     // For episodes, show the series poster (grandparent_thumb) rather than the
     // individual episode still — matches what a "recently added" grid should read as.
-    thumb: (i.grandparent_thumb || i.thumb) ? `/api/plex/image?path=${encodeURIComponent(i.grandparent_thumb || i.thumb)}` : null
+    thumb: imageUrl(i.grandparent_thumb || i.thumb)
   }));
 }
 
