@@ -85,4 +85,44 @@ router.get('/recently-added', requireAuth, async (req, res) => {
   }
 });
 
+// Rolling 30-day leaderboard: top viewer, top movie, top TV show, top anime.
+// Tautulli's top_tv stat combines every "show"-type library together, so TV and
+// Anime are split out here by section_id from that same result rather than two
+// separate API calls.
+router.get('/top-of-month', requireAuth, async (req, res) => {
+  try {
+    const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
+      params: { apikey: process.env.TAUTULLI_API_KEY, cmd: 'get_home_stats', time_range: 30, stats_type: 'plays', stats_count: 20 }
+    });
+    const stats = data.response.data || [];
+    const rowsFor = statId => stats.find(s => s.stat_id === statId)?.rows || [];
+    const { TAUTULLI_SECTION_TV, TAUTULLI_SECTION_ANIME } = process.env;
+
+    const tvRows = rowsFor('top_tv');
+    const topTv = TAUTULLI_SECTION_TV
+      ? tvRows.find(r => String(r.section_id) === TAUTULLI_SECTION_TV)
+      : tvRows[0];
+    const topAnime = TAUTULLI_SECTION_ANIME
+      ? tvRows.find(r => String(r.section_id) === TAUTULLI_SECTION_ANIME)
+      : null;
+    const topMovie = rowsFor('top_movies')[0];
+    const topUser = rowsFor('top_users')[0];
+
+    res.json({
+      user: topUser ? {
+        name: topUser.friendly_name || topUser.user,
+        plays: topUser.total_plays,
+        // Already a public plex.tv avatar URL — no proxying needed.
+        avatar: topUser.user_thumb || null
+      } : null,
+      movie: topMovie ? { title: topMovie.title, plays: topMovie.total_plays, thumb: imageUrl(topMovie.thumb) } : null,
+      tv: topTv ? { title: topTv.title, plays: topTv.total_plays, thumb: imageUrl(topTv.thumb) } : null,
+      anime: topAnime ? { title: topAnime.title, plays: topAnime.total_plays, thumb: imageUrl(topAnime.thumb) } : null
+    });
+  } catch (err) {
+    console.error('tautulli top-of-month error:', err.code || err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not reach Tautulli' });
+  }
+});
+
 module.exports = router;

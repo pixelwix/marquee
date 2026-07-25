@@ -63,6 +63,7 @@ function showDashboard(isOwner) {
   loadUpcoming();
   loadDownloads();
   setInterval(loadDownloads, 5000);
+  loadTopOfMonth();
   if (isOwner) {
     document.getElementById('panel-owner').classList.remove('hidden');
     loadOwnerStatus();
@@ -267,6 +268,36 @@ function formatEta(seconds) {
   if (seconds >= 3600) return `${Math.round(seconds / 3600)}h left`;
   if (seconds >= 60) return `${Math.round(seconds / 60)}m left`;
   return `${seconds}s left`;
+}
+
+// ---------- Top of the Month ----------
+async function loadTopOfMonth() {
+  const body = document.getElementById('top-month-body');
+  try {
+    const data = await api('/api/tautulli/top-of-month');
+    const tiles = [
+      { key: 'user', label: 'Top Viewer', item: data.user, isUser: true },
+      { key: 'movie', label: 'Top Movie', item: data.movie },
+      { key: 'tv', label: 'Top TV Show', item: data.tv },
+      { key: 'anime', label: 'Top Anime', item: data.anime }
+    ];
+    body.innerHTML = tiles.map(t => {
+      const img = t.item ? (t.isUser ? t.item.avatar : t.item.thumb) : null;
+      const name = t.item ? (t.item.name || t.item.title) : null;
+      return `
+        <div class="top-month-tile ${t.isUser ? 'user' : ''}">
+          ${t.item ? '<span class="top-month-crown">👑</span>' : ''}
+          <div class="top-month-frame"><img class="top-month-img" src="${img || ''}" onerror="this.style.visibility='hidden'"></div>
+          <div class="top-month-label">${t.label}</div>
+          ${t.item
+            ? `<div class="top-month-title">${escapeHtml(name)}</div><div class="top-month-plays">${t.item.plays} play${t.item.plays === 1 ? '' : 's'} this month</div>`
+            : '<div class="empty-state">No data yet</div>'}
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not reach Tautulli.</p>';
+  }
 }
 
 // ---------- Owner Status (owner only — Uptime Kuma + UPS) ----------

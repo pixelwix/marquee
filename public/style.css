@@ -135,6 +135,27 @@ body {
 .dl-row:last-child { border-bottom: none; }
 .dl-row-body { flex: 1; min-width: 0; }
 
+/* Top of the Month leaderboard */
+.top-month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; }
+.top-month-tile { text-align: center; }
+.top-month-frame {
+  position: relative; width: 100%; aspect-ratio: 2/3; border-radius: 12px; overflow: hidden; margin: 0 auto;
+  background: linear-gradient(160deg,#E4E9F2,#CBD6E8);
+  box-shadow: 0 0 0 2px rgba(224,138,30,0.55), 0 14px 26px -14px rgba(224,138,30,0.55);
+}
+.top-month-tile.user .top-month-frame { border-radius: 50%; aspect-ratio: 1/1; width: 74%; }
+.top-month-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.top-month-crown {
+  display: block; font-size: 1.3rem; margin-bottom: 0.3rem;
+  filter: drop-shadow(0 2px 3px rgba(224,138,30,0.4));
+}
+.top-month-label { font-family: var(--mono); font-size: 0.64rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.65rem; }
+.top-month-title { font-size: 0.85rem; font-weight: 600; margin-top: 0.2rem; line-height: 1.25; }
+.top-month-plays { font-family: var(--mono); font-size: 0.7rem; color: var(--amber); margin-top: 0.2rem; }
+@media (max-width: 900px) {
+  .top-month-grid { grid-template-columns: repeat(2, 1fr); row-gap: 1.5rem; }
+}
+
 /* Owner-only status panel */
 .ups-status { padding-bottom: 0.85rem; margin-bottom: 0.85rem; border-bottom: 1px solid rgba(20,25,35,0.06); }
 .monitor-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; }
