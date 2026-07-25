@@ -135,6 +135,14 @@ body {
 .dl-row:last-child { border-bottom: none; }
 .dl-row-body { flex: 1; min-width: 0; }
 
+/* Owner-only status panel */
+.ups-status { padding-bottom: 0.85rem; margin-bottom: 0.85rem; border-bottom: 1px solid rgba(20,25,35,0.06); }
+.monitor-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.monitor-pill {
+  display: inline-flex; align-items: center; gap: 0.4rem; font-family: var(--mono); font-size: 0.72rem;
+  padding: 0.3rem 0.6rem; border-radius: 20px; background: rgba(20,25,35,0.04); border: 1px solid rgba(20,25,35,0.08);
+}
+
 /* ---------- Poster grids ---------- */
 .poster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.85rem; }
 .poster-grid-6 { grid-template-columns: repeat(6, 1fr); }
