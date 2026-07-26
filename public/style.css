@@ -483,3 +483,22 @@ body {
 /* Open issues admin rows — reuses .pending-row/.pending-requester/.pending-actions
    from the pending-requests section above; only the reported-message line is new. */
 .issue-message { font-size: 0.78rem; color: var(--text); margin-top: 0.3rem; font-style: italic; }
+
+/* Release search modal (owner only) — list of indexer results for resolving
+   an issue directly, without leaving the dashboard for Sonarr/Radarr. */
+#release-list { flex: 1; min-height: 0; overflow-y: auto; }
+.release-row { display: flex; gap: 0.85rem; align-items: center; padding: 0.65rem 0; }
+.release-row + .release-row { border-top: 1px solid rgba(20,25,35,0.08); }
+.release-row.rejected { opacity: 0.6; }
+.release-info { flex: 1; min-width: 0; }
+.release-title {
+  font-size: 0.82rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.release-meta { font-size: 0.72rem; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+.release-rejections { font-size: 0.7rem; color: var(--danger); margin-top: 2px; }
+.grab-btn {
+  padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--teal);
+  background: transparent; color: var(--teal); font-size: 0.78rem; cursor: pointer; flex-shrink: 0;
+}
+.grab-btn:hover:not(:disabled) { background: rgba(15,143,118,0.1); }
+.grab-btn:disabled { opacity: 0.6; cursor: default; }

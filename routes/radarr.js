@@ -1,6 +1,8 @@
 const express = require('express');
 const axios = require('axios');
 const requireAuth = require('./requireAuth');
+const requireOwner = require('./requireOwner');
+const { mapReleases } = require('../lib/releaseSearch');
 const router = express.Router();
 
 router.get('/upcoming', requireAuth, async (req, res) => {
@@ -27,6 +29,51 @@ router.get('/upcoming', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('radarr error:', err.code || err.response?.status, err.message);
     res.status(502).json({ error: 'Could not reach Radarr' });
+  }
+});
+
+// Owner-only "resolve it right here" flow for a reported media issue: an
+// interactive search against every indexer Radarr knows about, so a bad/wrong
+// release can be replaced without leaving the dashboard. Can legitimately take
+// tens of seconds — this is a live search, not a cached lookup.
+router.get('/releases', requireAuth, requireOwner, async (req, res) => {
+  const tmdbId = Number(req.query.tmdbId);
+  if (!Number.isInteger(tmdbId) || tmdbId <= 0) {
+    return res.status(400).json({ error: 'Invalid tmdbId' });
+  }
+  try {
+    const { data: movies } = await axios.get(`${process.env.RADARR_URL}/api/v3/movie`, {
+      params: { tmdbId },
+      headers: { 'X-Api-Key': process.env.RADARR_API_KEY }
+    });
+    const movie = movies[0];
+    if (!movie) return res.status(404).json({ error: 'Movie not tracked in Radarr' });
+
+    const { data: releases } = await axios.get(`${process.env.RADARR_URL}/api/v3/release`, {
+      params: { movieId: movie.id },
+      headers: { 'X-Api-Key': process.env.RADARR_API_KEY },
+      timeout: 60000
+    });
+    res.json(mapReleases(releases));
+  } catch (err) {
+    console.error('radarr release search error:', err.code || err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not search Radarr indexers' });
+  }
+});
+
+router.post('/releases/grab', requireAuth, requireOwner, async (req, res) => {
+  const { guid, indexerId } = req.body;
+  if (typeof guid !== 'string' || !guid || !Number.isInteger(indexerId)) {
+    return res.status(400).json({ error: 'Invalid release' });
+  }
+  try {
+    await axios.post(`${process.env.RADARR_URL}/api/v3/release`, { guid, indexerId }, {
+      headers: { 'X-Api-Key': process.env.RADARR_API_KEY }
+    });
+    res.json({ status: 'grabbed' });
+  } catch (err) {
+    console.error('radarr grab error:', err.response?.data || err.message);
+    res.status(502).json({ error: err.response?.data?.[0]?.errorMessage || 'Could not grab release' });
   }
 });
 
