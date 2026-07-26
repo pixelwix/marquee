@@ -26,8 +26,6 @@
       shared admin API key
 - [x] Cycling sign-in taglines, configurable per deployment (Skynet-themed for
       example.com)
-- [ ] "Available now" notifications (Overseerr webhook -> toast / ntfy)
-- [ ] PWA / installable
 
 ## Phase 3 — hardening once public (done)
 - [x] `COOKIE_SECURE=true` once behind HTTPS
@@ -36,9 +34,34 @@
 - [x] Drop unused `cors` dependency
 - [x] Baseline security headers (X-Content-Type-Options, X-Frame-Options,
       Referrer-Policy), explicit session cookie sameSite=lax
+- [x] CRITICAL: path traversal in `/api/overseerr/tv/:id` — percent-encoded
+      `/` in the id let any signed-in user pivot the admin-keyed request to
+      arbitrary Overseerr API paths (confirmed reachable: `/settings/main`,
+      leaking Overseerr's own API key). Fixed with numeric-only validation.
 
 ## Live
 - [x] example.com now serves this dashboard directly (skyn3t-media retired).
       Host port made configurable (`HOST_PORT`, mapped to 81) rather than
       hardcoded, container still listens on 4000 internally regardless.
       Verified end-to-end over the real public URL after cutover.
+
+## Phase 4 — post-launch refinements (done)
+- [x] Floating request button: header icon on desktop, FAB on mobile styled
+      like the avatar-chip; cache-busted static assets so Cloudflare's edge
+      cache can't serve stale JS/CSS after a deploy
+- [x] Search results distinguish "already in Plex" (disabled, teal "In Plex")
+      from "already requested" (disabled, muted) instead of treating both the
+      same
+- [x] My Requests tab in the request modal — each family member's own
+      Overseerr request history (title, poster, status: Available /
+      Downloading / Pending Approval / Declined), scoped to their own
+      Overseerr session
+
+## Not yet started
+- [ ] "Available now" notifications (Overseerr webhook -> toast / ntfy)
+- [ ] PWA / installable
+- [ ] Trending/Discover panel
+- [ ] Disk space via Sonarr/Radarr diskspace API
+- [ ] Kid-safe mode
+- [ ] Plex Watchlist integration
+- [ ] Audiobookshelf/Mylar3 integration
