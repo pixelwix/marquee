@@ -240,6 +240,11 @@ body {
      longer row-siblings to stretch-match — flex:1 alone would collapse this to
      ~0 height with nothing to fill against, so cap it to roughly 8 rows instead. */
   #recently-watched-body { flex: none; min-height: 0; max-height: 34rem; overflow-y: auto; }
+  /* Airing Today stays a wrapping grid on desktop (it's usually a handful of
+     items) but scrolls horizontally on mobile like Recently Added/Releasing
+     Soon, rather than wrapping into a tall multi-row block. */
+  #airing-today-body { display: flex; overflow-x: auto; gap: 0.9rem; padding-bottom: 0.3rem; }
+  #airing-today-body .poster-card { flex: 0 0 130px; }
 }
 
 /* ---------- Modals ---------- */
