@@ -70,6 +70,9 @@
       one row per person) + admin-wide pending Overseerr requests with inline
       Approve/Decline, so approvals don't require logging into Overseerr
       separately
+- [x] "Report an issue" (Doesn't play / Wrong audio / Subtitles / Other) from
+      the Now Playing / Recently Watched info popup, backed by Overseerr's own
+      issue system. Admin panel gained an "Open issues" section with Resolve.
 
 ## Not yet started
 - [ ] Trending/Discover panel
