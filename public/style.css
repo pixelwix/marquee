@@ -293,7 +293,13 @@ body {
   display: flex; align-items: flex-start; justify-content: center; padding-top: 8vh; z-index: 20;
 }
 .modal-card {
-  width: min(540px, 90vw); background: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.7);
+  width: min(540px, 90vw);
+  /* .modal-card is a flex item of .modal — without this, a flex item's default
+     min-width:auto lets wide/unstyled content inside (e.g. an unstyled input)
+     force it past the width cap above instead of wrapping/shrinking, which is
+     what pushed the report modal off the right edge on mobile. */
+  min-width: 0;
+  background: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.7);
   border-radius: 16px; padding: 1.4rem; max-height: 78vh; display: flex; flex-direction: column;
   backdrop-filter: blur(24px) saturate(1.5); -webkit-backdrop-filter: blur(24px) saturate(1.5);
   box-shadow: 0 40px 80px -30px rgba(20,25,35,0.45);
@@ -326,12 +332,12 @@ body {
 .browse-row-name { font-size: 0.85rem; font-weight: 600; }
 .browse-row-index { font-size: 0.75rem; color: var(--muted); font-family: var(--mono); }
 
-#search-input {
+#search-input, #report-search-input {
   width: 100%; padding: 0.75rem 0.95rem; background: rgba(255,255,255,0.7);
   border: 1px solid rgba(20,25,35,0.1); border-radius: 9px; color: var(--text);
   font-family: var(--body); font-size: 0.9rem; margin-bottom: 0.85rem;
 }
-#search-input:focus { outline: none; border-color: var(--teal); }
+#search-input:focus, #report-search-input:focus { outline: none; border-color: var(--teal); }
 .search-results { flex: 1; overflow-y: auto; }
 
 .my-requests-list { flex: 1; overflow-y: auto; }
