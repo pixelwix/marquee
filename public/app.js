@@ -119,8 +119,33 @@ function connectNowPlayingStream() {
   const es = new EventSource('/api/tautulli/now-playing/stream');
   es.addEventListener('full', e => renderNowPlaying(JSON.parse(e.data)));
   es.addEventListener('update', e => patchNowPlayingRow(JSON.parse(e.data)));
+  // Unrelated to Now Playing, but this connection is already open to every
+  // dashboard, so Overseerr's "media available" webhook rides the same stream
+  // instead of opening a second one — see lib/sse.js.
+  es.addEventListener('media-available', e => showAvailableToast(JSON.parse(e.data)));
   // No reconnect logic needed here — EventSource retries automatically, and the
   // server always sends a fresh "full" snapshot as soon as a connection opens.
+}
+
+// ---------- "Available now" toast ----------
+function showAvailableToast({ title, poster }) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `
+    <img class="toast-poster" src="${poster || ''}" onerror="this.style.visibility='hidden'">
+    <div class="toast-body">
+      <div class="toast-eyebrow">Available now</div>
+      <div class="toast-title">${escapeHtml(title || 'A request')}</div>
+    </div>
+  `;
+  const dismiss = () => {
+    toast.classList.add('leaving');
+    toast.addEventListener('animationend', () => toast.remove(), { once: true });
+  };
+  toast.addEventListener('click', dismiss);
+  setTimeout(dismiss, 8000);
+  container.prepend(toast);
 }
 
 function renderNowPlaying(sessions) {
