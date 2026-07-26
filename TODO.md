@@ -56,9 +56,13 @@
       Overseerr request history (title, poster, status: Available /
       Downloading / Pending Approval / Declined), scoped to their own
       Overseerr session
+- [x] "Available now" toast — Overseerr's MEDIA_AVAILABLE webhook pushed to
+      every connected dashboard over the existing SSE connection. Overseerr's
+      webhook was already pointed at notify.helmarr.app, so payloads are
+      also forwarded there unchanged (OVERSEERR_WEBHOOK_FORWARD_URL) rather
+      than replacing that integration.
 
 ## Not yet started
-- [ ] "Available now" notifications (Overseerr webhook -> toast / ntfy)
 - [ ] PWA / installable
 - [ ] Trending/Discover panel
 - [ ] Disk space via Sonarr/Radarr diskspace API
