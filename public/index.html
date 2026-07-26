@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script>window.SITE_TAGLINES = {{TAGLINES_JSON}};</script>
 </head>
 <body>
 
@@ -14,7 +15,7 @@
 <div id="signin-screen" class="screen">
   <div class="signin-card">
     <div class="wordmark">{{SITE_NAME}}</div>
-    <p class="tagline">Uplink to the home network.</p>
+    <p class="tagline" id="tagline"></p>
     <button id="plex-signin-btn" class="btn-primary">
       <span class="signal-dot"></span> Sign in with Plex
     </button>
@@ -29,7 +30,10 @@
     <!-- HERO MASTHEAD -->
     <div class="hero">
       <div class="hero-top">
-        <div class="logo">{{SITE_NAME}}</div>
+        <div>
+          <div class="logo">{{SITE_NAME}}</div>
+          <div class="logo-tag" id="header-tag"></div>
+        </div>
         <div class="hero-icons">
           <button id="search-btn" class="icon-btn" aria-label="Request something">+</button>
           <div class="avatar-chip">
