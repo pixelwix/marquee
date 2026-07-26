@@ -2,7 +2,13 @@ const express = require('express');
 const axios = require('axios');
 const requireAuth = require('./requireAuth');
 const overseerrSession = require('../lib/overseerrSession');
+const rateLimit = require('../lib/rateLimit');
 const router = express.Router();
+
+// Unlike the read-only endpoints below, this has a real side effect (creates an
+// actual request against Sonarr/Radarr) — worth capping independent of who's
+// authenticated.
+const requestLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, message: 'Too many requests submitted — try again in a few minutes.' });
 
 // Search/discovery has no permission-sensitive behavior in Overseerr, so this
 // stays on the simple admin-key client. Request submission does not — see
@@ -92,13 +98,16 @@ async function requestAsUser(req, payload, retry = true) {
   }
 }
 
-router.post('/request', requireAuth, async (req, res) => {
+router.post('/request', requireAuth, requestLimiter, async (req, res) => {
   const { id, mediaType, seasons } = req.body;
   try {
     const payload = { mediaId: id, mediaType };
     if (mediaType === 'tv') payload.seasons = (seasons && seasons.length) ? seasons : 'all';
-    const { data } = await requestAsUser(req, payload);
-    res.json({ status: 'requested', data });
+    await requestAsUser(req, payload);
+    // The frontend only needs to know it succeeded — Overseerr's response here
+    // embeds a full User object (email, permission bitmask, etc.), unused by any
+    // caller, so it's not worth forwarding as-is.
+    res.json({ status: 'requested' });
   } catch (err) {
     console.error('overseerr request error', err.response?.data || err.message);
     res.status(502).json({ error: err.response?.data?.message || 'Could not submit request' });
