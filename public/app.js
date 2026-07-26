@@ -409,11 +409,15 @@ function formatUpsStatus(status) {
 
 // ---------- Request modal ----------
 const modal = document.getElementById('request-modal');
-document.getElementById('search-btn').addEventListener('click', () => {
+function openRequestModal() {
   closeSeasonPicker();
   modal.classList.remove('hidden');
   document.getElementById('search-input').focus();
-});
+}
+// Header icon button on desktop, floating button on mobile (see CSS) — both
+// trigger the same modal.
+document.getElementById('search-btn').addEventListener('click', openRequestModal);
+document.getElementById('fab-request-btn').addEventListener('click', openRequestModal);
 document.getElementById('close-modal-btn').addEventListener('click', () => {
   modal.classList.add('hidden');
   closeSeasonPicker();
