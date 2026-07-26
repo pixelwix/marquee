@@ -14,6 +14,9 @@ RUN apk add --no-cache --virtual .build-deps python3 make g++ \
 COPY . .
 
 ENV PORT=4000
+# Express is more defensive by default in production mode — notably, its default
+# (uncaught-error) handler stops including stack traces in responses.
+ENV NODE_ENV=production
 EXPOSE 4000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
