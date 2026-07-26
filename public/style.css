@@ -115,6 +115,10 @@ body {
 @media (max-width: 900px) {
   .fab { display: flex; bottom: 1.25rem; right: 1.25rem; }
   .hero-icons #search-btn { display: none; }
+  /* Reporting stays desktop-header-only — it's a secondary action, and mobile's
+     one FAB is already spoken for by requests. Still reachable on mobile from
+     the info popup on a Now Playing/Recently Watched item. */
+  .hero-icons #report-search-btn { display: none; }
 }
 .avatar-chip {
   display: flex; align-items: center; gap: 0.55rem; padding: 0.35rem 0.7rem 0.35rem 0.35rem;
@@ -303,7 +307,19 @@ body {
 /* Both tab panes sit in the same flex-column .modal-card, so each needs to be
    a flex column itself (min-height:0 so overflow-y:auto below actually kicks
    in instead of the card just growing past its max-height). */
-#search-tab, #myrequests-tab { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#search-tab, #myrequests-tab, #report-search-view, #report-browse-view, #report-form-view {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+}
+
+/* Report modal's browse view (show -> seasons -> episodes) — plain clickable
+   navigation rows, distinct from .season-row's checkbox-select rows in the
+   request modal's season picker. */
+.browse-row { display: flex; align-items: center; gap: 0.85rem; padding: 0.6rem 0; cursor: pointer; }
+.browse-row + .browse-row { border-top: 1px solid rgba(20,25,35,0.08); }
+.browse-row:hover { opacity: 0.85; }
+.browse-row-thumb { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; background: #E2E6EC; flex-shrink: 0; }
+.browse-row-name { font-size: 0.85rem; font-weight: 600; }
+.browse-row-index { font-size: 0.75rem; color: var(--muted); font-family: var(--mono); }
 
 #search-input {
   width: 100%; padding: 0.75rem 0.95rem; background: rgba(255,255,255,0.7);
