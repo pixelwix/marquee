@@ -144,12 +144,12 @@
   <div class="modal-card">
     <div class="modal-head">
       <h3>Request something</h3>
-      <button id="close-modal-btn" class="btn-ghost">&#10005;</button>
+      <button id="close-modal-btn" class="pill-btn pill-btn-icon">&#10005;</button>
     </div>
 
     <div class="modal-tabs">
-      <button id="tab-search-btn" class="modal-tab active">Search</button>
-      <button id="tab-myrequests-btn" class="modal-tab">My Requests</button>
+      <button id="tab-search-btn" class="modal-tab pill-btn active"><span class="state-dot"></span>Search</button>
+      <button id="tab-myrequests-btn" class="modal-tab pill-btn"><span class="state-dot"></span>My Requests</button>
     </div>
 
     <div id="search-tab">
@@ -157,7 +157,7 @@
       <div id="search-results" class="search-results"></div>
 
       <div id="season-picker" class="season-picker hidden">
-        <button id="season-picker-back" class="btn-ghost">&#8592; Back to search</button>
+        <button id="season-picker-back" class="pill-btn"><span class="state-dot paused"></span>&#8592; Back to search</button>
         <h4 id="season-picker-title"></h4>
         <div id="season-picker-list" class="season-list"></div>
         <button id="season-picker-submit" class="btn-primary">Request Selected Seasons</button>
@@ -175,7 +175,7 @@
   <div class="modal-card">
     <div class="modal-head">
       <h3>Report an issue</h3>
-      <button id="close-report-modal-btn" class="btn-ghost">&#10005;</button>
+      <button id="close-report-modal-btn" class="pill-btn pill-btn-icon">&#10005;</button>
     </div>
 
     <div id="report-search-view">
@@ -184,13 +184,13 @@
     </div>
 
     <div id="report-browse-view" class="hidden">
-      <button id="report-browse-back" class="btn-ghost">&#8592; Back to search</button>
+      <button id="report-browse-back" class="pill-btn"><span class="state-dot paused"></span>&#8592; Back to search</button>
       <h4 id="report-browse-title"></h4>
       <div id="report-browse-list" class="season-list"></div>
     </div>
 
     <div id="report-form-view" class="hidden">
-      <button id="report-form-back" class="btn-ghost">&#8592; Back</button>
+      <button id="report-form-back" class="pill-btn"><span class="state-dot paused"></span>&#8592; Back</button>
       <div class="result-item">
         <img id="report-form-poster" class="result-poster" src="" onerror="this.style.visibility='hidden'">
         <div class="result-info">
@@ -199,10 +199,10 @@
         </div>
       </div>
       <div class="report-type-grid">
-        <button class="report-type-btn" data-type="doesnt_play">Doesn't play</button>
-        <button class="report-type-btn" data-type="wrong_audio">Wrong audio</button>
-        <button class="report-type-btn" data-type="subtitles">Subtitles</button>
-        <button class="report-type-btn" data-type="other">Other</button>
+        <button class="report-type-btn pill-btn" data-type="doesnt_play"><span class="state-dot"></span>Doesn't play</button>
+        <button class="report-type-btn pill-btn" data-type="wrong_audio"><span class="state-dot"></span>Wrong audio</button>
+        <button class="report-type-btn pill-btn" data-type="subtitles"><span class="state-dot"></span>Subtitles</button>
+        <button class="report-type-btn pill-btn" data-type="other"><span class="state-dot"></span>Other</button>
       </div>
       <textarea id="report-form-message" placeholder="Any details? (optional)" rows="3"></textarea>
       <button id="report-form-submit" class="btn-primary" disabled>Send report</button>
@@ -217,7 +217,7 @@
   <div class="modal-card">
     <div class="modal-head">
       <h3 id="release-modal-title">Search for a release</h3>
-      <button id="close-release-modal-btn" class="btn-ghost">&#10005;</button>
+      <button id="close-release-modal-btn" class="pill-btn pill-btn-icon">&#10005;</button>
     </div>
     <div id="release-list" class="release-list"><p class="empty-state">Loading…</p></div>
   </div>
@@ -226,7 +226,7 @@
 <!-- MEDIA INFO MODAL -->
 <div id="info-modal" class="modal hidden">
   <div class="modal-card info-card">
-    <button id="close-info-btn" class="btn-ghost info-close">&#10005;</button>
+    <button id="close-info-btn" class="pill-btn pill-btn-icon info-close">&#10005;</button>
     <div class="info-layout">
       <img id="info-poster" class="info-poster" src="" onerror="this.style.visibility='hidden'">
       <div class="info-body">
@@ -237,13 +237,13 @@
         <dl id="info-stream" class="info-stream hidden"></dl>
 
         <div id="info-report-section" class="hidden">
-          <button id="info-report-btn" class="btn-ghost">Report an issue</button>
+          <button id="info-report-btn" class="pill-btn"><span class="state-dot"></span>Report an issue</button>
           <div id="info-report-form" class="report-form hidden">
             <div class="report-type-grid">
-              <button class="report-type-btn" data-type="doesnt_play">Doesn't play</button>
-              <button class="report-type-btn" data-type="wrong_audio">Wrong audio</button>
-              <button class="report-type-btn" data-type="subtitles">Subtitles</button>
-              <button class="report-type-btn" data-type="other">Other</button>
+              <button class="report-type-btn pill-btn" data-type="doesnt_play"><span class="state-dot"></span>Doesn't play</button>
+              <button class="report-type-btn pill-btn" data-type="wrong_audio"><span class="state-dot"></span>Wrong audio</button>
+              <button class="report-type-btn pill-btn" data-type="subtitles"><span class="state-dot"></span>Subtitles</button>
+              <button class="report-type-btn pill-btn" data-type="other"><span class="state-dot"></span>Other</button>
             </div>
             <textarea id="report-message" placeholder="Any details? (optional)" rows="2"></textarea>
             <button id="report-submit-btn" class="btn-primary" disabled>Send report</button>
