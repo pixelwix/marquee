@@ -91,13 +91,7 @@ body {
 /* Floating request button — the primary CTA, so it stays reachable regardless
    of scroll position rather than living in the header icon row. */
 .fab {
-  position: fixed; bottom: 1.75rem; z-index: 15;
-  /* .frame caps out at 1180px and centers itself — on a wide monitor, anchoring
-     to the viewport edge leaves this stranded in empty background far from the
-     actual content. max() tracks the frame's right edge above that width, and
-     falls back to a plain viewport-edge inset once the frame fills the screen
-     (mobile and narrower desktop windows alike). */
-  right: max(1.75rem, calc(50vw - 590px + 1.75rem));
+  position: fixed; bottom: 1.75rem; right: 1.75rem; z-index: 2147483647;
   display: flex; align-items: center; gap: 0.45rem;
   padding: 0.9rem 1.35rem; border-radius: 999px; border: none;
   background: var(--amber); color: #fff; font-family: var(--display); font-weight: 600; font-size: 0.92rem;
