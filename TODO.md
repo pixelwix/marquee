@@ -82,8 +82,11 @@
       search against Radarr/Sonarr's own indexers, grab a replacement
       release right there without opening Sonarr/Radarr separately.
 
+- [x] Trending/Discover — request modal's default view (before typing a
+      search) now shows trending + upcoming movies/TV, filtered to only
+      things not already in the library or already requested
+
 ## Not yet started
-- [ ] Trending/Discover panel
 - [ ] Disk space via Sonarr/Radarr diskspace API
 - [ ] Kid-safe mode
 - [ ] Plex Watchlist integration
