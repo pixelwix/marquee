@@ -421,7 +421,61 @@ document.getElementById('fab-request-btn').addEventListener('click', openRequest
 document.getElementById('close-modal-btn').addEventListener('click', () => {
   modal.classList.add('hidden');
   closeSeasonPicker();
+  document.getElementById('tab-search-btn').click();
 });
+
+// ---------- Request modal tabs ----------
+const tabSearchBtn = document.getElementById('tab-search-btn');
+const tabMyRequestsBtn = document.getElementById('tab-myrequests-btn');
+const searchTab = document.getElementById('search-tab');
+const myRequestsTab = document.getElementById('myrequests-tab');
+let myRequestsLoaded = false;
+
+tabSearchBtn.addEventListener('click', () => {
+  tabSearchBtn.classList.add('active');
+  tabMyRequestsBtn.classList.remove('active');
+  searchTab.classList.remove('hidden');
+  myRequestsTab.classList.add('hidden');
+});
+
+tabMyRequestsBtn.addEventListener('click', () => {
+  tabMyRequestsBtn.classList.add('active');
+  tabSearchBtn.classList.remove('active');
+  myRequestsTab.classList.remove('hidden');
+  searchTab.classList.add('hidden');
+  // Lazy-loaded on first visit to the tab, then left cached for the rest of
+  // this modal session — requests don't change status fast enough to need
+  // refetching every time the tab is reopened within the same visit.
+  if (!myRequestsLoaded) {
+    myRequestsLoaded = true;
+    loadMyRequests();
+  }
+});
+
+async function loadMyRequests() {
+  const listEl = document.getElementById('my-requests-list');
+  try {
+    const results = await api('/api/overseerr/requests/mine');
+    if (!results.length) {
+      listEl.innerHTML = '<p class="empty-state">No requests yet.</p>';
+      return;
+    }
+    const statusText = { available: 'Available', downloading: 'Downloading', pending: 'Pending Approval', declined: 'Declined' };
+    listEl.innerHTML = results.map(r => `
+      <div class="my-request-row">
+        <img class="result-poster" src="${r.poster || ''}" onerror="this.style.visibility='hidden'">
+        <div class="result-info">
+          <div class="result-title">${escapeHtml(r.title || 'Unknown title')}</div>
+          <div class="my-request-status ${r.availability}">
+            <span class="status-dot"></span>${statusText[r.availability] || r.availability}
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    listEl.innerHTML = '<p class="empty-state">Could not load requests.</p>';
+  }
+}
 
 let searchTimer;
 document.getElementById('search-input').addEventListener('input', e => {
