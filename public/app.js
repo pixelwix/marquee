@@ -468,8 +468,8 @@ async function loadPendingRequests() {
           </div>
         </div>
         <div class="pending-actions">
-          <button class="approve-btn">Approve</button>
-          <button class="decline-btn">Decline</button>
+          <button class="approve-btn pill-btn"><span class="state-dot"></span><span class="btn-label">Approve</span></button>
+          <button class="decline-btn pill-btn"><span class="state-dot danger"></span><span class="btn-label">Decline</span></button>
         </div>
       </div>
     `).join('');
@@ -484,7 +484,7 @@ document.getElementById('admin-requests-body').addEventListener('click', async e
   const row = btn.closest('.pending-row');
   const action = btn.classList.contains('approve-btn') ? 'approve' : 'decline';
   row.querySelectorAll('button').forEach(b => b.disabled = true);
-  btn.textContent = '…';
+  btn.querySelector('.btn-label').textContent = '…';
   try {
     await api(`/api/overseerr/requests/${row.dataset.id}/${action}`, { method: 'POST' });
     row.remove();
@@ -493,7 +493,7 @@ document.getElementById('admin-requests-body').addEventListener('click', async e
     }
   } catch (e) {
     row.querySelectorAll('button').forEach(b => b.disabled = false);
-    btn.textContent = action === 'approve' ? 'Approve' : 'Decline';
+    btn.querySelector('.btn-label').textContent = action === 'approve' ? 'Approve' : 'Decline';
   }
 });
 
@@ -516,8 +516,8 @@ async function loadAdminIssues() {
           ${r.message ? `<div class="issue-message">${escapeHtml(r.message)}</div>` : ''}
         </div>
         <div class="pending-actions">
-          <button class="search-release-btn btn-ghost">Search</button>
-          <button class="approve-btn">Resolve</button>
+          <button class="search-release-btn pill-btn"><span class="state-dot"></span><span class="btn-label">Search</span></button>
+          <button class="approve-btn pill-btn"><span class="state-dot"></span><span class="btn-label">Resolve</span></button>
         </div>
       </div>
     `).join('');
@@ -536,7 +536,7 @@ document.getElementById('admin-issues-body').addEventListener('click', async e =
   if (!btn) return;
   const row = btn.closest('.pending-row');
   row.querySelectorAll('button').forEach(b => b.disabled = true);
-  btn.textContent = '…';
+  btn.querySelector('.btn-label').textContent = '…';
   try {
     await api(`/api/overseerr/issues/${row.dataset.id}/resolve`, { method: 'POST' });
     row.remove();
@@ -545,7 +545,7 @@ document.getElementById('admin-issues-body').addEventListener('click', async e =
     }
   } catch (e) {
     row.querySelectorAll('button').forEach(b => b.disabled = false);
-    btn.textContent = 'Resolve';
+    btn.querySelector('.btn-label').textContent = 'Resolve';
   }
 });
 
@@ -586,7 +586,9 @@ async function openReleaseModal(ctx) {
           </div>
           ${r.rejected ? `<div class="release-rejections">${escapeHtml(r.rejections.join(', '))}</div>` : ''}
         </div>
-        <button class="grab-btn" data-guid="${escapeHtml(r.guid)}" data-indexer-id="${r.indexerId}">Grab</button>
+        <button class="grab-btn pill-btn" data-guid="${escapeHtml(r.guid)}" data-indexer-id="${r.indexerId}">
+          <span class="state-dot"></span><span class="btn-label">Grab</span>
+        </button>
       </div>
     `).join('');
   } catch (e) {
@@ -597,16 +599,16 @@ async function openReleaseModal(ctx) {
     const btn = e.target.closest('.grab-btn');
     if (!btn) return;
     btn.disabled = true;
-    btn.textContent = 'Grabbing…';
+    btn.querySelector('.btn-label').textContent = 'Grabbing…';
     try {
       await api(grabUrl, {
         method: 'POST',
         body: JSON.stringify({ guid: btn.dataset.guid, indexerId: Number(btn.dataset.indexerId) })
       });
-      btn.textContent = 'Grabbed ✓';
+      btn.querySelector('.btn-label').textContent = 'Grabbed ✓';
     } catch (err) {
       btn.disabled = false;
-      btn.textContent = 'Grab';
+      btn.querySelector('.btn-label').textContent = 'Grab';
     }
   };
 }
@@ -710,8 +712,9 @@ document.getElementById('search-input').addEventListener('input', e => {
             <div class="result-title">${escapeHtml(r.title)}</div>
             <div class="result-year">${r.year || ''} · ${r.mediaType === 'tv' ? 'Series' : 'Movie'}</div>
           </div>
-          <button class="request-btn ${r.availability === 'available' ? 'available' : ''}" data-id="${r.id}" data-type="${r.mediaType}" data-title="${escapeHtml(r.title)}" ${r.availability !== 'none' ? 'disabled' : ''}>
-            ${r.availability === 'available' ? '✓ In Plex' : r.availability === 'requested' ? 'Requested' : 'Request'}
+          <button class="request-btn pill-btn ${r.availability === 'available' ? 'available' : ''}" data-id="${r.id}" data-type="${r.mediaType}" data-title="${escapeHtml(r.title)}" ${r.availability !== 'none' ? 'disabled' : ''}>
+            <span class="state-dot ${r.availability === 'available' ? '' : 'paused'}"></span>
+            <span class="btn-label">${r.availability === 'available' ? '✓ In Plex' : r.availability === 'requested' ? 'Requested' : 'Request'}</span>
           </button>
         </div>
       `).join('');
@@ -734,16 +737,16 @@ document.getElementById('search-results').addEventListener('click', async e => {
     return;
   }
   btn.disabled = true;
-  btn.textContent = '…';
+  btn.querySelector('.btn-label').textContent = '…';
   try {
     await api('/api/overseerr/request', {
       method: 'POST',
       body: JSON.stringify({ id, mediaType })
     });
-    btn.textContent = 'Requested';
+    btn.querySelector('.btn-label').textContent = 'Requested';
   } catch (e) {
     btn.disabled = false;
-    btn.textContent = 'Failed — retry';
+    btn.querySelector('.btn-label').textContent = 'Failed — retry';
   }
 });
 
@@ -810,7 +813,7 @@ document.getElementById('season-picker-submit').addEventListener('click', async 
       method: 'POST',
       body: JSON.stringify({ id: seasonPickerContext.id, mediaType: 'tv', seasons: checked })
     });
-    seasonPickerContext.button.textContent = 'Requested';
+    seasonPickerContext.button.querySelector('.btn-label').textContent = 'Requested';
     seasonPickerContext.button.disabled = true;
     closeSeasonPicker();
   } catch (e) {

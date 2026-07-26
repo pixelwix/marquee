@@ -62,12 +62,22 @@ body {
 }
 .signal-dot { width: 8px; height: 8px; border-radius: 50%; background: #FFC658; }
 
-.btn-ghost {
-  background: rgba(255,255,255,0.5); border: 1px solid var(--card-border);
-  color: var(--muted); padding: 0.4rem 0.75rem; border-radius: 8px;
-  font-size: 0.82rem; cursor: pointer; backdrop-filter: blur(10px);
+/* Shared pill style for utility/action buttons (close, back, resolve,
+   decline, search, grab, report-type picker, modal tabs) — the same look as
+   .monitor-pill, just clickable. Header icon buttons (.icon-btn) and the
+   mobile FABs (.fab) keep their own distinct treatment, deliberately not
+   converted to this. */
+.pill-btn {
+  display: inline-flex; align-items: center; gap: 0.4rem; font-family: var(--mono); font-size: 0.72rem;
+  padding: 0.3rem 0.6rem; border-radius: 20px; background: rgba(20,25,35,0.04); border: 1px solid rgba(20,25,35,0.08);
+  color: var(--text); cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease;
 }
-.btn-ghost:hover { color: var(--text); border-color: rgba(15,143,118,0.4); }
+.pill-btn:hover:not(:disabled) { background: rgba(20,25,35,0.08); border-color: rgba(20,25,35,0.15); }
+.pill-btn:disabled { opacity: 0.55; cursor: default; }
+/* Icon-only close buttons (✕) — same soft pill background/border, but round
+   rather than an elongated dot+label pill, since there's no label to pair a
+   status dot with. */
+.pill-btn-icon { width: 30px; height: 30px; padding: 0; justify-content: center; border-radius: 50%; }
 
 /* ---------- Hero ---------- */
 .hero {
@@ -169,8 +179,9 @@ body {
 .thumb { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; background: #E2E6EC; flex-shrink: 0; }
 .now-title { font-size: 0.88rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .now-meta { font-size: 0.74rem; color: var(--muted); font-family: var(--mono); margin-top: 2px; display: flex; align-items: center; gap: 0.4rem; }
-.state-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); display: inline-block; }
+.state-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); display: inline-block; flex-shrink: 0; }
 .state-dot.paused { background: var(--muted); }
+.state-dot.danger { background: var(--danger); }
 .bar { height: 5px; background: rgba(20,25,35,0.08); border-radius: 3px; margin-top: 7px; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--amber); }
 
@@ -319,13 +330,10 @@ body {
 .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; }
 .modal-head h3 { font-family: var(--display); margin: 0; font-weight: 600; }
 
-.modal-tabs { display: flex; gap: 1.4rem; border-bottom: 1px solid rgba(20,25,35,0.08); margin-bottom: 0.85rem; }
-.modal-tab {
-  background: none; border: none; padding: 0 0 0.6rem; margin-bottom: -1px;
-  font-family: var(--body); font-size: 0.85rem; font-weight: 600; color: var(--muted);
-  border-bottom: 2px solid transparent; cursor: pointer;
-}
-.modal-tab.active { color: var(--teal); border-bottom-color: var(--teal); }
+.modal-tabs { display: flex; gap: 0.5rem; margin-bottom: 0.85rem; }
+.modal-tab .state-dot { background: var(--muted); }
+.modal-tab.active .state-dot { background: var(--teal); }
+.modal-tab.active { color: var(--text); border-color: rgba(15,143,118,0.35); background: rgba(15,143,118,0.08); }
 
 /* Both tab panes sit in the same flex-column .modal-card, so each needs to be
    a flex column itself (min-height:0 so overflow-y:auto below actually kicks
@@ -366,17 +374,9 @@ body {
 .result-info { flex: 1; }
 .result-title { font-size: 0.87rem; font-weight: 600; }
 .result-year { font-size: 0.75rem; color: var(--muted); font-family: var(--mono); }
-.request-btn {
-  padding: 0.42rem 0.85rem; border-radius: 8px; border: 1px solid var(--teal);
-  background: transparent; color: var(--teal); font-size: 0.78rem; cursor: pointer;
-}
-.request-btn:hover:not(:disabled) { background: rgba(15,143,118,0.1); }
-.request-btn:disabled { border-color: rgba(20,25,35,0.15); color: var(--muted); cursor: default; }
-.request-btn.available:disabled { border-color: rgba(15,143,118,0.35); background: rgba(15,143,118,0.08); color: var(--teal); }
-
 /* Season picker — shown instead of requesting a whole TV show outright */
 .season-picker.hidden { display: none; }
-.season-picker #season-picker-back { padding: 0; margin-bottom: 0.6rem; font-size: 0.8rem; }
+.season-picker #season-picker-back { margin-bottom: 0.6rem; }
 .season-picker h4 { font-family: var(--display); margin: 0 0 0.75rem; font-weight: 600; }
 .season-list { overflow-y: auto; max-height: 40vh; margin-bottom: 1rem; }
 .season-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.55rem 0; font-size: 0.85rem; }
@@ -449,26 +449,14 @@ body {
 .pending-requester { display: flex; align-items: center; gap: 0.35rem; margin-top: 3px; font-size: 0.74rem; color: var(--muted); font-family: var(--mono); }
 .pending-requester img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; background: #E2E6EC; }
 .pending-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
-.approve-btn, .decline-btn {
-  padding: 0.4rem 0.75rem; border-radius: 8px; border: 1px solid; background: transparent;
-  font-size: 0.78rem; cursor: pointer;
-}
-.approve-btn { border-color: var(--teal); color: var(--teal); }
-.approve-btn:hover:not(:disabled) { background: rgba(15,143,118,0.1); }
-.decline-btn { border-color: var(--danger); color: var(--danger); }
-.decline-btn:hover:not(:disabled) { background: rgba(214,69,69,0.1); }
-.approve-btn:disabled, .decline-btn:disabled { opacity: 0.5; cursor: default; }
 
 /* "Report an issue" — inline sub-form on the media info modal. */
 #info-report-section { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid rgba(20,25,35,0.1); }
 .report-form { margin-top: 0.75rem; }
 .report-type-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-bottom: 0.6rem; }
-.report-type-btn {
-  padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid rgba(20,25,35,0.15);
-  background: transparent; color: var(--text); font-size: 0.8rem; cursor: pointer;
-}
-.report-type-btn:hover { border-color: var(--teal); }
-.report-type-btn.selected { border-color: var(--teal); background: rgba(15,143,118,0.1); color: var(--teal); }
+.report-type-btn .state-dot { background: var(--muted); }
+.report-type-btn.selected .state-dot { background: var(--teal); }
+.report-type-btn.selected { color: var(--teal); border-color: rgba(15,143,118,0.35); background: rgba(15,143,118,0.08); }
 #report-message {
   width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.7);
   border: 1px solid rgba(20,25,35,0.1); border-radius: 9px; color: var(--text);
@@ -496,9 +484,4 @@ body {
 }
 .release-meta { font-size: 0.72rem; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
 .release-rejections { font-size: 0.7rem; color: var(--danger); margin-top: 2px; }
-.grab-btn {
-  padding: 0.4rem 0.8rem; border-radius: 8px; border: 1px solid var(--teal);
-  background: transparent; color: var(--teal); font-size: 0.78rem; cursor: pointer; flex-shrink: 0;
-}
-.grab-btn:hover:not(:disabled) { background: rgba(15,143,118,0.1); }
-.grab-btn:disabled { opacity: 0.6; cursor: default; }
+.grab-btn { flex-shrink: 0; }
