@@ -57,11 +57,10 @@ app.use('/api/downloads', require('./routes/downloads'));
 app.use('/api/owner', require('./routes/owner'));
 
 // index.html carries a {{SITE_NAME}} placeholder so this same image can show a generic
-// "Marquee" brand out of the box, or your own (e.g. via SITE_NAME=skyn3t in .env).
+// "Marquee" brand out of the box, or your own (e.g. via SITE_NAME=MyPlexHub in .env).
 const siteName = process.env.SITE_NAME || 'Marquee';
 // Pipe-separated so a deployment can brand the sign-in screen with its own personality
-// (e.g. skyn3t.me leaning into its Skynet namesake) without touching the code — the
-// generic default is intentionally plain.
+// without touching the code — the generic default is intentionally plain.
 const taglines = (process.env.SITE_TAGLINES || 'Uplink to the home network.').split('|');
 const taglinesJson = JSON.stringify(taglines).replace(/</g, '\\u003c');
 // Cloudflare overrides our origin's Cache-Control for .js/.css with its own
@@ -88,8 +87,8 @@ app.get('/', (req, res) => {
   res.type('html').send(renderedHtml);
 });
 // Same {{SITE_NAME}} templating as index.html, so an installed PWA's home-screen
-// label matches whatever this deployment is branded as (e.g. skyn3t.me) instead
-// of the generic default baked into the static file.
+// label matches whatever this deployment is branded as instead of the generic
+// default baked into the static file.
 app.get('/manifest.webmanifest', (req, res) => {
   res.set('Cache-Control', 'no-cache');
   res.type('application/manifest+json').send(renderedManifest);

@@ -6,7 +6,7 @@ const loginLog = require('../lib/loginLog');
 const router = express.Router();
 
 const PLEX_HEADERS = {
-  'X-Plex-Product': 'skyn3t',
+  'X-Plex-Product': 'Marquee',
   'X-Plex-Client-Identifier': process.env.PLEX_CLIENT_ID,
   'Accept': 'application/json'
 };

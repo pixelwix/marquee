@@ -24,8 +24,7 @@
 - [x] Season picker for TV requests (was requesting every season by default) +
       requests now go through each user's own Overseerr permissions, not the
       shared admin API key
-- [x] Cycling sign-in taglines, configurable per deployment (Skynet-themed for
-      skyn3t.me)
+- [x] Cycling sign-in taglines, configurable per deployment
 
 ## Phase 3 — hardening once public (done)
 - [x] `COOKIE_SECURE=true` once behind HTTPS
@@ -40,7 +39,7 @@
       leaking Overseerr's own API key). Fixed with numeric-only validation.
 
 ## Live
-- [x] skyn3t.me now serves this dashboard directly (skyn3t-media retired).
+- [x] Marquee now serves this dashboard directly (previous dashboard retired).
       Host port made configurable (`HOST_PORT`, mapped to 81) rather than
       hardcoded, container still listens on 4000 internally regardless.
       Verified end-to-end over the real public URL after cutover.
