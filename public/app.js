@@ -439,8 +439,8 @@ document.getElementById('search-input').addEventListener('input', e => {
             <div class="result-title">${escapeHtml(r.title)}</div>
             <div class="result-year">${r.year || ''} · ${r.mediaType === 'tv' ? 'Series' : 'Movie'}</div>
           </div>
-          <button class="request-btn" data-id="${r.id}" data-type="${r.mediaType}" data-title="${escapeHtml(r.title)}" ${r.status ? 'disabled' : ''}>
-            ${r.status ? 'Requested' : 'Request'}
+          <button class="request-btn ${r.availability === 'available' ? 'available' : ''}" data-id="${r.id}" data-type="${r.mediaType}" data-title="${escapeHtml(r.title)}" ${r.availability !== 'none' ? 'disabled' : ''}>
+            ${r.availability === 'available' ? '✓ In Plex' : r.availability === 'requested' ? 'Requested' : 'Request'}
           </button>
         </div>
       `).join('');
