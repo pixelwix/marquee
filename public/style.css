@@ -372,7 +372,7 @@ body {
 .my-request-status.downloading { color: var(--amber); }
 .my-request-status.declined { color: var(--danger); }
 .my-request-status .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block; }
-.result-item { display: flex; gap: 0.85rem; padding: 0.65rem 0; align-items: center; }
+.result-item { display: flex; gap: 0.85rem; padding: 0.65rem 0; align-items: center; cursor: pointer; }
 .result-item + .result-item { border-top: 1px solid rgba(20,25,35,0.08); }
 .result-poster { width: 42px; height: 60px; object-fit: cover; border-radius: 6px; background: #E2E6EC; }
 .result-info { flex: 1; }
@@ -453,6 +453,11 @@ body {
 .pending-requester { display: flex; align-items: center; gap: 0.35rem; margin-top: 3px; font-size: 0.74rem; color: var(--muted); font-family: var(--mono); }
 .pending-requester img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; background: #E2E6EC; }
 .pending-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+/* "Request" — shown on the info modal when opened from a search/discover
+   result (not yet in the library), so a title/poster click leads to details
+   first rather than committing to a request immediately. */
+#info-request-section { margin-top: 1rem; }
 
 /* "Report an issue" — inline sub-form on the media info modal. */
 #info-report-section { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid rgba(20,25,35,0.1); }

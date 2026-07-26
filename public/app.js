@@ -701,11 +701,15 @@ async function loadMyRequests() {
 
 // Shared by the discover feed and actual search results — same item shape
 // from the backend (routes/overseerr.js's mapDiscoverItem), same row markup.
+// Keeps the last-rendered array around so a row click can look itself up by
+// index and open the info modal with full details before requesting.
+let currentSearchResults = [];
 function renderSearchResults(results, emptyMessage) {
+  currentSearchResults = results;
   const resultsEl = document.getElementById('search-results');
   if (!results.length) { resultsEl.innerHTML = `<p class="empty-state">${emptyMessage}</p>`; return; }
-  resultsEl.innerHTML = results.map(r => `
-    <div class="result-item">
+  resultsEl.innerHTML = results.map((r, idx) => `
+    <div class="result-item" data-idx="${idx}">
       <img class="result-poster" src="${r.poster || ''}" onerror="this.style.visibility='hidden'">
       <div class="result-info">
         <div class="result-title">${escapeHtml(r.title)}</div>
@@ -754,28 +758,44 @@ document.getElementById('search-input').addEventListener('input', e => {
 
 document.getElementById('search-results').addEventListener('click', async e => {
   const btn = e.target.closest('.request-btn');
-  if (!btn || btn.disabled) return;
-  const id = Number(btn.dataset.id);
-  const mediaType = btn.dataset.type;
+  if (btn && !btn.disabled) {
+    const id = Number(btn.dataset.id);
+    const mediaType = btn.dataset.type;
 
-  // TV shows go through the season picker instead of requesting the whole
-  // series outright — movies have no seasons, so those still request directly.
-  if (mediaType === 'tv') {
-    openSeasonPicker(id, btn.dataset.title, btn);
+    // TV shows go through the season picker instead of requesting the whole
+    // series outright — movies have no seasons, so those still request directly.
+    if (mediaType === 'tv') {
+      openSeasonPicker(id, btn.dataset.title, btn);
+      return;
+    }
+    btn.disabled = true;
+    btn.querySelector('.btn-label').textContent = '…';
+    try {
+      await api('/api/overseerr/request', {
+        method: 'POST',
+        body: JSON.stringify({ id, mediaType })
+      });
+      btn.querySelector('.btn-label').textContent = 'Requested';
+    } catch (e) {
+      btn.disabled = false;
+      btn.querySelector('.btn-label').textContent = 'Failed — retry';
+    }
     return;
   }
-  btn.disabled = true;
-  btn.querySelector('.btn-label').textContent = '…';
-  try {
-    await api('/api/overseerr/request', {
-      method: 'POST',
-      body: JSON.stringify({ id, mediaType })
-    });
-    btn.querySelector('.btn-label').textContent = 'Requested';
-  } catch (e) {
-    btn.disabled = false;
-    btn.querySelector('.btn-label').textContent = 'Failed — retry';
-  }
+
+  // Anywhere else in the row (poster, title, or a disabled/already-handled
+  // button) — show details before committing to a request.
+  const item = e.target.closest('.result-item');
+  if (!item) return;
+  const r = currentSearchResults[Number(item.dataset.idx)];
+  if (!r) return;
+  openInfo({
+    poster: r.poster, title: r.title,
+    badge: r.mediaType === 'tv' ? 'SERIES' : 'MOVIE',
+    meta: r.year || '',
+    overview: r.overview,
+    request: r
+  });
 });
 
 // ---------- Season picker ----------
@@ -853,8 +873,9 @@ document.getElementById('season-picker-submit').addEventListener('click', async 
 // ---------- Media info modal ----------
 const infoModal = document.getElementById('info-modal');
 let infoReportRatingKey = null;
+let infoRequestItem = null; // the search/discover result the info modal is currently showing, if any
 
-function openInfo({ poster, title, badge, meta, overview, stream, ratingKey }) {
+function openInfo({ poster, title, badge, meta, overview, stream, ratingKey, request }) {
   const posterEl = document.getElementById('info-poster');
   posterEl.style.visibility = ''; // undo a previous onerror hide before loading the next poster
   posterEl.src = poster || '';
@@ -872,6 +893,20 @@ function openInfo({ poster, title, badge, meta, overview, stream, ratingKey }) {
     streamEl.classList.add('hidden');
   }
 
+  // Shown when opened from a search/discover result — click the title/poster
+  // for details first, then request from here instead of committing blind.
+  infoRequestItem = request || null;
+  const requestSection = document.getElementById('info-request-section');
+  requestSection.classList.toggle('hidden', !request);
+  if (request) {
+    const btn = document.getElementById('info-request-btn');
+    btn.disabled = request.availability !== 'none';
+    btn.classList.toggle('available', request.availability === 'available');
+    btn.querySelector('.state-dot').classList.toggle('paused', request.availability !== 'available');
+    btn.querySelector('.btn-label').textContent = request.availability === 'available' ? '✓ In Plex'
+      : request.availability === 'requested' ? 'Requested' : 'Request';
+  }
+
   // Only offered for things that carry a Plex rating key (Now Playing/Recently
   // Watched) — upcoming/not-yet-available items (Airing Today, Releasing Soon)
   // have nothing to report a playback problem with yet.
@@ -881,6 +916,31 @@ function openInfo({ poster, title, badge, meta, overview, stream, ratingKey }) {
 
   infoModal.classList.remove('hidden');
 }
+
+document.getElementById('info-request-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('info-request-btn');
+  if (btn.disabled || !infoRequestItem) return;
+  const { id, mediaType, title } = infoRequestItem;
+  // The list this came from (search results/discover) has its own matching
+  // row — updated alongside this button so it doesn't go stale if the user
+  // doesn't close this modal right away.
+  const inlineBtn = document.querySelector(`#search-results .request-btn[data-id="${id}"][data-type="${mediaType}"]`);
+
+  if (mediaType === 'tv') {
+    infoModal.classList.add('hidden');
+    openSeasonPicker(id, title, inlineBtn || btn);
+    return;
+  }
+
+  const targets = [...new Set([btn, inlineBtn].filter(Boolean))];
+  targets.forEach(b => { b.disabled = true; b.querySelector('.btn-label').textContent = '…'; });
+  try {
+    await api('/api/overseerr/request', { method: 'POST', body: JSON.stringify({ id, mediaType }) });
+    targets.forEach(b => b.querySelector('.btn-label').textContent = 'Requested');
+  } catch (e) {
+    targets.forEach(b => { b.disabled = false; b.querySelector('.btn-label').textContent = 'Failed — retry'; });
+  }
+});
 
 function resetReportForm() {
   document.getElementById('info-report-form').classList.add('hidden');
