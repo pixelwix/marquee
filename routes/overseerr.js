@@ -43,6 +43,17 @@ router.get('/search', requireAuth, async (req, res) => {
 // available/requested so those can be shown as already-handled rather than
 // offered again.
 router.get('/tv/:id', requireAuth, async (req, res) => {
+  // TMDB ids are always numeric — reject anything else before it reaches the URL.
+  // Without this, a value like "..%2fsettings%2fmain" decodes to a literal "/" in
+  // req.params.id (Express only blocks bare "/" from matching :id, not the
+  // percent-encoded form), and since this is string-concatenated into the request
+  // path (not passed as an axios query param, which would be safely encoded), it
+  // lets any signed-in user pivot this admin-keyed request to arbitrary Overseerr
+  // API paths — confirmed reachable: GET /api/v1/settings/main, which returns
+  // Overseerr's own API key among other config.
+  if (!/^\d+$/.test(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid id' });
+  }
   try {
     const { data } = await adminClient().get(`/tv/${req.params.id}`);
     const seasons = (data.seasons || [])
