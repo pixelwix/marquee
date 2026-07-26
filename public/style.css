@@ -419,3 +419,28 @@ body {
 .decline-btn { border-color: var(--danger); color: var(--danger); }
 .decline-btn:hover:not(:disabled) { background: rgba(214,69,69,0.1); }
 .approve-btn:disabled, .decline-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* "Report an issue" — inline sub-form on the media info modal. */
+#info-report-section { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid rgba(20,25,35,0.1); }
+.report-form { margin-top: 0.75rem; }
+.report-type-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-bottom: 0.6rem; }
+.report-type-btn {
+  padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid rgba(20,25,35,0.15);
+  background: transparent; color: var(--text); font-size: 0.8rem; cursor: pointer;
+}
+.report-type-btn:hover { border-color: var(--teal); }
+.report-type-btn.selected { border-color: var(--teal); background: rgba(15,143,118,0.1); color: var(--teal); }
+#report-message {
+  width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.7);
+  border: 1px solid rgba(20,25,35,0.1); border-radius: 9px; color: var(--text);
+  font-family: var(--body); font-size: 0.85rem; resize: vertical; margin-bottom: 0.6rem;
+}
+#report-message:focus { outline: none; border-color: var(--teal); }
+#report-submit-btn:disabled { opacity: 0.5; cursor: default; }
+.report-status { font-size: 0.78rem; color: var(--muted); margin: 0.5rem 0 0; }
+.report-status.ok { color: var(--teal); }
+.report-status.error { color: var(--danger); }
+
+/* Open issues admin rows — reuses .pending-row/.pending-requester/.pending-actions
+   from the pending-requests section above; only the reported-message line is new. */
+.issue-message { font-size: 0.78rem; color: var(--text); margin-top: 0.3rem; font-style: italic; }

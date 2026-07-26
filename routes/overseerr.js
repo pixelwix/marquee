@@ -5,16 +5,18 @@ const requireOwner = require('./requireOwner');
 const overseerrSession = require('../lib/overseerrSession');
 const rateLimit = require('../lib/rateLimit');
 const sse = require('../lib/sse');
+const tautulliMedia = require('../lib/tautulliMedia');
 const router = express.Router();
 
-// Unlike the read-only endpoints below, this has a real side effect (creates an
-// actual request against Sonarr/Radarr) — worth capping independent of who's
-// authenticated.
+// Unlike the read-only endpoints below, these have a real side effect (creates an
+// actual request against Sonarr/Radarr, or a real Overseerr issue) — worth capping
+// independent of who's authenticated.
 const requestLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, message: 'Too many requests submitted — try again in a few minutes.' });
+const issueLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, message: 'Too many issues reported — try again in a few minutes.' });
 
 // Search/discovery has no permission-sensitive behavior in Overseerr, so this
-// stays on the simple admin-key client. Request submission does not — see
-// requestAsUser below.
+// stays on the simple admin-key client. Request/issue submission does not — see
+// postAsUser below.
 const adminClient = () => axios.create({
   baseURL: `${process.env.OVERSEERR_URL}/api/v1`,
   headers: { 'X-Api-Key': process.env.OVERSEERR_API_KEY }
@@ -86,20 +88,20 @@ router.get('/tv/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Submits the request through the signed-in user's own Overseerr session (not
-// the admin API key) so Overseerr's REQUEST/AUTO_APPROVE permission checks
-// apply to them, not to whoever generated the API key. Retries once with a
-// fresh session if the cached one has expired.
-async function requestAsUser(req, payload, retry = true) {
+// Submits through the signed-in user's own Overseerr session (not the admin API
+// key) so Overseerr's own permission checks (REQUEST/AUTO_APPROVE, CREATE_ISSUES,
+// ...) apply to them, not to whoever generated the API key. Retries once with a
+// fresh session if the cached one has expired. Shared by /request and /issue.
+async function postAsUser(req, path, payload, retry = true) {
   const session = await overseerrSession.getSession(req.session.user.id, req.session.user.plexToken);
   try {
-    return await axios.post(`${process.env.OVERSEERR_URL}/api/v1/request`, payload, {
+    return await axios.post(`${process.env.OVERSEERR_URL}/api/v1${path}`, payload, {
       headers: { Cookie: session.cookie, 'Content-Type': 'application/json' }
     });
   } catch (err) {
     if (retry && err.response?.status === 401) {
       overseerrSession.invalidate(req.session.user.id);
-      return requestAsUser(req, payload, false);
+      return postAsUser(req, path, payload, false);
     }
     throw err;
   }
@@ -110,7 +112,7 @@ router.post('/request', requireAuth, requestLimiter, async (req, res) => {
   try {
     const payload = { mediaId: id, mediaType };
     if (mediaType === 'tv') payload.seasons = (seasons && seasons.length) ? seasons : 'all';
-    await requestAsUser(req, payload);
+    await postAsUser(req, '/request', payload);
     // The frontend only needs to know it succeeded — Overseerr's response here
     // embeds a full User object (email, permission bitmask, etc.), unused by any
     // caller, so it's not worth forwarding as-is.
@@ -221,6 +223,89 @@ router.post('/requests/:id/decline', requireAuth, requireOwner, async (req, res)
   } catch (err) {
     console.error('overseerr decline error', err.response?.data || err.message);
     res.status(502).json({ error: 'Could not decline request' });
+  }
+});
+
+// A fixed set of problem categories, both for a simpler reporting UI and so this
+// can't be used to inject an arbitrary Overseerr issueType value. Matches
+// Overseerr's own IssueType enum (VIDEO/AUDIO/SUBTITLES/OTHER = 1-4).
+const ISSUE_TYPES = { doesnt_play: 1, wrong_audio: 2, subtitles: 3, other: 4 };
+const ISSUE_TYPE_LABELS = { 1: "Doesn't play", 2: 'Wrong audio', 3: 'Subtitles', 4: 'Other' };
+
+router.post('/issue', requireAuth, issueLimiter, async (req, res) => {
+  const { ratingKey, issueType, message } = req.body;
+  const type = ISSUE_TYPES[issueType];
+  if (!/^\d+$/.test(String(ratingKey)) || !type) {
+    return res.status(400).json({ error: 'Invalid issue report' });
+  }
+  try {
+    // Plex rating keys aren't TMDB ids — resolve through Tautulli first (show's
+    // own tmdbId + season/episode for an episode, or the movie's own tmdbId)
+    // before Overseerr can be told which Media record this issue belongs to.
+    const resolved = await tautulliMedia.resolveForIssue(ratingKey);
+    if (!resolved.tmdbId) {
+      return res.status(502).json({ error: 'Could not identify this title in Overseerr' });
+    }
+    const { data: media } = await adminClient().get(`/${resolved.mediaType}/${resolved.tmdbId}`);
+    const mediaId = media.mediaInfo?.id;
+    if (!mediaId) {
+      return res.status(502).json({ error: 'This title isn’t tracked in Overseerr yet' });
+    }
+    await postAsUser(req, '/issue', {
+      issueType: type,
+      message: String(message || '').trim().slice(0, 500) || 'No additional details provided.',
+      mediaId,
+      problemSeason: resolved.season,
+      problemEpisode: resolved.episode
+    });
+    res.json({ status: 'reported' });
+  } catch (err) {
+    console.error('overseerr issue error', err.response?.data || err.message);
+    res.status(502).json({ error: err.response?.data?.message || 'Could not submit issue report' });
+  }
+});
+
+// Admin-wide open issues, with enough context (title/poster/reporter/message) to
+// act on without opening Overseerr separately. Same PII discipline as
+// /requests/pending — createdBy's email/permissions/quota fields never leave
+// the server.
+router.get('/issues/open', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const { data } = await adminClient().get('/issue', {
+      params: { filter: 'open', take: 50, sort: 'added' }
+    });
+
+    const results = await Promise.all(data.results.map(async r => {
+      const { title, poster } = await resolveMedia(r.media?.mediaType, r.media?.tmdbId);
+      return {
+        id: r.id,
+        title,
+        poster,
+        issueType: ISSUE_TYPE_LABELS[r.issueType] || 'Other',
+        season: r.problemSeason,
+        episode: r.problemEpisode,
+        message: r.comments?.[0]?.message || '',
+        reportedBy: r.createdBy?.displayName || r.createdBy?.plexUsername || 'Unknown',
+        reportedByAvatar: r.createdBy?.avatar || null,
+        reportedAt: r.createdAt
+      };
+    }));
+
+    res.json(results);
+  } catch (err) {
+    console.error('overseerr open issues error', err.response?.data || err.message);
+    res.status(502).json({ error: 'Could not reach Overseerr' });
+  }
+});
+
+router.post('/issues/:id/resolve', requireAuth, requireOwner, async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    await adminClient().post(`/issue/${req.params.id}/resolved`);
+    res.json({ status: 'resolved' });
+  } catch (err) {
+    console.error('overseerr resolve issue error', err.response?.data || err.message);
+    res.status(502).json({ error: 'Could not resolve issue' });
   }
 });
 
