@@ -9,7 +9,13 @@ request UI backed by Overseerr/Jellyseerr — all behind Plex sign-in.
 ```bash
 cd marquee
 cp .env.example .env
+git config core.hooksPath githooks
 ```
+
+The last line enables a pre-commit hook that blocks commits containing
+private/internal IP addresses — this repo is public, and `.env.example` has
+leaked real LAN IPs into it before. Real config only ever belongs in `.env`,
+which is gitignored.
 
 Fill in `.env`:
 
@@ -22,9 +28,10 @@ Fill in `.env`:
 | `SONARR_API_KEY` / `RADARR_API_KEY` | Settings → General → Security in each app |
 | `OVERSEERR_API_KEY` | Overseerr/Jellyseerr → Settings → General → API Key |
 
-The URLs default to a common layout (Plex on one host, the rest on another,
-all on your LAN) — adjust any that don't match your setup. Set `SITE_NAME` if
-you want the dashboard to show your own name instead of "Marquee".
+The URLs default to `localhost` as a placeholder — set each one to wherever
+that service actually lives (your LAN, another container, etc). Set
+`SITE_NAME` if you want the dashboard to show your own name instead of
+"Marquee".
 
 ## 2. Build and run
 
