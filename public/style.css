@@ -200,7 +200,7 @@ body {
 
 /* Top of the Month leaderboard — #1 gets the big medal frame, #2/#3 are compact
    ranked rows underneath, each color-coded gold/silver/bronze. */
-.top-month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; align-items: stretch; }
+.top-month-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.2rem; align-items: stretch; }
 /* Flex column so .medal-rows (mt-auto below) can be pinned to the bottom of the
    card — grid's align-items:stretch already equalizes card height per row, this
    makes the runner-up list actually sit at that shared bottom edge instead of
@@ -494,3 +494,101 @@ body {
 .release-meta { font-size: 0.72rem; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
 .release-rejections { font-size: 0.7rem; color: var(--danger); margin-top: 2px; }
 .grab-btn { flex-shrink: 0; }
+
+/* Card Header Flex (bento header + action button) */
+.card-header-flex { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+.card-header-flex .card-label { margin-bottom: 0; }
+
+/* Wide modal layout & scrollable tab containers */
+.modal-card-wide { max-width: 840px; width: 95%; max-height: 90vh; display: flex; flex-direction: column; }
+.modal-card-wide #admin-tab-overview,
+.modal-card-wide #admin-tab-status,
+.modal-card-wide #admin-tab-health {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 6px;
+}
+
+#edit-setting-form {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#edit-modal-form-body {
+  flex: 1;
+  min-height: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+/* Settings & Health views */
+.settings-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
+.settings-section-head h4 { font-family: var(--head); font-size: 0.95rem; font-weight: 600; color: var(--text); margin: 0; }
+
+.health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.75rem; }
+.health-card {
+  padding: 0.75rem 0.9rem; border-radius: 10px; background: rgba(255,255,255,0.6);
+  border: 1px solid rgba(20,25,35,0.08); display: flex; flex-direction: column; gap: 0.35rem;
+}
+.health-card-head { display: flex; align-items: center; justify-content: space-between; }
+.health-card-title { font-family: var(--head); font-size: 0.88rem; font-weight: 600; color: var(--text); }
+.health-badge {
+  font-family: var(--mono); font-size: 0.7rem; padding: 0.15rem 0.45rem; border-radius: 99px; font-weight: 500;
+}
+.health-badge.ok { background: rgba(15,143,118,0.12); color: var(--teal); border: 1px solid rgba(15,143,118,0.3); }
+.health-badge.error { background: rgba(220,38,38,0.12); color: var(--danger); border: 1px solid rgba(220,38,38,0.3); }
+.health-badge.unconfigured { background: rgba(100,116,139,0.12); color: var(--muted); border: 1px solid rgba(100,116,139,0.25); }
+
+.health-card-details { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-card-latency { font-family: var(--mono); font-size: 0.7rem; color: var(--text); display: flex; align-items: center; gap: 0.3rem; }
+
+/* Config list table */
+.config-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 0.5rem; }
+.config-table tr { border-bottom: 1px solid rgba(20,25,35,0.06); }
+.config-table td { padding: 0.55rem 0.5rem; }
+.config-table td.config-key { font-family: var(--mono); font-weight: 500; color: var(--text); width: 40%; }
+.config-table td.config-val { font-family: var(--mono); color: var(--muted); }
+.config-pill { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.72rem; font-family: var(--mono); }
+.config-pill.yes { background: rgba(15,143,118,0.1); color: var(--teal); }
+.config-pill.no { background: rgba(220,38,38,0.08); color: var(--danger); }
+
+/* Interactive / Editable Service Cards */
+.health-card.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.health-card.clickable:hover {
+  border-color: rgba(15,143,118,0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15,143,118,0.08);
+}
+.health-card-footer {
+  display: flex; align-items: center; justify-content: space-between; margin-top: 0.2rem;
+}
+.card-edit-btn {
+  font-family: var(--mono); font-size: 0.7rem; color: var(--teal); background: rgba(15,143,118,0.08);
+  border: 1px solid rgba(15,143,118,0.25); border-radius: 4px; padding: 0.1rem 0.35rem; cursor: pointer;
+}
+.card-edit-btn:hover { background: rgba(15,143,118,0.18); }
+
+/* Settings Form Group */
+.setting-field { margin-bottom: 0.85rem; }
+.setting-field label {
+  display: block; font-family: var(--mono); font-size: 0.78rem; font-weight: 500; color: var(--text); margin-bottom: 0.3rem;
+}
+.setting-field input, .setting-field select {
+  width: 100%; box-sizing: border-box; padding: 0.55rem 0.75rem; background: rgba(255,255,255,0.85);
+  border: 1px solid rgba(20,25,35,0.12); border-radius: 8px; color: var(--text);
+  font-family: var(--mono); font-size: 0.82rem; transition: border-color 0.15s ease;
+}
+.setting-field input:focus, .setting-field select:focus {
+  outline: none; border-color: var(--teal); background: #ffffff;
+}
+.setting-hint { font-size: 0.72rem; color: var(--muted); font-family: var(--body); margin-top: 0.25rem; }
+
+

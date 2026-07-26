@@ -63,22 +63,57 @@ async function fetchRecentlyAdded(sectionId) {
   }));
 }
 
-router.get('/recently-added', requireAuth, async (req, res) => {
+function parseLibraryConfig() {
+  const custom = process.env.TAUTULLI_LIBRARIES;
+  if (custom && custom.trim()) {
+    const pairs = custom.split(',').map(s => s.trim()).filter(Boolean);
+    const result = [];
+    for (const pair of pairs) {
+      const parts = pair.split(':');
+      if (parts.length >= 2) {
+        const label = parts.slice(0, -1).join(':').trim();
+        const sectionId = parts[parts.length - 1].trim();
+        if (label && sectionId) {
+          const key = label.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+          result.push({ key, label, sectionId });
+        }
+      }
+    }
+    if (result.length > 0) return result;
+  }
+
   const { TAUTULLI_SECTION_MOVIES, TAUTULLI_SECTION_TV, TAUTULLI_SECTION_ANIME } = process.env;
+  const legacy = [];
+  if (TAUTULLI_SECTION_MOVIES) legacy.push({ key: 'movies', label: 'Movies', sectionId: TAUTULLI_SECTION_MOVIES });
+  if (TAUTULLI_SECTION_TV) legacy.push({ key: 'tv', label: 'TV Shows', sectionId: TAUTULLI_SECTION_TV });
+  if (TAUTULLI_SECTION_ANIME) legacy.push({ key: 'anime', label: 'Anime', sectionId: TAUTULLI_SECTION_ANIME });
+
+  return legacy;
+}
+
+router.get('/recently-added', requireAuth, async (req, res) => {
   try {
-    // If none of the section env vars are set, fall back to one combined list
-    // (original behavior) so this doesn't break an existing setup.
-    if (!TAUTULLI_SECTION_MOVIES && !TAUTULLI_SECTION_TV && !TAUTULLI_SECTION_ANIME) {
+    const config = parseLibraryConfig();
+    if (config.length === 0) {
       const all = await fetchRecentlyAdded();
       return res.json({ all });
     }
 
-    const [movies, tv, anime] = await Promise.all([
-      TAUTULLI_SECTION_MOVIES ? fetchRecentlyAdded(TAUTULLI_SECTION_MOVIES) : [],
-      TAUTULLI_SECTION_TV ? fetchRecentlyAdded(TAUTULLI_SECTION_TV) : [],
-      TAUTULLI_SECTION_ANIME ? fetchRecentlyAdded(TAUTULLI_SECTION_ANIME) : []
-    ]);
-    res.json({ movies, tv, anime });
+    const results = await Promise.all(config.map(async lib => {
+      const items = await fetchRecentlyAdded(lib.sectionId);
+      return {
+        key: lib.key,
+        label: lib.label,
+        sectionId: lib.sectionId,
+        items
+      };
+    }));
+
+    const responseData = { libraries: results };
+    for (const r of results) {
+      responseData[r.key] = r.items;
+    }
+    res.json(responseData);
   } catch (err) {
     console.error('tautulli error:', err.code || err.response?.status, err.message);
     res.status(502).json({ error: 'Could not reach Tautulli' });
@@ -148,36 +183,74 @@ router.get('/metadata/:ratingKey', requireAuth, async (req, res) => {
 // surfaces only one anime title (regular TV dominates the shared ranking).
 router.get('/top-of-month', requireAuth, async (req, res) => {
   try {
-    const homeStats = (timeRange, statsCount) => axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
-      params: { apikey: process.env.TAUTULLI_API_KEY, cmd: 'get_home_stats', time_range: timeRange, stats_type: 'plays', stats_count: statsCount }
+    const fetchStats = (sectionId = null, timeRange = 30) => axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
+      params: {
+        apikey: process.env.TAUTULLI_API_KEY,
+        cmd: 'get_home_stats',
+        time_range: timeRange,
+        stats_type: 'plays',
+        stats_count: 20,
+        ...(sectionId ? { section_id: sectionId } : {})
+      }
     });
-    const [main, animeExtended] = await Promise.all([homeStats(30, 20), homeStats(90, 50)]);
-    const rowsFor = (payload, statId) => (payload.data.response.data || []).find(s => s.stat_id === statId)?.rows || [];
-    const { TAUTULLI_SECTION_TV, TAUTULLI_SECTION_ANIME } = process.env;
 
-    const tvRows = rowsFor(main, 'top_tv');
-    const topTv = (TAUTULLI_SECTION_TV
-      ? tvRows.filter(r => String(r.section_id) === TAUTULLI_SECTION_TV)
-      : tvRows
-    ).slice(0, 3);
-    const animeRows = rowsFor(animeExtended, 'top_tv');
-    const topAnime = (TAUTULLI_SECTION_ANIME
-      ? animeRows.filter(r => String(r.section_id) === TAUTULLI_SECTION_ANIME)
-      : []
-    ).slice(0, 3);
-    const topMovies = rowsFor(main, 'top_movies').slice(0, 3);
-    const topUsers = rowsFor(main, 'top_users').slice(0, 3);
+    const [mainRes] = await Promise.all([fetchStats(null, 30)]);
+    const rowsFor = (payload, statId) => (payload.data?.response?.data || []).find(s => s.stat_id === statId)?.rows || [];
+
+    const topUsers = rowsFor(mainRes, 'top_users').slice(0, 3).map(u => ({
+      name: u.friendly_name || u.user,
+      plays: u.total_plays,
+      avatar: u.user_thumb || null
+    }));
+
+    const config = parseLibraryConfig();
+    const tiles = [
+      { label: 'Top Viewer', isUser: true, items: topUsers }
+    ];
+
+    if (config.length > 0) {
+      const sectionStats = await Promise.all(config.map(async lib => {
+        try {
+          const { data } = await fetchStats(lib.sectionId, 30);
+          const statBlocks = data?.response?.data || [];
+          let rows = [];
+          for (const block of statBlocks) {
+            if (block.rows && block.rows.length) {
+              rows = rows.concat(block.rows);
+            }
+          }
+          const seen = new Set();
+          const items = [];
+          for (const r of rows) {
+            const key = r.rating_key || r.title;
+            if (!seen.has(key)) {
+              seen.add(key);
+              items.push({ title: r.title, plays: r.total_plays, thumb: imageUrl(r.thumb) });
+            }
+            if (items.length >= 3) break;
+          }
+          return { label: `Top ${lib.label}`, items };
+        } catch {
+          return { label: `Top ${lib.label}`, items: [] };
+        }
+      }));
+      tiles.push(...sectionStats);
+    } else {
+      const topMovies = rowsFor(mainRes, 'top_movies').slice(0, 3).map(m => ({ title: m.title, plays: m.total_plays, thumb: imageUrl(m.thumb) }));
+      const topTv = rowsFor(mainRes, 'top_tv').slice(0, 3).map(t => ({ title: t.title, plays: t.total_plays, thumb: imageUrl(t.thumb) }));
+      if (topMovies.length) tiles.push({ label: 'Top Movie', items: topMovies });
+      if (topTv.length) tiles.push({ label: 'Top TV Show', items: topTv });
+    }
+
+    const legacyMovies = tiles.find(t => t.label.toLowerCase().includes('movie'))?.items || [];
+    const legacyTv = tiles.find(t => t.label.toLowerCase().includes('tv'))?.items || [];
 
     res.json({
-      user: topUsers.map(u => ({
-        name: u.friendly_name || u.user,
-        plays: u.total_plays,
-        // Already a public plex.tv avatar URL — no proxying needed.
-        avatar: u.user_thumb || null
-      })),
-      movie: topMovies.map(m => ({ title: m.title, plays: m.total_plays, thumb: imageUrl(m.thumb) })),
-      tv: topTv.map(t => ({ title: t.title, plays: t.total_plays, thumb: imageUrl(t.thumb) })),
-      anime: topAnime.map(t => ({ title: t.title, plays: t.total_plays, thumb: imageUrl(t.thumb) }))
+      tiles,
+      user: topUsers,
+      movie: legacyMovies,
+      tv: legacyTv,
+      anime: []
     });
   } catch (err) {
     console.error('tautulli top-of-month error:', err.code || err.response?.status, err.message);

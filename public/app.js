@@ -96,6 +96,7 @@ function showDashboard(isOwner) {
   loadDownloads();
   setInterval(loadDownloads, 5000);
   if (isOwner) {
+    document.getElementById('admin-settings-btn').classList.remove('hidden');
     document.getElementById('panel-owner').classList.remove('hidden');
     loadOwnerStatus();
     setInterval(loadOwnerStatus, 15000);
@@ -105,6 +106,8 @@ function showDashboard(isOwner) {
     setInterval(loadPendingRequests, 30000);
     loadAdminIssues();
     setInterval(loadAdminIssues, 30000);
+    loadServerSettings();
+    loadServiceHealth();
   }
 }
 
@@ -240,13 +243,18 @@ async function loadRecentlyAdded() {
     const data = await api('/api/tautulli/recently-added');
     store.recentlyAdded = data;
 
-    const sections = data.all
-      ? [{ key: 'all', label: null, items: data.all }]
-      : [
-          { key: 'movies', label: 'Movies', items: data.movies || [] },
-          { key: 'tv', label: 'TV Shows', items: data.tv || [] },
-          { key: 'anime', label: 'Anime', items: data.anime || [] }
-        ].filter(s => s.items.length);
+    let sections = [];
+    if (data.all) {
+      sections = [{ key: 'all', label: null, items: data.all }];
+    } else if (Array.isArray(data.libraries) && data.libraries.length > 0) {
+      sections = data.libraries.filter(s => s.items && s.items.length);
+    } else {
+      sections = [
+        { key: 'movies', label: 'Movies', items: data.movies || [] },
+        { key: 'tv', label: 'TV Shows', items: data.tv || [] },
+        { key: 'anime', label: 'Anime', items: data.anime || [] }
+      ].filter(s => s.items && s.items.length);
+    }
 
     if (!sections.length || sections.every(s => !s.items.length)) {
       body.innerHTML = '<p class="empty-state">Nothing added recently.</p>';
@@ -258,7 +266,7 @@ async function loadRecentlyAdded() {
     const cap = window.matchMedia('(max-width: 900px)').matches ? 6 : 10;
 
     body.innerHTML = sections.map(s => `
-      ${s.label ? `<div class="subsection-label">${s.label}</div>` : ''}
+      ${s.label ? `<div class="subsection-label">${escapeHtml(s.label)}</div>` : ''}
       <div class="poster-grid poster-grid-scroll" style="margin-bottom:1rem;">
         ${s.items.slice(0, cap).map((i, idx) => `
           <div class="poster-card" data-cat="${s.key}" data-idx="${idx}">
@@ -357,12 +365,17 @@ async function loadTopOfMonth() {
   const body = document.getElementById('top-month-body');
   try {
     const data = await api('/api/tautulli/top-of-month');
-    const sections = [
-      { label: 'Top Viewer', items: data.user, isUser: true },
-      { label: 'Top Movie', items: data.movie },
-      { label: 'Top TV Show', items: data.tv },
-      { label: 'Top Anime', items: data.anime }
-    ];
+    let sections = [];
+    if (Array.isArray(data.tiles) && data.tiles.length > 0) {
+      sections = data.tiles;
+    } else {
+      sections = [
+        { label: 'Top Viewer', items: data.user, isUser: true },
+        { label: 'Top Movie', items: data.movie },
+        { label: 'Top TV Show', items: data.tv },
+        { label: 'Top Anime', items: data.anime }
+      ].filter(s => s.items && s.items.length);
+    }
     body.innerHTML = sections.map(s => renderTopMonthTile(s.label, s.items, s.isUser)).join('');
   } catch (e) {
     body.innerHTML = '<p class="empty-state">Could not reach Tautulli.</p>';
@@ -403,9 +416,15 @@ function renderTopMonthTile(label, items, isUser) {
   `;
 }
 
+function setDualHTML(id1, id2, html) {
+  const el1 = document.getElementById(id1);
+  const el2 = document.getElementById(id2);
+  if (el1) el1.innerHTML = html;
+  if (el2) el2.innerHTML = html;
+}
+
 // ---------- Owner Status (owner only — Uptime Kuma + UPS) ----------
 async function loadOwnerStatus() {
-  const body = document.getElementById('owner-body');
   try {
     const { monitors, ups } = await api('/api/owner/status');
     let html = '';
@@ -427,18 +446,17 @@ async function loadOwnerStatus() {
         <span class="monitor-pill ${m.status}"><span class="${dotClass(m.status !== 'up')}"></span>${escapeHtml(m.name)}</span>
       `).join('')}</div>`;
     }
-    body.innerHTML = html || '<p class="empty-state">Nothing configured.</p>';
+    setDualHTML('owner-body', 'modal-owner-body', html || '<p class="empty-state">Nothing configured.</p>');
   } catch (e) {
-    body.innerHTML = '<p class="empty-state">Could not reach status sources.</p>';
+    setDualHTML('owner-body', 'modal-owner-body', '<p class="empty-state">Could not reach status sources.</p>');
   }
 }
 
 // ---------- Admin panel (owner only) ----------
 async function loadAdminLogins() {
-  const body = document.getElementById('admin-logins-body');
   try {
     const logins = await api('/api/owner/logins');
-    body.innerHTML = !logins.length ? '<p class="empty-state">No sign-ins recorded yet.</p>' : logins.map(l => `
+    const html = !logins.length ? '<p class="empty-state">No sign-ins recorded yet.</p>' : logins.map(l => `
       <div class="login-row">
         <img class="login-avatar" src="${l.thumb || ''}" onerror="this.style.visibility='hidden'">
         <div>
@@ -447,17 +465,20 @@ async function loadAdminLogins() {
         </div>
       </div>
     `).join('');
+    setDualHTML('admin-logins-body', 'modal-admin-logins-body', html);
   } catch (e) {
-    body.innerHTML = '<p class="empty-state">Could not load sign-ins.</p>';
+    setDualHTML('admin-logins-body', 'modal-admin-logins-body', '<p class="empty-state">Could not load sign-ins.</p>');
   }
 }
 
 async function loadPendingRequests() {
-  const body = document.getElementById('admin-requests-body');
   try {
     const results = await api('/api/overseerr/requests/pending');
-    if (!results.length) { body.innerHTML = '<p class="empty-state">Nothing pending.</p>'; return; }
-    body.innerHTML = results.map(r => `
+    if (!results.length) {
+      setDualHTML('admin-requests-body', 'modal-admin-requests-body', '<p class="empty-state">Nothing pending.</p>');
+      return;
+    }
+    const html = results.map(r => `
       <div class="pending-row" data-id="${r.id}">
         <img class="result-poster" src="${r.poster || ''}" onerror="this.style.visibility='hidden'">
         <div class="result-info">
@@ -473,12 +494,13 @@ async function loadPendingRequests() {
         </div>
       </div>
     `).join('');
+    setDualHTML('admin-requests-body', 'modal-admin-requests-body', html);
   } catch (e) {
-    body.innerHTML = '<p class="empty-state">Could not load pending requests.</p>';
+    setDualHTML('admin-requests-body', 'modal-admin-requests-body', '<p class="empty-state">Could not load pending requests.</p>');
   }
 }
 
-document.getElementById('admin-requests-body').addEventListener('click', async e => {
+async function handlePendingRequestClick(e) {
   const btn = e.target.closest('.approve-btn, .decline-btn');
   if (!btn) return;
   const row = btn.closest('.pending-row');
@@ -487,22 +509,25 @@ document.getElementById('admin-requests-body').addEventListener('click', async e
   btn.querySelector('.btn-label').textContent = '…';
   try {
     await api(`/api/overseerr/requests/${row.dataset.id}/${action}`, { method: 'POST' });
-    row.remove();
-    if (!document.getElementById('admin-requests-body').children.length) {
-      document.getElementById('admin-requests-body').innerHTML = '<p class="empty-state">Nothing pending.</p>';
-    }
+    loadPendingRequests();
   } catch (e) {
     row.querySelectorAll('button').forEach(b => b.disabled = false);
     btn.querySelector('.btn-label').textContent = action === 'approve' ? 'Approve' : 'Decline';
   }
-});
+}
+
+document.getElementById('admin-requests-body').addEventListener('click', handlePendingRequestClick);
+const modalRequestsBody = document.getElementById('modal-admin-requests-body');
+if (modalRequestsBody) modalRequestsBody.addEventListener('click', handlePendingRequestClick);
 
 async function loadAdminIssues() {
-  const body = document.getElementById('admin-issues-body');
   try {
     const results = await api('/api/overseerr/issues/open');
-    if (!results.length) { body.innerHTML = '<p class="empty-state">Nothing open.</p>'; return; }
-    body.innerHTML = results.map(r => `
+    if (!results.length) {
+      setDualHTML('admin-issues-body', 'modal-admin-issues-body', '<p class="empty-state">Nothing open.</p>');
+      return;
+    }
+    const html = results.map(r => `
       <div class="pending-row" data-id="${r.id}" data-title="${escapeHtml(r.title || 'Unknown title')}"
            data-media-type="${r.mediaType || ''}" data-tmdb-id="${r.tmdbId || ''}" data-tvdb-id="${r.tvdbId || ''}"
            data-season="${r.season || ''}" data-episode="${r.episode || ''}">
@@ -521,12 +546,13 @@ async function loadAdminIssues() {
         </div>
       </div>
     `).join('');
+    setDualHTML('admin-issues-body', 'modal-admin-issues-body', html);
   } catch (e) {
-    body.innerHTML = '<p class="empty-state">Could not load issues.</p>';
+    setDualHTML('admin-issues-body', 'modal-admin-issues-body', '<p class="empty-state">Could not load issues.</p>');
   }
 }
 
-document.getElementById('admin-issues-body').addEventListener('click', async e => {
+async function handleAdminIssuesClick(e) {
   const searchBtn = e.target.closest('.search-release-btn');
   if (searchBtn) {
     openReleaseModal(searchBtn.closest('.pending-row').dataset);
@@ -539,15 +565,402 @@ document.getElementById('admin-issues-body').addEventListener('click', async e =
   btn.querySelector('.btn-label').textContent = '…';
   try {
     await api(`/api/overseerr/issues/${row.dataset.id}/resolve`, { method: 'POST' });
-    row.remove();
-    if (!document.getElementById('admin-issues-body').children.length) {
-      document.getElementById('admin-issues-body').innerHTML = '<p class="empty-state">Nothing open.</p>';
-    }
+    loadAdminIssues();
   } catch (e) {
     row.querySelectorAll('button').forEach(b => b.disabled = false);
     btn.querySelector('.btn-label').textContent = 'Resolve';
   }
+}
+
+document.getElementById('admin-issues-body').addEventListener('click', handleAdminIssuesClick);
+const modalIssuesBody = document.getElementById('modal-admin-issues-body');
+if (modalIssuesBody) modalIssuesBody.addEventListener('click', handleAdminIssuesClick);
+
+// ---------- Server Settings & Integration Health (owner only) ----------
+let currentEnvConfig = {};
+
+const SERVICE_CONFIG_SCHEMAS = {
+  Plex: {
+    title: 'Plex Server Configuration',
+    fields: [
+      { key: 'PLEX_SERVER_URL', label: 'Plex Server URL', placeholder: 'http://localhost:32400', hint: 'The internal or external URL to reach your Plex Media Server.' },
+      { key: 'PLEX_ADMIN_TOKEN', label: 'Plex Admin Token', placeholder: 'Your X-Plex-Token', hint: 'Owner authentication token for Plex.' },
+      { key: 'PLEX_MACHINE_ID', label: 'Plex Machine ID', placeholder: 'Plex machine identifier', hint: 'Found in Plex Settings > General, or via GET /identity.' },
+      { key: 'PLEX_CLIENT_ID', label: 'Plex Client ID', placeholder: 'marquee-app-a1b2c3d4', hint: 'Stable UUID identifying Marquee to plex.tv.' }
+    ]
+  },
+  Tautulli: {
+    title: 'Tautulli Configuration',
+    fields: [
+      { key: 'TAUTULLI_URL', label: 'Tautulli URL', placeholder: 'http://localhost:8181', hint: 'URL to reach Tautulli.' },
+      { key: 'TAUTULLI_API_KEY', label: 'Tautulli API Key', placeholder: 'API Key', hint: 'Tautulli > Settings > Web Interface > API Key.' },
+      { key: 'TAUTULLI_LIBRARIES', label: 'Custom Libraries (Comma-separated Label:SectionID)', placeholder: 'Movies:1, TV Shows:2, Documentaries:4, 4K Movies:5', hint: 'Custom Plex libraries to display. E.g. Movies:1, TV Shows:2, Documentaries:4.' },
+      { key: 'TAUTULLI_SECTION_MOVIES', label: 'Legacy Movies Section ID (Optional)', placeholder: '1', hint: 'Fallback section ID for movies.' },
+      { key: 'TAUTULLI_SECTION_TV', label: 'Legacy TV Shows Section ID (Optional)', placeholder: '2', hint: 'Fallback section ID for TV shows.' },
+      { key: 'TAUTULLI_SECTION_ANIME', label: 'Legacy Anime Section ID (Optional)', placeholder: '3', hint: 'Fallback section ID for anime.' }
+    ]
+  },
+  Overseerr: {
+    title: 'Overseerr / Jellyseerr Configuration',
+    fields: [
+      { key: 'OVERSEERR_URL', label: 'Overseerr URL', placeholder: 'http://localhost:5055', hint: 'URL to reach Overseerr.' },
+      { key: 'OVERSEERR_API_KEY', label: 'Overseerr API Key', placeholder: 'API Key', hint: 'Overseerr > Settings > General > API Key.' },
+      { key: 'OVERSEERR_WEBHOOK_SECRET', label: 'Webhook Authorization Secret', placeholder: 'Secret token', hint: 'Passed in Overseerr notification headers.' },
+      { key: 'OVERSEERR_WEBHOOK_FORWARD_URL', label: 'Webhook Forward URL (Optional)', placeholder: 'https://...', hint: 'Forwards Overseerr webhooks to an existing integration.' }
+    ]
+  },
+  Sonarr: {
+    title: 'Sonarr Configuration',
+    fields: [
+      { key: 'SONARR_URL', label: 'Sonarr URL', placeholder: 'http://localhost:8989', hint: 'URL to reach Sonarr.' },
+      { key: 'SONARR_API_KEY', label: 'Sonarr API Key', placeholder: 'API Key', hint: 'Sonarr > Settings > General > Security > API Key.' }
+    ]
+  },
+  Radarr: {
+    title: 'Radarr Configuration',
+    fields: [
+      { key: 'RADARR_URL', label: 'Radarr URL', placeholder: 'http://localhost:7878', hint: 'URL to reach Radarr.' },
+      { key: 'RADARR_API_KEY', label: 'Radarr API Key', placeholder: 'API Key', hint: 'Radarr > Settings > General > Security > API Key.' }
+    ]
+  },
+  qBittorrent: {
+    title: 'qBittorrent Configuration',
+    fields: [
+      { key: 'QBITTORRENT_URL', label: 'qBittorrent WebUI URL', placeholder: 'http://localhost:9080', hint: 'URL to reach qBittorrent WebUI.' },
+      { key: 'QBITTORRENT_USERNAME', label: 'Username', placeholder: 'admin', hint: 'WebUI username.' },
+      { key: 'QBITTORRENT_PASSWORD', label: 'Password', placeholder: '••••••••', type: 'password', hint: 'WebUI password.' }
+    ]
+  },
+  SABnzbd: {
+    title: 'SABnzbd Configuration',
+    fields: [
+      { key: 'SABNZBD_URL', label: 'SABnzbd URL', placeholder: 'http://localhost:8080', hint: 'URL to reach SABnzbd.' },
+      { key: 'SABNZBD_API_KEY', label: 'SABnzbd API Key', placeholder: 'API Key', hint: 'SABnzbd > Settings > General > API Key.' }
+    ]
+  },
+  'Uptime Kuma': {
+    title: 'Uptime Kuma Configuration',
+    fields: [
+      { key: 'UPTIME_KUMA_DB_PATH', label: 'Database File Path', placeholder: '/app/uptime-kuma-data/kuma.db', hint: 'SQLite DB path inside container.' },
+      { key: 'UPTIME_KUMA_DATA_DIR', label: 'Host Data Directory', placeholder: '/path/to/kuma/data', hint: 'Mounted host path for Uptime Kuma.' }
+    ]
+  },
+  'NUT UPS': {
+    title: 'Network UPS Tools (NUT) Configuration',
+    fields: [
+      { key: 'NUT_HOST', label: 'NUT Host IP / Hostname', placeholder: '192.168.1.100', hint: 'Host running upsd server.' },
+      { key: 'NUT_PORT', label: 'NUT Port', placeholder: '3493', hint: 'Default NUT port is 3493.' },
+      { key: 'NUT_USERNAME', label: 'Username (Optional)', placeholder: 'monuser', hint: 'NUT authentication username.' },
+      { key: 'NUT_PASSWORD', label: 'Password (Optional)', placeholder: '••••••••', type: 'password', hint: 'NUT authentication password.' },
+      { key: 'NUT_UPS_NAME', label: 'UPS Device Name', placeholder: 'ups', hint: 'UPS device name configured in upsd.conf.' }
+    ]
+  },
+  ServerDeployment: {
+    title: 'Server & Branding Configuration',
+    fields: [
+      { key: 'SITE_NAME', label: 'Site Branding Name', placeholder: 'Marquee', hint: 'Shown as the page title, wordmark, and logo.' },
+      { key: 'SITE_TAGLINES', label: 'Sign-in Taglines', placeholder: 'Tagline 1|Tagline 2', hint: 'Pipe-separated list (|) of rotating taglines.' },
+      { key: 'PUBLIC_URL', label: 'Public Application URL', placeholder: 'https://media.example.com', hint: 'External domain or public URL.' },
+      { key: 'COOKIE_SECURE', label: 'HTTPS Cookie Security Mode', type: 'select', options: [{ val: 'false', label: 'HTTP (Development)' }, { val: 'true', label: 'HTTPS (Secure)' }], hint: 'Set to HTTPS (Secure) when running behind an SSL reverse proxy.' },
+      { key: 'HOST_PORT', label: 'Host Machine Port', placeholder: '4000', hint: 'External host port for reverse proxy mapping.' }
+    ]
+  }
+};
+
+async function loadServerSettings() {
+  const body = document.getElementById('server-config-body');
+  if (!body) return;
+  try {
+    const s = await api('/api/owner/settings');
+    if (s.env) currentEnvConfig = s.env;
+    const html = `
+      <table class="config-table">
+        <tbody>
+          <tr><td class="config-key">Site Name</td><td class="config-val">${escapeHtml(s.siteName)}</td></tr>
+          <tr><td class="config-key">Sign-in Taglines</td><td class="config-val">${escapeHtml(s.siteTaglines.join(' | '))}</td></tr>
+          <tr><td class="config-key">Host Port</td><td class="config-val">${escapeHtml(String(s.hostPort))}</td></tr>
+          <tr><td class="config-key">Public URL</td><td class="config-val">${s.publicUrl ? escapeHtml(s.publicUrl) : 'Not configured'}</td></tr>
+          <tr><td class="config-key">Cookie Security</td><td class="config-val"><span class="config-pill ${s.cookieSecure ? 'yes' : 'no'}">${s.cookieSecure ? 'HTTPS (Secure)' : 'HTTP (Development)'}</span></td></tr>
+          <tr><td class="config-key">Session DB Dir</td><td class="config-val">${escapeHtml(s.sessionDbDir)}</td></tr>
+          <tr><td class="config-key">Overseerr Webhook Secret</td><td class="config-val"><span class="config-pill ${s.webhookSecretSet ? 'yes' : 'no'}">${s.webhookSecretSet ? 'Configured' : 'Not configured'}</span></td></tr>
+          <tr><td class="config-key">Webhook Forwarding URL</td><td class="config-val">${s.webhookForwardUrl ? escapeHtml(s.webhookForwardUrl) : 'None'}</td></tr>
+        </tbody>
+      </table>
+    `;
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not load server configuration.</p>';
+  }
+}
+
+async function loadServiceHealth() {
+  const grid = document.getElementById('service-health-grid');
+  if (!grid) return;
+  grid.innerHTML = '<p class="empty-state">Testing service connections…</p>';
+  try {
+    const { results } = await api('/api/owner/health');
+    if (!results || !results.length) {
+      grid.innerHTML = '<p class="empty-state">No services checked.</p>';
+      return;
+    }
+    grid.innerHTML = results.map(r => {
+      const isOk = r.status === 'ok';
+      const isErr = r.status === 'error';
+      const badgeText = isOk ? 'Online' : (isErr ? 'Error' : 'Unconfigured');
+      const latencyText = r.latencyMs != null ? `⚡ ${r.latencyMs}ms` : '—';
+      let detailText = 'Not configured';
+      if (isOk) {
+        if (r.details?.version) detailText = `v${r.details.version}`;
+        else if (r.details?.monitorCount != null) detailText = `${r.details.monitorCount} monitors`;
+        else if (r.details?.batteryChargePercent != null) detailText = `UPS Battery ${r.details.batteryChargePercent}%`;
+        else detailText = 'Operational';
+      } else if (isErr) {
+        detailText = r.error || 'Connection failed';
+      }
+      return `
+        <div class="health-card clickable" data-service="${escapeHtml(r.name)}">
+          <div class="health-card-head">
+            <span class="health-card-title">${escapeHtml(r.name)}</span>
+            <span class="health-badge ${r.status}">${badgeText}</span>
+          </div>
+          <div class="health-card-latency">${latencyText}</div>
+          <div class="health-card-footer">
+            <span class="health-card-details">${escapeHtml(detailText)}</span>
+            <span class="card-edit-btn">Edit &#9998;</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    grid.innerHTML = '<p class="empty-state">Could not run health check.</p>';
+  }
+}
+
+const serviceHealthGrid = document.getElementById('service-health-grid');
+if (serviceHealthGrid) {
+  serviceHealthGrid.addEventListener('click', e => {
+    const card = e.target.closest('.health-card');
+    if (card && card.dataset.service) {
+      openEditSettingModal(card.dataset.service);
+    }
+  });
+}
+
+const editServerConfigBtn = document.getElementById('edit-server-config-btn');
+if (editServerConfigBtn) {
+  editServerConfigBtn.addEventListener('click', () => {
+    openEditSettingModal('ServerDeployment');
+  });
+}
+
+// Edit Setting Modal logic
+const editSettingModal = document.getElementById('edit-setting-modal');
+const editModalTitle = document.getElementById('edit-modal-title');
+const editModalFormBody = document.getElementById('edit-modal-form-body');
+const editModalStatus = document.getElementById('edit-modal-status');
+
+function openEditSettingModal(serviceKey) {
+  const schema = SERVICE_CONFIG_SCHEMAS[serviceKey];
+  if (!schema || !editSettingModal) return;
+
+  editModalTitle.textContent = schema.title;
+  if (editModalStatus) {
+    editModalStatus.textContent = '';
+    editModalStatus.className = 'report-status';
+  }
+
+  let html = '';
+  schema.fields.forEach(f => {
+    const val = currentEnvConfig[f.key] || '';
+    html += `<div class="setting-field">`;
+    html += `<label for="setting-input-${f.key}">${escapeHtml(f.label)}</label>`;
+    if (f.type === 'select') {
+      html += `<select id="setting-input-${f.key}" data-key="${f.key}">`;
+      (f.options || []).forEach(opt => {
+        const selected = (val === opt.val) ? 'selected' : '';
+        html += `<option value="${opt.val}" ${selected}>${escapeHtml(opt.label)}</option>`;
+      });
+      html += `</select>`;
+    } else {
+      const inputType = f.type || 'text';
+      html += `<input id="setting-input-${f.key}" type="${inputType}" data-key="${f.key}" value="${escapeHtml(val)}" placeholder="${escapeHtml(f.placeholder || '')}" autocomplete="off">`;
+    }
+    if (f.hint) {
+      html += `<div class="setting-hint">${escapeHtml(f.hint)}</div>`;
+    }
+    if (f.key === 'TAUTULLI_LIBRARIES') {
+      html += `<button type="button" class="btn btn-secondary btn-sm" id="detect-libraries-btn" style="margin-top: 6px; font-size: 0.8rem; padding: 4px 10px;">Auto-Detect Libraries from Tautulli</button>`;
+    }
+    html += `</div>`;
+  });
+
+  editModalFormBody.innerHTML = html;
+
+  const detectBtn = document.getElementById('detect-libraries-btn');
+  if (detectBtn) {
+    detectBtn.addEventListener('click', async () => {
+      detectBtn.disabled = true;
+      detectBtn.textContent = 'Detecting…';
+      try {
+        const libs = await api('/api/tautulli/libraries');
+        if (Array.isArray(libs) && libs.length > 0) {
+          const val = libs.map(l => `${l.name}:${l.sectionId}`).join(', ');
+          const input = document.getElementById('setting-input-TAUTULLI_LIBRARIES');
+          if (input) input.value = val;
+          if (editModalStatus) {
+            editModalStatus.textContent = `Detected ${libs.length} libraries! Click 'Save Changes' to apply.`;
+            editModalStatus.className = 'report-status ok';
+          }
+        } else {
+          if (editModalStatus) {
+            editModalStatus.textContent = 'No libraries returned by Tautulli.';
+            editModalStatus.className = 'report-status error';
+          }
+        }
+      } catch (e) {
+        if (editModalStatus) {
+          editModalStatus.textContent = 'Could not fetch libraries from Tautulli. Verify Tautulli URL & API Key.';
+          editModalStatus.className = 'report-status error';
+        }
+      } finally {
+        detectBtn.disabled = false;
+        detectBtn.textContent = 'Auto-Detect Libraries from Tautulli';
+      }
+    });
+  }
+
+  editSettingModal.classList.remove('hidden');
+}
+
+const closeEditSettingBtn = document.getElementById('close-edit-setting-btn');
+if (closeEditSettingBtn) {
+  closeEditSettingBtn.addEventListener('click', () => editSettingModal.classList.add('hidden'));
+}
+const cancelEditSettingBtn = document.getElementById('cancel-edit-setting-btn');
+if (cancelEditSettingBtn) {
+  cancelEditSettingBtn.addEventListener('click', () => editSettingModal.classList.add('hidden'));
+}
+
+const editSettingForm = document.getElementById('edit-setting-form');
+if (editSettingForm) {
+  editSettingForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const saveBtn = document.getElementById('save-setting-btn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    if (editModalStatus) editModalStatus.textContent = '';
+
+    const inputs = editModalFormBody.querySelectorAll('[data-key]');
+    const updates = {};
+    inputs.forEach(input => {
+      updates[input.dataset.key] = input.value;
+    });
+
+    try {
+      await api('/api/owner/settings', {
+        method: 'POST',
+        body: JSON.stringify(updates)
+      });
+
+      for (const [k, v] of Object.entries(updates)) {
+        currentEnvConfig[k] = v;
+      }
+
+      if (editModalStatus) {
+        editModalStatus.textContent = 'Settings saved successfully!';
+        editModalStatus.className = 'report-status ok';
+      }
+
+      setTimeout(() => {
+        editSettingModal.classList.add('hidden');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+        loadServerSettings();
+        loadServiceHealth();
+      }, 600);
+    } catch (err) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Changes';
+      if (editModalStatus) {
+        editModalStatus.textContent = err.message || 'Failed to save settings.';
+        editModalStatus.className = 'report-status error';
+      }
+    }
+  });
+}
+
+// ---------- Admin & Settings Modal ----------
+const adminSettingsModal = document.getElementById('admin-settings-modal');
+
+function openAdminSettingsModal() {
+  if (!adminSettingsModal) return;
+  adminSettingsModal.classList.remove('hidden');
+  loadOwnerStatus();
+  loadAdminLogins();
+  loadPendingRequests();
+  loadAdminIssues();
+  loadServerSettings();
+  loadServiceHealth();
+}
+
+const adminSettingsBtn = document.getElementById('admin-settings-btn');
+if (adminSettingsBtn) adminSettingsBtn.addEventListener('click', openAdminSettingsModal);
+
+document.querySelectorAll('.open-admin-settings-btn').forEach(btn => {
+  btn.addEventListener('click', openAdminSettingsModal);
 });
+
+const closeAdminSettingsBtn = document.getElementById('close-admin-settings-btn');
+if (closeAdminSettingsBtn) {
+  closeAdminSettingsBtn.addEventListener('click', () => {
+    adminSettingsModal.classList.add('hidden');
+  });
+}
+
+// Admin Modal Tabs
+const tabAdminOverviewBtn = document.getElementById('tab-admin-overview-btn');
+const tabAdminStatusBtn = document.getElementById('tab-admin-status-btn');
+const tabAdminHealthBtn = document.getElementById('tab-admin-health-btn');
+
+const adminTabOverview = document.getElementById('admin-tab-overview');
+const adminTabStatus = document.getElementById('admin-tab-status');
+const adminTabHealth = document.getElementById('admin-tab-health');
+
+if (tabAdminOverviewBtn) {
+  tabAdminOverviewBtn.addEventListener('click', () => {
+    tabAdminOverviewBtn.classList.add('active');
+    tabAdminStatusBtn.classList.remove('active');
+    tabAdminHealthBtn.classList.remove('active');
+    adminTabOverview.classList.remove('hidden');
+    adminTabStatus.classList.add('hidden');
+    adminTabHealth.classList.add('hidden');
+  });
+}
+
+if (tabAdminStatusBtn) {
+  tabAdminStatusBtn.addEventListener('click', () => {
+    tabAdminOverviewBtn.classList.remove('active');
+    tabAdminStatusBtn.classList.add('active');
+    tabAdminHealthBtn.classList.remove('active');
+    adminTabOverview.classList.add('hidden');
+    adminTabStatus.classList.remove('hidden');
+    adminTabHealth.classList.add('hidden');
+  });
+}
+
+if (tabAdminHealthBtn) {
+  tabAdminHealthBtn.addEventListener('click', () => {
+    tabAdminOverviewBtn.classList.remove('active');
+    tabAdminStatusBtn.classList.remove('active');
+    tabAdminHealthBtn.classList.add('active');
+    adminTabOverview.classList.add('hidden');
+    adminTabStatus.classList.add('hidden');
+    adminTabHealth.classList.remove('hidden');
+  });
+}
+
+const refreshHealthBtn = document.getElementById('refresh-health-btn');
+if (refreshHealthBtn) refreshHealthBtn.addEventListener('click', loadServiceHealth);
 
 // ---------- Release search modal (owner only) ----------
 // Interactive search against Radarr/Sonarr's own configured indexers, so a

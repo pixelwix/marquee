@@ -46,6 +46,7 @@
           <div class="logo-tag" id="header-tag"></div>
         </div>
         <div class="hero-icons">
+          <button id="admin-settings-btn" class="icon-btn hidden" aria-label="Admin & Settings" title="Admin & Settings">&#9881;</button>
           <button id="search-btn" class="icon-btn" aria-label="Request something">+</button>
           <button id="report-search-btn" class="icon-btn" aria-label="Report an issue">&#9873;</button>
           <div class="avatar-chip">
@@ -106,12 +107,18 @@
       </section>
 
       <section class="card span4 hidden" id="panel-owner">
-        <div class="card-label"><span class="chan">CH.08</span> System Status</div>
+        <div class="card-header-flex">
+          <div class="card-label"><span class="chan">CH.08</span> System Status</div>
+          <button class="pill-btn open-admin-settings-btn"><span class="state-dot"></span>Settings &#9881;</button>
+        </div>
         <div id="owner-body"><p class="empty-state">Loading…</p></div>
       </section>
 
       <section class="card span4 hidden" id="panel-admin">
-        <div class="card-label"><span class="chan">CH.09</span> Admin</div>
+        <div class="card-header-flex">
+          <div class="card-label"><span class="chan">CH.09</span> Admin</div>
+          <button class="pill-btn open-admin-settings-btn"><span class="state-dot"></span>Full Admin View &#9881;</button>
+        </div>
         <h4 class="admin-subhead">Recent sign-ins</h4>
         <div id="admin-logins-body"><p class="empty-state">Loading…</p></div>
         <h4 class="admin-subhead">Pending requests</h4>
@@ -259,6 +266,73 @@
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ADMIN & SETTINGS MODAL (Owner only) -->
+<div id="admin-settings-modal" class="modal hidden">
+  <div class="modal-card modal-card-wide">
+    <div class="modal-head">
+      <h3>Owner Admin &amp; Settings</h3>
+      <button id="close-admin-settings-btn" class="pill-btn pill-btn-icon">&#10005;</button>
+    </div>
+
+    <div class="modal-tabs">
+      <button id="tab-admin-overview-btn" class="modal-tab pill-btn active"><span class="state-dot"></span>Overview &amp; Requests</button>
+      <button id="tab-admin-status-btn" class="modal-tab pill-btn"><span class="state-dot"></span>System Status</button>
+      <button id="tab-admin-health-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Services &amp; Settings</button>
+    </div>
+
+    <!-- TAB 1: OVERVIEW & REQUESTS -->
+    <div id="admin-tab-overview">
+      <h4 class="admin-subhead">Recent sign-ins</h4>
+      <div id="modal-admin-logins-body"><p class="empty-state">Loading…</p></div>
+
+      <h4 class="admin-subhead">Pending Overseerr requests</h4>
+      <div id="modal-admin-requests-body"><p class="empty-state">Loading…</p></div>
+
+      <h4 class="admin-subhead">Open issues</h4>
+      <div id="modal-admin-issues-body"><p class="empty-state">Loading…</p></div>
+    </div>
+
+    <!-- TAB 2: SYSTEM STATUS -->
+    <div id="admin-tab-status" class="hidden">
+      <div id="modal-owner-body"><p class="empty-state">Loading…</p></div>
+    </div>
+
+    <!-- TAB 3: SERVICES & SETTINGS -->
+    <div id="admin-tab-health" class="hidden">
+      <div class="settings-section-head">
+        <h4>Integrated Service Health &amp; Latency</h4>
+        <button id="refresh-health-btn" class="pill-btn"><span class="state-dot"></span>Run Health Check</button>
+      </div>
+      <div id="service-health-grid" class="health-grid"><p class="empty-state">Loading service health…</p></div>
+
+      <div class="settings-section-head" style="margin-top:24px;">
+        <h4>Server &amp; Deployment Configuration</h4>
+        <button id="edit-server-config-btn" class="pill-btn"><span class="state-dot"></span>Edit Deployment Settings &#9998;</button>
+      </div>
+      <div id="server-config-body"><p class="empty-state">Loading settings…</p></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- EDIT SETTING MODAL -->
+<div id="edit-setting-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="edit-modal-title">Edit Configuration</h3>
+      <button id="close-edit-setting-btn" class="pill-btn pill-btn-icon">&#10005;</button>
+    </div>
+    <form id="edit-setting-form">
+      <div id="edit-modal-form-body"></div>
+      <p id="edit-modal-status" class="report-status"></p>
+      <div class="modal-foot" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+        <button type="button" id="cancel-edit-setting-btn" class="pill-btn">Cancel</button>
+        <button type="submit" id="save-setting-btn" class="btn-primary">Save Changes</button>
+      </div>
+    </form>
   </div>
 </div>
 

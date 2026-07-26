@@ -7,6 +7,9 @@ const ups = require('../lib/ups');
 const loginLog = require('../lib/loginLog');
 const router = express.Router();
 
+const fs = require('fs');
+const axios = require('axios');
+
 router.get('/status', requireAuth, requireOwner, async (req, res) => {
   const [monitors, upsStatus] = await Promise.all([
     settle('uptime-kuma read', uptimeKuma.getMonitors(), []),
@@ -25,4 +28,249 @@ router.get('/logins', requireAuth, requireOwner, async (req, res) => {
   }
 });
 
+const path = require('path');
+
+function updateEnvFile(updates) {
+  const envPath = path.join(__dirname, '..', '.env');
+  let content = '';
+  try {
+    if (fs.existsSync(envPath)) {
+      content = fs.readFileSync(envPath, 'utf8');
+    }
+  } catch (err) {
+    console.error('Error reading .env file:', err.message);
+  }
+
+  let lines = content.split('\n');
+  const updatedKeys = new Set();
+
+  lines = lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return line;
+    const eqIdx = line.indexOf('=');
+    if (eqIdx === -1) return line;
+    const key = line.substring(0, eqIdx).trim();
+    if (Object.prototype.hasOwnProperty.call(updates, key)) {
+      updatedKeys.add(key);
+      return `${key}=${updates[key]}`;
+    }
+    return line;
+  });
+
+  for (const [key, val] of Object.entries(updates)) {
+    if (!updatedKeys.has(key)) {
+      lines.push(`${key}=${val}`);
+    }
+  }
+
+  fs.writeFileSync(envPath, lines.join('\n'), 'utf8');
+}
+
+const ALLOWED_CONFIG_KEYS = new Set([
+  'SITE_NAME', 'SITE_TAGLINES', 'HOST_PORT', 'PUBLIC_URL', 'COOKIE_SECURE',
+  'PLEX_SERVER_URL', 'PLEX_ADMIN_TOKEN', 'PLEX_MACHINE_ID', 'PLEX_CLIENT_ID',
+  'TAUTULLI_URL', 'TAUTULLI_API_KEY', 'TAUTULLI_SECTION_MOVIES', 'TAUTULLI_SECTION_TV', 'TAUTULLI_SECTION_ANIME', 'TAUTULLI_LIBRARIES',
+  'OVERSEERR_URL', 'OVERSEERR_API_KEY', 'OVERSEERR_WEBHOOK_SECRET', 'OVERSEERR_WEBHOOK_FORWARD_URL',
+  'SONARR_URL', 'SONARR_API_KEY',
+  'RADARR_URL', 'RADARR_API_KEY',
+  'QBITTORRENT_URL', 'QBITTORRENT_USERNAME', 'QBITTORRENT_PASSWORD',
+  'SABNZBD_URL', 'SABNZBD_API_KEY',
+  'UPTIME_KUMA_DB_PATH', 'UPTIME_KUMA_DATA_DIR',
+  'NUT_HOST', 'NUT_PORT', 'NUT_USERNAME', 'NUT_PASSWORD', 'NUT_UPS_NAME'
+]);
+
+router.get('/settings', requireAuth, requireOwner, (req, res) => {
+  const siteName = process.env.SITE_NAME || 'Marquee';
+  const siteTaglines = (process.env.SITE_TAGLINES || 'Uplink to the home network.').split('|').filter(Boolean);
+  const hostPort = process.env.HOST_PORT || 4000;
+  const publicUrl = process.env.PUBLIC_URL || null;
+  const cookieSecure = process.env.COOKIE_SECURE === 'true';
+  const sessionDbDir = process.env.SESSION_DB_DIR || '/app/data';
+  const webhookSecretSet = !!process.env.OVERSEERR_WEBHOOK_SECRET;
+  const webhookForwardUrl = process.env.OVERSEERR_WEBHOOK_FORWARD_URL || null;
+
+  const env = {};
+  for (const k of ALLOWED_CONFIG_KEYS) {
+    env[k] = process.env[k] || '';
+  }
+
+  res.json({
+    siteName,
+    siteTaglines,
+    hostPort,
+    publicUrl,
+    cookieSecure,
+    sessionDbDir,
+    webhookSecretSet,
+    webhookForwardUrl,
+    env,
+    services: {
+      plex: { configured: !!(process.env.PLEX_SERVER_URL && process.env.PLEX_ADMIN_TOKEN), url: process.env.PLEX_SERVER_URL || null },
+      tautulli: { configured: !!(process.env.TAUTULLI_URL && process.env.TAUTULLI_API_KEY), url: process.env.TAUTULLI_URL || null },
+      overseerr: { configured: !!(process.env.OVERSEERR_URL && process.env.OVERSEERR_API_KEY), url: process.env.OVERSEERR_URL || null },
+      sonarr: { configured: !!(process.env.SONARR_URL && process.env.SONARR_API_KEY), url: process.env.SONARR_URL || null },
+      radarr: { configured: !!(process.env.RADARR_URL && process.env.RADARR_API_KEY), url: process.env.RADARR_URL || null },
+      qbittorrent: { configured: !!process.env.QBITTORRENT_URL, url: process.env.QBITTORRENT_URL || null },
+      sabnzbd: { configured: !!(process.env.SABNZBD_URL && process.env.SABNZBD_API_KEY), url: process.env.SABNZBD_URL || null },
+      uptimeKuma: { configured: !!(process.env.UPTIME_KUMA_DB_PATH && fs.existsSync(process.env.UPTIME_KUMA_DB_PATH)) },
+      nutUps: { configured: !!process.env.NUT_HOST, host: process.env.NUT_HOST || null, name: process.env.NUT_UPS_NAME || null }
+    }
+  });
+});
+
+router.post('/settings', requireAuth, requireOwner, (req, res) => {
+  const updates = req.body || {};
+  const validUpdates = {};
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (ALLOWED_CONFIG_KEYS.has(key) && typeof value === 'string') {
+      const valStr = value.trim();
+      process.env[key] = valStr;
+      validUpdates[key] = valStr;
+    }
+  }
+
+  if (Object.keys(validUpdates).length === 0) {
+    return res.status(400).json({ error: 'No valid setting updates provided' });
+  }
+
+  try {
+    updateEnvFile(validUpdates);
+    res.json({ status: 'ok', updatedKeys: Object.keys(validUpdates) });
+  } catch (err) {
+    console.error('Failed to write .env file:', err);
+    res.status(500).json({ error: 'Failed to persist settings to disk' });
+  }
+});
+
+async function checkServiceHealth(name, fn) {
+  const start = Date.now();
+  try {
+    const res = await fn();
+    const latencyMs = Date.now() - start;
+    return { name, status: 'ok', latencyMs, details: res || null };
+  } catch (err) {
+    const latencyMs = Date.now() - start;
+    return { name, status: 'error', latencyMs, error: err.message };
+  }
+}
+
+router.get('/health', requireAuth, requireOwner, async (req, res) => {
+  const checks = [];
+
+  // Plex
+  if (process.env.PLEX_SERVER_URL && process.env.PLEX_ADMIN_TOKEN) {
+    checks.push(checkServiceHealth('Plex', async () => {
+      const { data } = await axios.get(`${process.env.PLEX_SERVER_URL}/identity`, {
+        headers: { 'X-Plex-Token': process.env.PLEX_ADMIN_TOKEN },
+        timeout: 4000
+      });
+      return { version: data?.MediaContainer?.version || 'connected' };
+    }));
+  } else {
+    checks.push(Promise.resolve({ name: 'Plex', status: 'unconfigured' }));
+  }
+
+  // Tautulli
+  if (process.env.TAUTULLI_URL && process.env.TAUTULLI_API_KEY) {
+    checks.push(checkServiceHealth('Tautulli', async () => {
+      const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
+        params: { cmd: 'arn_is_running', apikey: process.env.TAUTULLI_API_KEY },
+        timeout: 4000
+      });
+      if (data?.response?.result !== 'success') throw new Error(data?.response?.message || 'Invalid API response');
+      return { connected: true };
+    }));
+  } else {
+    checks.push(Promise.resolve({ name: 'Tautulli', status: 'unconfigured' }));
+  }
+
+  // Overseerr
+  if (process.env.OVERSEERR_URL && process.env.OVERSEERR_API_KEY) {
+    checks.push(checkServiceHealth('Overseerr', async () => {
+      const { data } = await axios.get(`${process.env.OVERSEERR_URL}/api/v1/status`, {
+        headers: { 'X-Api-Key': process.env.OVERSEERR_API_KEY },
+        timeout: 4000
+      });
+      return { version: data?.version || 'connected' };
+    }));
+  } else {
+    checks.push(Promise.resolve({ name: 'Overseerr', status: 'unconfigured' }));
+  }
+
+  // Sonarr
+  if (process.env.SONARR_URL && process.env.SONARR_API_KEY) {
+    checks.push(checkServiceHealth('Sonarr', async () => {
+      const { data } = await axios.get(`${process.env.SONARR_URL}/api/v3/system/status`, {
+        params: { apikey: process.env.SONARR_API_KEY },
+        timeout: 4000
+      });
+      return { version: data?.version || 'connected' };
+    }));
+  } else {
+    checks.push(Promise.resolve({ name: 'Sonarr', status: 'unconfigured' }));
+  }
+
+  // Radarr
+  if (process.env.RADARR_URL && process.env.RADARR_API_KEY) {
+    checks.push(checkServiceHealth('Radarr', async () => {
+      const { data } = await axios.get(`${process.env.RADARR_URL}/api/v3/system/status`, {
+        params: { apikey: process.env.RADARR_API_KEY },
+        timeout: 4000
+      });
+      return { version: data?.version || 'connected' };
+    }));
+  } else {
+    checks.push(Promise.resolve({ name: 'Radarr', status: 'unconfigured' }));
+  }
+
+  // qBittorrent
+  if (process.env.QBITTORRENT_URL) {
+    checks.push(checkServiceHealth('qBittorrent', async () => {
+      const { data } = await axios.get(`${process.env.QBITTORRENT_URL}/api/v2/app/version`, { timeout: 4000 });
+      return { version: data || 'connected' };
+    }));
+  } else {
+    checks.push(Promise.resolve({ name: 'qBittorrent', status: 'unconfigured' }));
+  }
+
+  // SABnzbd
+  if (process.env.SABNZBD_URL && process.env.SABNZBD_API_KEY) {
+    checks.push(checkServiceHealth('SABnzbd', async () => {
+      const { data } = await axios.get(`${process.env.SABNZBD_URL}/api`, {
+        params: { mode: 'version', output: 'json', apikey: process.env.SABNZBD_API_KEY },
+        timeout: 4000
+      });
+      return { version: data?.version || 'connected' };
+    }));
+  } else {
+    checks.push(Promise.resolve({ name: 'SABnzbd', status: 'unconfigured' }));
+  }
+
+  // Uptime Kuma
+  if (process.env.UPTIME_KUMA_DB_PATH && fs.existsSync(process.env.UPTIME_KUMA_DB_PATH)) {
+    checks.push(checkServiceHealth('Uptime Kuma', async () => {
+      const monitors = await uptimeKuma.getMonitors();
+      return { monitorCount: monitors.length };
+    }));
+  } else {
+    checks.push(Promise.resolve({ name: 'Uptime Kuma', status: 'unconfigured' }));
+  }
+
+  // NUT UPS
+  if (process.env.NUT_HOST) {
+    checks.push(checkServiceHealth('NUT UPS', async () => {
+      const status = await ups.getStatus();
+      if (!status) throw new Error('Could not query UPS status');
+      return status;
+    }));
+  } else {
+    checks.push(Promise.resolve({ name: 'NUT UPS', status: 'unconfigured' }));
+  }
+
+  const results = await Promise.all(checks);
+  res.json({ results });
+});
+
 module.exports = router;
+
