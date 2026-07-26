@@ -201,7 +201,19 @@ body {
   background: linear-gradient(160deg,#E4E9F2,#CBD6E8);
   box-shadow: 0 0 0 2px rgba(224,162,30,0.6), 0 10px 20px -12px rgba(224,162,30,0.6);
 }
-.top-month-tile.user .top-month-frame { border-radius: 50%; aspect-ratio: 1/1; max-width: 92px; }
+/* Same reserved box height as the poster frames (aspect-ratio: 2/3, unchanged)
+   so the label/title/plays rows below start at the same vertical offset in
+   every column — only the avatar itself becomes circular and centered within
+   that box, rather than the box itself getting shorter. A shorter box here is
+   exactly what threw off "347 plays"'s alignment against the other three. */
+.top-month-tile.user .top-month-frame {
+  background: none; box-shadow: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.top-month-tile.user .top-month-img {
+  width: 92px; height: 92px; border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(224,162,30,0.6), 0 10px 20px -12px rgba(224,162,30,0.6);
+}
 .top-month-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .top-month-medal {
   display: block; font-size: 1.3rem; margin-bottom: 0.3rem;
