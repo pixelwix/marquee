@@ -9,6 +9,28 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
+// ---------- Taglines ----------
+// SITE_TAGLINES (server-injected, see server.js) — defaults to a single generic
+// phrase, but a deployment can supply its own personality via .env.
+(function cycleTagline() {
+  const el = document.getElementById('tagline');
+  const phrases = (window.SITE_TAGLINES && window.SITE_TAGLINES.length) ? window.SITE_TAGLINES : ['Uplink to the home network.'];
+  let idx = 0;
+  el.textContent = phrases[0];
+  if (phrases.length <= 1) return;
+  setInterval(() => {
+    el.classList.add('fading');
+    setTimeout(() => {
+      idx = (idx + 1) % phrases.length;
+      el.textContent = phrases[idx];
+      el.classList.remove('fading');
+    }, 300);
+  }, 4000);
+})();
+// One phrase, picked once, as a small caption under the dashboard's own logo.
+document.getElementById('header-tag').textContent =
+  (window.SITE_TAGLINES || [])[Math.floor(Math.random() * (window.SITE_TAGLINES || []).length)] || '';
+
 // ---------- Sign in with Plex ----------
 document.getElementById('plex-signin-btn').addEventListener('click', async () => {
   signinStatus.textContent = 'Requesting sign-in code…';

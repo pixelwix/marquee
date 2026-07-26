@@ -49,10 +49,17 @@ app.use('/api/owner', require('./routes/owner'));
 // index.html carries a {{SITE_NAME}} placeholder so this same image can show a generic
 // "Marquee" brand out of the box, or your own (e.g. via SITE_NAME=skyn3t in .env).
 const siteName = process.env.SITE_NAME || 'Marquee';
+// Pipe-separated so a deployment can brand the sign-in screen with its own personality
+// (e.g. skyn3t.me leaning into its Skynet namesake) without touching the code — the
+// generic default is intentionally plain.
+const taglines = (process.env.SITE_TAGLINES || 'Uplink to the home network.').split('|');
+const taglinesJson = JSON.stringify(taglines).replace(/</g, '\\u003c');
 app.get('/', (req, res) => {
   fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8', (err, html) => {
     if (err) return res.status(500).end();
-    res.type('html').send(html.replaceAll('{{SITE_NAME}}', siteName));
+    res.type('html').send(html
+      .replaceAll('{{SITE_NAME}}', siteName)
+      .replace('{{TAGLINES_JSON}}', taglinesJson));
   });
 });
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));

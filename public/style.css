@@ -50,7 +50,8 @@ body {
   -webkit-backdrop-filter: blur(22px) saturate(1.4);
   box-shadow: 0 30px 60px -30px rgba(20,25,35,0.35), inset 0 1px 0 rgba(255,255,255,0.6);
 }
-.tagline { color: var(--muted); margin: 0.35rem 0 2rem; font-size: 0.92rem; }
+.tagline { color: var(--muted); margin: 0.35rem 0 2rem; font-size: 0.92rem; min-height: 1.3em; transition: opacity 0.3s ease; }
+.tagline.fading { opacity: 0; }
 .signin-status { color: var(--muted); font-family: var(--mono); font-size: 0.78rem; min-height: 1.2em; margin-top: 1.1rem; }
 
 .btn-primary {
@@ -77,6 +78,7 @@ body {
 .hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 78% 25%, rgba(255,255,255,0.15), transparent 55%); }
 .hero-top { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; position: relative; z-index: 1; color: #fff; }
 .logo { font-family: var(--display); font-weight: 700; font-size: 1.4rem; color: #fff; }
+.logo-tag { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.04em; color: rgba(255,255,255,0.55); text-transform: uppercase; margin-top: 1px; }
 .hero-icons { display: flex; gap: 0.6rem; align-items: center; }
 .icon-btn {
   width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.18);
