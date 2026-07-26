@@ -64,15 +64,27 @@ const siteName = process.env.SITE_NAME || 'Marquee';
 // generic default is intentionally plain.
 const taglines = (process.env.SITE_TAGLINES || 'Uplink to the home network.').split('|');
 const taglinesJson = JSON.stringify(taglines).replace(/</g, '\\u003c');
+// Cloudflare overrides our origin's Cache-Control for .js/.css with its own
+// multi-hour edge TTL regardless of what we send — no-cache alone doesn't help.
+// Busting the query string on every process start (i.e. every deploy) instead
+// forces a real cache miss, since it's a URL Cloudflare has never cached before.
+const assetVersion = String(Date.now());
 app.get('/', (req, res) => {
   fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8', (err, html) => {
     if (err) return res.status(500).end();
+    // Always revalidate the page shell itself, so it picks up the new asset
+    // version immediately rather than also being stuck on a stale cached copy.
+    res.set('Cache-Control', 'no-cache');
     res.type('html').send(html
       .replaceAll('{{SITE_NAME}}', siteName)
-      .replace('{{TAGLINES_JSON}}', taglinesJson));
+      .replace('{{TAGLINES_JSON}}', taglinesJson)
+      .replaceAll('{{ASSET_VERSION}}', assetVersion));
   });
 });
-app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+app.use(express.static(path.join(__dirname, 'public'), {
+  index: false,
+  setHeaders: res => res.set('Cache-Control', 'no-cache')
+}));
 
 const port = process.env.PORT || 4000;
 app.listen(port, () => console.log(`${siteName} running on :${port}`));
