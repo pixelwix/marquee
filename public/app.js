@@ -196,10 +196,14 @@ async function loadRecentlyAdded() {
       return;
     }
 
+    // Same horizontal-scroll row as Releasing Soon; mobile shows fewer per row
+    // since there's less width to scroll through per swipe.
+    const cap = window.matchMedia('(max-width: 900px)').matches ? 6 : 10;
+
     body.innerHTML = sections.map(s => `
       ${s.label ? `<div class="subsection-label">${s.label}</div>` : ''}
-      <div class="poster-grid" style="margin-bottom:1rem;">
-        ${s.items.map((i, idx) => `
+      <div class="poster-grid poster-grid-scroll" style="margin-bottom:1rem;">
+        ${s.items.slice(0, cap).map((i, idx) => `
           <div class="poster-card" data-cat="${s.key}" data-idx="${idx}">
             <div class="poster-frame">
               <img class="poster-img" src="${i.thumb || ''}" onerror="this.style.visibility='hidden'">
