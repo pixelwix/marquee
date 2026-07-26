@@ -115,6 +115,8 @@
         <div id="admin-logins-body"><p class="empty-state">Loading…</p></div>
         <h4 class="admin-subhead">Pending requests</h4>
         <div id="admin-requests-body"><p class="empty-state">Loading…</p></div>
+        <h4 class="admin-subhead">Open issues</h4>
+        <div id="admin-issues-body"><p class="empty-state">Loading…</p></div>
       </section>
 
     </div>
@@ -172,6 +174,21 @@
         <p id="info-meta" class="info-meta"></p>
         <p id="info-overview" class="info-overview"></p>
         <dl id="info-stream" class="info-stream hidden"></dl>
+
+        <div id="info-report-section" class="hidden">
+          <button id="info-report-btn" class="btn-ghost">Report an issue</button>
+          <div id="info-report-form" class="report-form hidden">
+            <div class="report-type-grid">
+              <button class="report-type-btn" data-type="doesnt_play">Doesn't play</button>
+              <button class="report-type-btn" data-type="wrong_audio">Wrong audio</button>
+              <button class="report-type-btn" data-type="subtitles">Subtitles</button>
+              <button class="report-type-btn" data-type="other">Other</button>
+            </div>
+            <textarea id="report-message" placeholder="Any details? (optional)" rows="2"></textarea>
+            <button id="report-submit-btn" class="btn-primary" disabled>Send report</button>
+            <p id="report-status" class="report-status"></p>
+          </div>
+        </div>
       </div>
     </div>
   </div>

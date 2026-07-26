@@ -103,6 +103,8 @@ function showDashboard(isOwner) {
     loadAdminLogins();
     loadPendingRequests();
     setInterval(loadPendingRequests, 30000);
+    loadAdminIssues();
+    setInterval(loadAdminIssues, 30000);
   }
 }
 
@@ -495,6 +497,50 @@ document.getElementById('admin-requests-body').addEventListener('click', async e
   }
 });
 
+async function loadAdminIssues() {
+  const body = document.getElementById('admin-issues-body');
+  try {
+    const results = await api('/api/overseerr/issues/open');
+    if (!results.length) { body.innerHTML = '<p class="empty-state">Nothing open.</p>'; return; }
+    body.innerHTML = results.map(r => `
+      <div class="pending-row" data-id="${r.id}">
+        <img class="result-poster" src="${r.poster || ''}" onerror="this.style.visibility='hidden'">
+        <div class="result-info">
+          <div class="result-title">${escapeHtml(r.title || 'Unknown title')}${r.season ? ` — S${r.season}E${r.episode}` : ''}</div>
+          <div class="pending-requester">
+            <img src="${r.reportedByAvatar || ''}" onerror="this.style.visibility='hidden'">
+            ${escapeHtml(r.reportedBy)} · ${r.issueType} · ${timeAgo(r.reportedAt)}
+          </div>
+          ${r.message ? `<div class="issue-message">${escapeHtml(r.message)}</div>` : ''}
+        </div>
+        <div class="pending-actions">
+          <button class="approve-btn">Resolve</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not load issues.</p>';
+  }
+}
+
+document.getElementById('admin-issues-body').addEventListener('click', async e => {
+  const btn = e.target.closest('.approve-btn');
+  if (!btn) return;
+  const row = btn.closest('.pending-row');
+  row.querySelectorAll('button').forEach(b => b.disabled = true);
+  btn.textContent = '…';
+  try {
+    await api(`/api/overseerr/issues/${row.dataset.id}/resolve`, { method: 'POST' });
+    row.remove();
+    if (!document.getElementById('admin-issues-body').children.length) {
+      document.getElementById('admin-issues-body').innerHTML = '<p class="empty-state">Nothing open.</p>';
+    }
+  } catch (e) {
+    row.querySelectorAll('button').forEach(b => b.disabled = false);
+    btn.textContent = 'Resolve';
+  }
+});
+
 function formatUpsStatus(status) {
   const flags = {
     OL: 'Online', OB: 'On Battery', LB: 'Low Battery', CHRG: 'Charging', DISCHRG: 'Discharging',
@@ -701,8 +747,9 @@ document.getElementById('season-picker-submit').addEventListener('click', async 
 
 // ---------- Media info modal ----------
 const infoModal = document.getElementById('info-modal');
+let infoReportRatingKey = null;
 
-function openInfo({ poster, title, badge, meta, overview, stream }) {
+function openInfo({ poster, title, badge, meta, overview, stream, ratingKey }) {
   const posterEl = document.getElementById('info-poster');
   posterEl.style.visibility = ''; // undo a previous onerror hide before loading the next poster
   posterEl.src = poster || '';
@@ -720,8 +767,69 @@ function openInfo({ poster, title, badge, meta, overview, stream }) {
     streamEl.classList.add('hidden');
   }
 
+  // Only offered for things that carry a Plex rating key (Now Playing/Recently
+  // Watched) — upcoming/not-yet-available items (Airing Today, Releasing Soon)
+  // have nothing to report a playback problem with yet.
+  infoReportRatingKey = ratingKey || null;
+  resetReportForm();
+  document.getElementById('info-report-section').classList.toggle('hidden', !ratingKey);
+
   infoModal.classList.remove('hidden');
 }
+
+function resetReportForm() {
+  document.getElementById('info-report-form').classList.add('hidden');
+  document.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('report-message').value = '';
+  const submitBtn = document.getElementById('report-submit-btn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Send report';
+  const status = document.getElementById('report-status');
+  status.textContent = '';
+  status.className = 'report-status';
+  selectedReportType = null;
+}
+
+let selectedReportType = null;
+
+document.getElementById('info-report-btn').addEventListener('click', () => {
+  document.getElementById('info-report-form').classList.toggle('hidden');
+});
+
+document.querySelectorAll('.report-type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedReportType = btn.dataset.type;
+    document.getElementById('report-submit-btn').disabled = false;
+  });
+});
+
+document.getElementById('report-submit-btn').addEventListener('click', async () => {
+  if (!infoReportRatingKey || !selectedReportType) return;
+  const submitBtn = document.getElementById('report-submit-btn');
+  const status = document.getElementById('report-status');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Sending…';
+  try {
+    await api('/api/overseerr/issue', {
+      method: 'POST',
+      body: JSON.stringify({
+        ratingKey: infoReportRatingKey,
+        issueType: selectedReportType,
+        message: document.getElementById('report-message').value
+      })
+    });
+    status.textContent = 'Thanks — reported.';
+    status.className = 'report-status ok';
+    submitBtn.textContent = 'Send report';
+  } catch (e) {
+    status.textContent = e.message || 'Could not submit report.';
+    status.className = 'report-status error';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Send report';
+  }
+});
 
 // Stream info shown on a Now Playing item — sourced from Tautulli, deliberately
 // excludes ip_address (this modal is visible to any signed-in family member).
@@ -761,7 +869,8 @@ document.getElementById('now-playing-body').addEventListener('click', e => {
     poster: s.thumb, title: s.title, badge: 'CH.01 · ON AIR',
     meta: `${s.user || ''} · ${s.quality || ''} · ${s.progress}% watched`,
     overview: s.overview,
-    stream: s.stream
+    stream: s.stream,
+    ratingKey: s.ratingKey
   });
 });
 
@@ -775,7 +884,8 @@ document.getElementById('recently-watched-body').addEventListener('click', async
   openInfo({
     poster: i.thumb, title: i.title, badge: 'CH.02 · RECENTLY WATCHED',
     meta: `${i.finished ? 'Finished' : i.progress + '% watched'} · ${timeAgo(i.watchedAt)}`,
-    overview: i.overview
+    overview: i.overview,
+    ratingKey: i.ratingKey
   });
   // get_history (the recently-watched data source) has no synopsis field, unlike
   // the other panels — fetched lazily here and cached on the item so repeat
