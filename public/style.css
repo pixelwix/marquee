@@ -390,3 +390,32 @@ body {
 .toast-title { font-size: 0.85rem; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes toast-out { to { opacity: 0; transform: translateY(8px); } }
+
+/* Admin panel (owner only) — recent sign-ins roster + pending Overseerr requests
+   with inline approve/decline. */
+.admin-subhead {
+  font-family: var(--mono); font-size: 0.68rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.05em; margin: 0.9rem 0 0.4rem;
+}
+.admin-subhead:first-of-type { margin-top: 0; }
+
+.login-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem 0; }
+.login-row + .login-row { border-top: 1px solid rgba(20,25,35,0.06); }
+.login-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #E2E6EC; flex-shrink: 0; }
+.login-name { font-size: 0.85rem; font-weight: 600; }
+.login-time { font-size: 0.72rem; color: var(--muted); font-family: var(--mono); }
+
+.pending-row { display: flex; gap: 0.85rem; align-items: center; padding: 0.65rem 0; }
+.pending-row + .pending-row { border-top: 1px solid rgba(20,25,35,0.08); }
+.pending-requester { display: flex; align-items: center; gap: 0.35rem; margin-top: 3px; font-size: 0.74rem; color: var(--muted); font-family: var(--mono); }
+.pending-requester img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; background: #E2E6EC; }
+.pending-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+.approve-btn, .decline-btn {
+  padding: 0.4rem 0.75rem; border-radius: 8px; border: 1px solid; background: transparent;
+  font-size: 0.78rem; cursor: pointer;
+}
+.approve-btn { border-color: var(--teal); color: var(--teal); }
+.approve-btn:hover:not(:disabled) { background: rgba(15,143,118,0.1); }
+.decline-btn { border-color: var(--danger); color: var(--danger); }
+.decline-btn:hover:not(:disabled) { background: rgba(214,69,69,0.1); }
+.approve-btn:disabled, .decline-btn:disabled { opacity: 0.5; cursor: default; }

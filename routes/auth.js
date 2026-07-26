@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const { parseStringPromise } = require('xml2js');
 const rateLimit = require('../lib/rateLimit');
+const loginLog = require('../lib/loginLog');
 const router = express.Router();
 
 const PLEX_HEADERS = {
@@ -66,6 +67,7 @@ router.get('/plex/poll', pollLimiter, async (req, res) => {
       plexToken: data.authToken,
       isOwner
     };
+    loginLog.record(req.session.user);
     res.clearCookie('plex_pin_id');
     res.json({ status: 'ok', user: req.session.user.username, isOwner });
   } catch (err) {

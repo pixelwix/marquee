@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const requireAuth = require('./requireAuth');
+const requireOwner = require('./requireOwner');
 const overseerrSession = require('../lib/overseerrSession');
 const rateLimit = require('../lib/rateLimit');
 const sse = require('../lib/sse');
@@ -120,6 +121,23 @@ router.post('/request', requireAuth, requestLimiter, async (req, res) => {
   }
 });
 
+// Overseerr's request list only returns tmdbId, not a title — resolved here with
+// one lookup per request (parallel at each call site; confirmed there's no bulk
+// endpoint). Shared by /requests/mine and /requests/pending below.
+async function resolveMedia(mediaType, tmdbId) {
+  if (!tmdbId) return { title: null, poster: null };
+  try {
+    const { data } = await adminClient().get(`/${mediaType}/${tmdbId}`);
+    return {
+      title: data.title || data.name,
+      poster: data.posterPath ? `https://image.tmdb.org/t/p/w300${data.posterPath}` : null
+    };
+  } catch (e) {
+    // Leave title/poster null rather than failing the whole list over one bad lookup.
+    return { title: null, poster: null };
+  }
+}
+
 router.get('/requests/mine', requireAuth, async (req, res) => {
   try {
     const session = await overseerrSession.getSession(req.session.user.id, req.session.user.plexToken);
@@ -128,23 +146,9 @@ router.get('/requests/mine', requireAuth, async (req, res) => {
       headers: { Cookie: session.cookie }
     });
 
-    // Overseerr's request list only returns tmdbId, not a title — resolved here
-    // with one lookup per request (parallel; confirmed there's no bulk endpoint).
     const results = await Promise.all(data.results.map(async r => {
       const mediaType = r.type; // 'movie' | 'tv'
-      const tmdbId = r.media?.tmdbId;
-      let title = null;
-      let poster = null;
-      if (tmdbId) {
-        try {
-          const { data: details } = await adminClient().get(`/${mediaType}/${tmdbId}`);
-          title = details.title || details.name;
-          poster = details.posterPath ? `https://image.tmdb.org/t/p/w300${details.posterPath}` : null;
-        } catch (e) {
-          // Leave title/poster null rather than failing the whole list over one
-          // bad lookup.
-        }
-      }
+      const { title, poster } = await resolveMedia(mediaType, r.media?.tmdbId);
       // Two different things worth showing distinctly: whether the request
       // itself was approved (r.status: 1 pending, 2 approved, 3 declined), and
       // whether the underlying media is actually available yet (r.media.status:
@@ -161,6 +165,62 @@ router.get('/requests/mine', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('overseerr requests error', err.response?.data || err.message);
     res.status(502).json({ error: 'Could not reach Overseerr' });
+  }
+});
+
+// Admin-wide view (every family member's pending requests, not just the caller's
+// own) so the owner can approve/decline from the dashboard instead of Overseerr's
+// own UI. Deliberately drops requestedBy's email/permissions/quota fields before
+// they reach the frontend — only what's needed to identify who asked and decide
+// on the request.
+router.get('/requests/pending', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const { data } = await adminClient().get('/request', {
+      params: { filter: 'pending', take: 50, sort: 'added' }
+    });
+
+    const results = await Promise.all(data.results.map(async r => {
+      const mediaType = r.type;
+      const { title, poster } = await resolveMedia(mediaType, r.media?.tmdbId);
+      return {
+        id: r.id,
+        title,
+        poster,
+        mediaType,
+        requestedBy: r.requestedBy?.displayName || r.requestedBy?.plexUsername || 'Unknown',
+        requestedByAvatar: r.requestedBy?.avatar || null,
+        requestedAt: r.createdAt
+      };
+    }));
+
+    res.json(results);
+  } catch (err) {
+    console.error('overseerr pending requests error', err.response?.data || err.message);
+    res.status(502).json({ error: 'Could not reach Overseerr' });
+  }
+});
+
+// TMDB/request ids are always numeric — same path-traversal lesson as /tv/:id
+// above: reject anything else before it reaches an admin-keyed outbound URL.
+router.post('/requests/:id/approve', requireAuth, requireOwner, async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    await adminClient().post(`/request/${req.params.id}/approve`);
+    res.json({ status: 'approved' });
+  } catch (err) {
+    console.error('overseerr approve error', err.response?.data || err.message);
+    res.status(502).json({ error: 'Could not approve request' });
+  }
+});
+
+router.post('/requests/:id/decline', requireAuth, requireOwner, async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    await adminClient().post(`/request/${req.params.id}/decline`);
+    res.json({ status: 'declined' });
+  } catch (err) {
+    console.error('overseerr decline error', err.response?.data || err.message);
+    res.status(502).json({ error: 'Could not decline request' });
   }
 });
 
