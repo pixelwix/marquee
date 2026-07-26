@@ -99,6 +99,10 @@ function showDashboard(isOwner) {
     document.getElementById('panel-owner').classList.remove('hidden');
     loadOwnerStatus();
     setInterval(loadOwnerStatus, 15000);
+    document.getElementById('panel-admin').classList.remove('hidden');
+    loadAdminLogins();
+    loadPendingRequests();
+    setInterval(loadPendingRequests, 30000);
   }
 }
 
@@ -426,6 +430,70 @@ async function loadOwnerStatus() {
     body.innerHTML = '<p class="empty-state">Could not reach status sources.</p>';
   }
 }
+
+// ---------- Admin panel (owner only) ----------
+async function loadAdminLogins() {
+  const body = document.getElementById('admin-logins-body');
+  try {
+    const logins = await api('/api/owner/logins');
+    body.innerHTML = !logins.length ? '<p class="empty-state">No sign-ins recorded yet.</p>' : logins.map(l => `
+      <div class="login-row">
+        <img class="login-avatar" src="${l.thumb || ''}" onerror="this.style.visibility='hidden'">
+        <div>
+          <div class="login-name">${escapeHtml(l.username)}${l.isOwner ? ' · Owner' : ''}</div>
+          <div class="login-time">${timeAgo(l.at)}</div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not load sign-ins.</p>';
+  }
+}
+
+async function loadPendingRequests() {
+  const body = document.getElementById('admin-requests-body');
+  try {
+    const results = await api('/api/overseerr/requests/pending');
+    if (!results.length) { body.innerHTML = '<p class="empty-state">Nothing pending.</p>'; return; }
+    body.innerHTML = results.map(r => `
+      <div class="pending-row" data-id="${r.id}">
+        <img class="result-poster" src="${r.poster || ''}" onerror="this.style.visibility='hidden'">
+        <div class="result-info">
+          <div class="result-title">${escapeHtml(r.title || 'Unknown title')}</div>
+          <div class="pending-requester">
+            <img src="${r.requestedByAvatar || ''}" onerror="this.style.visibility='hidden'">
+            ${escapeHtml(r.requestedBy)} · ${timeAgo(r.requestedAt)}
+          </div>
+        </div>
+        <div class="pending-actions">
+          <button class="approve-btn">Approve</button>
+          <button class="decline-btn">Decline</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not load pending requests.</p>';
+  }
+}
+
+document.getElementById('admin-requests-body').addEventListener('click', async e => {
+  const btn = e.target.closest('.approve-btn, .decline-btn');
+  if (!btn) return;
+  const row = btn.closest('.pending-row');
+  const action = btn.classList.contains('approve-btn') ? 'approve' : 'decline';
+  row.querySelectorAll('button').forEach(b => b.disabled = true);
+  btn.textContent = '…';
+  try {
+    await api(`/api/overseerr/requests/${row.dataset.id}/${action}`, { method: 'POST' });
+    row.remove();
+    if (!document.getElementById('admin-requests-body').children.length) {
+      document.getElementById('admin-requests-body').innerHTML = '<p class="empty-state">Nothing pending.</p>';
+    }
+  } catch (e) {
+    row.querySelectorAll('button').forEach(b => b.disabled = false);
+    btn.textContent = action === 'approve' ? 'Approve' : 'Decline';
+  }
+});
 
 function formatUpsStatus(status) {
   const flags = {
@@ -772,7 +840,9 @@ function escapeHtml(str = '') {
   return str.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function timeAgo(ts) {
-  const mins = Math.round((Date.now() - ts) / 60000);
+  // Accepts either an epoch-ms number (Tautulli/login log) or an ISO date string
+  // (Overseerr's createdAt) — normalize through Date so both work.
+  const mins = Math.round((Date.now() - new Date(ts).getTime()) / 60000);
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.round(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
