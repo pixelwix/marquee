@@ -584,15 +584,33 @@ document.getElementById('now-playing-body').addEventListener('click', e => {
   });
 });
 
-document.getElementById('recently-watched-body').addEventListener('click', e => {
+let recentlyWatchedInfoRequest = 0; // guards against a slower earlier fetch overwriting a later click
+
+document.getElementById('recently-watched-body').addEventListener('click', async e => {
   const card = e.target.closest('.now-row');
   if (!card) return;
   const i = store.recentlyWatched[Number(card.dataset.idx)];
   if (!i) return;
   openInfo({
     poster: i.thumb, title: i.title, badge: 'CH.02 · RECENTLY WATCHED',
-    meta: `${i.finished ? 'Finished' : i.progress + '% watched'} · ${timeAgo(i.watchedAt)}`
+    meta: `${i.finished ? 'Finished' : i.progress + '% watched'} · ${timeAgo(i.watchedAt)}`,
+    overview: i.overview
   });
+  // get_history (the recently-watched data source) has no synopsis field, unlike
+  // the other panels — fetched lazily here and cached on the item so repeat
+  // clicks on the same row don't re-fetch.
+  if (i.overview == null) {
+    const requestId = ++recentlyWatchedInfoRequest;
+    try {
+      const { overview } = await api(`/api/tautulli/metadata/${i.ratingKey}`);
+      i.overview = overview;
+      if (requestId === recentlyWatchedInfoRequest) {
+        document.getElementById('info-overview').textContent = overview || 'No synopsis available.';
+      }
+    } catch (e) {
+      i.overview = '';
+    }
+  }
 });
 
 document.getElementById('recently-added-body').addEventListener('click', e => {
