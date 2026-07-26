@@ -211,6 +211,18 @@
   </div>
 </div>
 
+<!-- RELEASE SEARCH MODAL (owner only — search Radarr/Sonarr's indexers directly
+     from an open issue, to fix a bad file without leaving the dashboard) -->
+<div id="release-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="release-modal-title">Search for a release</h3>
+      <button id="close-release-modal-btn" class="btn-ghost">&#10005;</button>
+    </div>
+    <div id="release-list" class="release-list"><p class="empty-state">Loading…</p></div>
+  </div>
+</div>
+
 <!-- MEDIA INFO MODAL -->
 <div id="info-modal" class="modal hidden">
   <div class="modal-card info-card">

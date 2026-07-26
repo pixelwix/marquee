@@ -503,7 +503,9 @@ async function loadAdminIssues() {
     const results = await api('/api/overseerr/issues/open');
     if (!results.length) { body.innerHTML = '<p class="empty-state">Nothing open.</p>'; return; }
     body.innerHTML = results.map(r => `
-      <div class="pending-row" data-id="${r.id}">
+      <div class="pending-row" data-id="${r.id}" data-title="${escapeHtml(r.title || 'Unknown title')}"
+           data-media-type="${r.mediaType || ''}" data-tmdb-id="${r.tmdbId || ''}" data-tvdb-id="${r.tvdbId || ''}"
+           data-season="${r.season || ''}" data-episode="${r.episode || ''}">
         <img class="result-poster" src="${r.poster || ''}" onerror="this.style.visibility='hidden'">
         <div class="result-info">
           <div class="result-title">${escapeHtml(r.title || 'Unknown title')}${r.season ? ` — S${r.season}E${r.episode}` : ''}</div>
@@ -514,6 +516,7 @@ async function loadAdminIssues() {
           ${r.message ? `<div class="issue-message">${escapeHtml(r.message)}</div>` : ''}
         </div>
         <div class="pending-actions">
+          <button class="search-release-btn btn-ghost">Search</button>
           <button class="approve-btn">Resolve</button>
         </div>
       </div>
@@ -524,6 +527,11 @@ async function loadAdminIssues() {
 }
 
 document.getElementById('admin-issues-body').addEventListener('click', async e => {
+  const searchBtn = e.target.closest('.search-release-btn');
+  if (searchBtn) {
+    openReleaseModal(searchBtn.closest('.pending-row').dataset);
+    return;
+  }
   const btn = e.target.closest('.approve-btn');
   if (!btn) return;
   const row = btn.closest('.pending-row');
@@ -539,6 +547,72 @@ document.getElementById('admin-issues-body').addEventListener('click', async e =
     row.querySelectorAll('button').forEach(b => b.disabled = false);
     btn.textContent = 'Resolve';
   }
+});
+
+// ---------- Release search modal (owner only) ----------
+// Interactive search against Radarr/Sonarr's own configured indexers, so a
+// bad/wrong release reported as an issue can be fixed without leaving the
+// dashboard. Can take up to ~a minute — this is a live indexer search, not a
+// cached lookup, same as Sonarr/Radarr's own "Interactive Search" UI.
+function formatBytes(bytes) {
+  if (!bytes) return '';
+  return (bytes / (1024 ** 3)).toFixed(1) + ' GB';
+}
+
+async function openReleaseModal(ctx) {
+  const modal = document.getElementById('release-modal');
+  const listEl = document.getElementById('release-list');
+  document.getElementById('release-modal-title').textContent = ctx.title +
+    (ctx.season ? ` — S${ctx.season}E${ctx.episode}` : '');
+  listEl.innerHTML = '<p class="empty-state">Searching indexers… this can take up to a minute.</p>';
+  modal.classList.remove('hidden');
+
+  const isMovie = ctx.mediaType === 'movie';
+  const url = isMovie
+    ? `/api/radarr/releases?tmdbId=${ctx.tmdbId}`
+    : `/api/sonarr/releases?tvdbId=${ctx.tvdbId}&season=${ctx.season}&episode=${ctx.episode}`;
+  const grabUrl = isMovie ? '/api/radarr/releases/grab' : '/api/sonarr/releases/grab';
+
+  try {
+    const releases = await api(url);
+    if (!releases.length) { listEl.innerHTML = '<p class="empty-state">No releases found.</p>'; return; }
+    listEl.innerHTML = releases.map(r => `
+      <div class="release-row ${r.rejected ? 'rejected' : ''}">
+        <div class="release-info">
+          <div class="release-title" title="${escapeHtml(r.title)}">${escapeHtml(r.title)}</div>
+          <div class="release-meta">
+            ${escapeHtml(r.quality || 'Unknown')} · ${formatBytes(r.sizeBytes)} · ${escapeHtml(r.indexer)}
+            · ${r.protocol === 'torrent' ? `${r.seeders ?? 0} seeders` : `${r.ageDays ?? '?'}d old`}
+          </div>
+          ${r.rejected ? `<div class="release-rejections">${escapeHtml(r.rejections.join(', '))}</div>` : ''}
+        </div>
+        <button class="grab-btn" data-guid="${escapeHtml(r.guid)}" data-indexer-id="${r.indexerId}">Grab</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    listEl.innerHTML = `<p class="empty-state">${escapeHtml(e.message || 'Search failed.')}</p>`;
+  }
+
+  listEl.onclick = async e => {
+    const btn = e.target.closest('.grab-btn');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = 'Grabbing…';
+    try {
+      await api(grabUrl, {
+        method: 'POST',
+        body: JSON.stringify({ guid: btn.dataset.guid, indexerId: Number(btn.dataset.indexerId) })
+      });
+      btn.textContent = 'Grabbed ✓';
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = 'Grab';
+    }
+  };
+}
+
+document.getElementById('close-release-modal-btn').addEventListener('click', () => {
+  document.getElementById('release-modal').classList.add('hidden');
 });
 
 function formatUpsStatus(status) {

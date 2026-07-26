@@ -290,7 +290,13 @@ router.get('/issues/open', requireAuth, requireOwner, async (req, res) => {
         message: r.comments?.[0]?.message || '',
         reportedBy: r.createdBy?.displayName || r.createdBy?.plexUsername || 'Unknown',
         reportedByAvatar: r.createdBy?.avatar || null,
-        reportedAt: r.createdAt
+        reportedAt: r.createdAt,
+        // For the "search Radarr/Sonarr" action — routes to the right service
+        // and its own id scheme (Radarr keys movies by tmdbId, Sonarr keys
+        // series by tvdbId).
+        mediaType: r.media?.mediaType,
+        tmdbId: r.media?.tmdbId,
+        tvdbId: r.media?.tvdbId
       };
     }));
 
