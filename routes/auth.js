@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const { parseStringPromise } = require('xml2js');
+const rateLimit = require('../lib/rateLimit');
 const router = express.Router();
 
 const PLEX_HEADERS = {
@@ -9,8 +10,15 @@ const PLEX_HEADERS = {
   'Accept': 'application/json'
 };
 
+// These are the only endpoints reachable without already being signed in, so
+// they're the actual public attack surface once this is exposed to the
+// internet rather than just the LAN. Limits are sized generously around a
+// real sign-in (poll runs every 2s for up to 3 minutes = ~90 calls).
+const pinLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 10, message: 'Too many sign-in attempts — try again in a few minutes.' });
+const pollLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 120, message: 'Too many sign-in attempts — try again in a few minutes.' });
+
 // Step 1: frontend asks us for a PIN, we ask plex.tv, hand back the code + our pin id
-router.post('/plex/pin', async (req, res) => {
+router.post('/plex/pin', pinLimiter, async (req, res) => {
   try {
     const { data } = await axios.post(
       'https://plex.tv/api/v2/pins?strong=true',
@@ -27,7 +35,7 @@ router.post('/plex/pin', async (req, res) => {
 });
 
 // Step 2: frontend polls us after the user approves the code on app.plex.tv
-router.get('/plex/poll', async (req, res) => {
+router.get('/plex/poll', pollLimiter, async (req, res) => {
   const pinId = req.cookies.plex_pin_id;
   if (!pinId) return res.status(400).json({ error: 'No pending sign-in' });
 

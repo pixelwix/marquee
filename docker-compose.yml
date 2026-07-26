@@ -6,7 +6,10 @@ services:
     env_file:
       - .env
     ports:
-      - "4000:4000"
+      # HOST_PORT is what your reverse proxy/tunnel points at — the container
+      # always listens on 4000 internally regardless (matches the Dockerfile
+      # healthcheck), so this only changes the host side.
+      - "${HOST_PORT:-4000}:4000"
     volumes:
       - ./data:/app/data
       # Optional, for the owner-only status panel: read-only bind mount of Uptime

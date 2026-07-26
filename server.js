@@ -11,6 +11,15 @@ const app = express();
 
 app.set('trust proxy', 1); // needed for secure cookies to work when HTTPS is terminated by your reverse proxy
 
+// Baseline hardening — cheap and worth having once this is reachable from the
+// public internet rather than just the LAN.
+app.use((req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('X-Frame-Options', 'DENY'); // the sign-in page shouldn't be embeddable elsewhere
+  res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // Persists sessions to disk so the family isn't logged out on every
 // `docker compose up -d --build` or container restart.
 const sessionDbDir = process.env.SESSION_DB_DIR || '/app/data';
@@ -26,6 +35,7 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
+    sameSite: 'lax',
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — this is a family dashboard, not a bank
     // Only mark the cookie secure once you're actually accessing this over HTTPS
     // (i.e. through your reverse proxy). Testing directly at http://host:4000
