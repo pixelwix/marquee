@@ -111,20 +111,20 @@ function renderNowPlaying(sessions) {
     ? `${sessions.length} stream${sessions.length === 1 ? '' : 's'} live right now`
     : 'Nothing playing right now';
   indicator.style.visibility = sessions.length ? 'visible' : 'hidden';
-  if (!sessions.length) {
-    body.innerHTML = '<p class="empty-state">Nothing playing right now.</p>';
-    return;
-  }
-  body.innerHTML = sessions.map((s, idx) => `
-    <div class="now-row" data-idx="${idx}" data-session-key="${s.sessionKey}">
-      <img class="thumb" src="${s.thumb || ''}" onerror="this.style.visibility='hidden'">
-      <div style="flex:1; min-width:0;">
-        <div class="now-title">${escapeHtml(s.title)}</div>
-        <div class="now-meta"><span class="${dotClass(s.state === 'paused')}"></span>${escapeHtml(s.user || '')} · ${s.quality || ''} · <span class="state-word">${s.state}</span></div>
-        <div class="bar"><div class="bar-fill" style="width:${s.progress}%"></div></div>
+  body.innerHTML = !sessions.length
+    ? '<p class="empty-state">Nothing playing right now.</p>'
+    : sessions.map((s, idx) => `
+      <div class="now-row" data-idx="${idx}" data-session-key="${s.sessionKey}">
+        <img class="thumb" src="${s.thumb || ''}" onerror="this.style.visibility='hidden'">
+        <div style="flex:1; min-width:0;">
+          <div class="now-title">${escapeHtml(s.title)}</div>
+          <div class="now-meta"><span class="${dotClass(s.state === 'paused')}"></span>${escapeHtml(s.user || '')} · ${s.quality || ''} · <span class="state-word">${s.state}</span></div>
+          <div class="bar"><div class="bar-fill" style="width:${s.progress}%"></div></div>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `).join('');
+  // Session count changed — Recently Watched's row count tracks it.
+  renderRecentlyWatched();
 }
 
 function patchNowPlayingRow({ sessionKey, state, progress }) {
@@ -139,31 +139,41 @@ function patchNowPlayingRow({ sessionKey, state, progress }) {
 }
 
 // ---------- Recently Watched ----------
-// Styled like Now Playing (small thumb + progress bar per row) rather than a
-// poster grid — on-deck/"continue watching" is already visible in Plex itself,
-// so this shows actual watch history instead.
+// Styled like Now Playing (small thumb per row) rather than a poster grid —
+// on-deck/"continue watching" is already visible in Plex itself, so this shows
+// actual watch history instead. Row count tracks how many streams are live in
+// Now Playing (so the two panels visually pair up), with a floor of 5 so it
+// doesn't shrink to almost nothing when few/no streams are active.
+let recentlyWatchedLoaded = false;
+
 async function loadRecentlyWatched() {
-  const body = document.getElementById('recently-watched-body');
   try {
-    const items = await api('/api/tautulli/recently-watched');
-    store.recentlyWatched = items;
-    if (!items.length) { body.innerHTML = '<p class="empty-state">Nothing watched recently.</p>'; return; }
-    body.innerHTML = items.map((i, idx) => `
-      <div class="now-row" data-idx="${idx}">
-        <img class="thumb" src="${i.thumb || ''}" onerror="this.style.visibility='hidden'">
-        <div style="flex:1; min-width:0;">
-          <div class="now-title">${escapeHtml(i.title)}</div>
-          <div class="now-meta">
-            <span class="${dotClass(!i.finished)}"></span>
-            ${i.finished ? 'Finished' : i.progress + '% watched'} · ${timeAgo(i.watchedAt)}
-          </div>
-          <div class="bar"><div class="bar-fill" style="width:${i.progress}%"></div></div>
+    store.recentlyWatched = await api('/api/tautulli/recently-watched');
+    recentlyWatchedLoaded = true;
+    renderRecentlyWatched();
+  } catch (e) {
+    document.getElementById('recently-watched-body').innerHTML = '<p class="empty-state">Could not reach Tautulli.</p>';
+  }
+}
+
+function renderRecentlyWatched() {
+  if (!recentlyWatchedLoaded) return;
+  const body = document.getElementById('recently-watched-body');
+  const count = Math.max(store.nowPlaying.length, 5);
+  const items = store.recentlyWatched.slice(0, count);
+  if (!items.length) { body.innerHTML = '<p class="empty-state">Nothing watched recently.</p>'; return; }
+  body.innerHTML = items.map((i, idx) => `
+    <div class="now-row" data-idx="${idx}">
+      <img class="thumb" src="${i.thumb || ''}" onerror="this.style.visibility='hidden'">
+      <div style="flex:1; min-width:0;">
+        <div class="now-title">${escapeHtml(i.title)}</div>
+        <div class="now-meta">
+          <span class="${dotClass(!i.finished)}"></span>
+          ${i.finished ? 'Finished' : i.progress + '% watched'} · ${timeAgo(i.watchedAt)}
         </div>
       </div>
-    `).join('');
-  } catch (e) {
-    body.innerHTML = '<p class="empty-state">Could not reach Tautulli.</p>';
-  }
+    </div>
+  `).join('');
 }
 
 // ---------- Recently Added ----------
