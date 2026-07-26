@@ -66,6 +66,10 @@
       same SITE_NAME templating as index.html) + a minimal service worker
       (network-first everywhere, never caches /api/ — this is a live
       dashboard, not an offline-first app)
+- [x] Owner-only admin panel (CH.09) — recent sign-ins (durable login history,
+      one row per person) + admin-wide pending Overseerr requests with inline
+      Approve/Decline, so approvals don't require logging into Overseerr
+      separately
 
 ## Not yet started
 - [ ] Trending/Discover panel
