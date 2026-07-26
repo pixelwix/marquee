@@ -81,6 +81,17 @@ app.get('/', (req, res) => {
       .replaceAll('{{ASSET_VERSION}}', assetVersion));
   });
 });
+// Same {{SITE_NAME}} templating as index.html, so an installed PWA's home-screen
+// label matches whatever this deployment is branded as (e.g. skyn3t.me) instead
+// of the generic default baked into the static file.
+app.get('/manifest.webmanifest', (req, res) => {
+  fs.readFile(path.join(__dirname, 'public', 'manifest.webmanifest'), 'utf8', (err, manifest) => {
+    if (err) return res.status(500).end();
+    res.set('Cache-Control', 'no-cache');
+    res.type('application/manifest+json').send(manifest.replaceAll('{{SITE_NAME}}', siteName));
+  });
+});
+
 app.use(express.static(path.join(__dirname, 'public'), {
   index: false,
   setHeaders: res => res.set('Cache-Control', 'no-cache')
