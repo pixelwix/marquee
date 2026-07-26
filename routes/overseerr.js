@@ -16,8 +16,11 @@ const issueLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, message: 'To
 
 // Search/discovery has no permission-sensitive behavior in Overseerr, so this
 // stays on the simple admin-key client. Request/issue submission does not — see
-// postAsUser below.
-const adminClient = () => axios.create({
+// postAsUser below. Built once (not a function re-called per request) — the
+// config never changes, and some call sites construct one of these per item in
+// a Promise.all over a whole request/issue list, so recreating it each time was
+// pure waste.
+const adminClient = axios.create({
   baseURL: `${process.env.OVERSEERR_URL}/api/v1`,
   headers: { 'X-Api-Key': process.env.OVERSEERR_API_KEY }
 });
@@ -28,7 +31,7 @@ router.get('/search', requireAuth, async (req, res) => {
     // encodes spaces as "+", and this Overseerr instance's strict URL-encoding
     // validation rejects that (requires literal %20), so any multi-word query
     // was failing with a 400.
-    const { data } = await adminClient().get(`/search?query=${encodeURIComponent(req.query.q)}&page=1`);
+    const { data } = await adminClient.get(`/search?query=${encodeURIComponent(req.query.q)}&page=1`);
     const results = data.results
       .filter(r => r.mediaType === 'movie' || r.mediaType === 'tv')
       .map(r => ({
@@ -70,7 +73,7 @@ router.get('/tv/:id', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Invalid id' });
   }
   try {
-    const { data } = await adminClient().get(`/tv/${req.params.id}`);
+    const { data } = await adminClient.get(`/tv/${req.params.id}`);
     const seasons = (data.seasons || [])
       .filter(s => s.seasonNumber > 0) // skip "Specials"
       .map(s => {
@@ -129,7 +132,7 @@ router.post('/request', requireAuth, requestLimiter, async (req, res) => {
 async function resolveMedia(mediaType, tmdbId) {
   if (!tmdbId) return { title: null, poster: null };
   try {
-    const { data } = await adminClient().get(`/${mediaType}/${tmdbId}`);
+    const { data } = await adminClient.get(`/${mediaType}/${tmdbId}`);
     return {
       title: data.title || data.name,
       poster: data.posterPath ? `https://image.tmdb.org/t/p/w300${data.posterPath}` : null
@@ -177,7 +180,7 @@ router.get('/requests/mine', requireAuth, async (req, res) => {
 // on the request.
 router.get('/requests/pending', requireAuth, requireOwner, async (req, res) => {
   try {
-    const { data } = await adminClient().get('/request', {
+    const { data } = await adminClient.get('/request', {
       params: { filter: 'pending', take: 50, sort: 'added' }
     });
 
@@ -207,7 +210,7 @@ router.get('/requests/pending', requireAuth, requireOwner, async (req, res) => {
 router.post('/requests/:id/approve', requireAuth, requireOwner, async (req, res) => {
   if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
   try {
-    await adminClient().post(`/request/${req.params.id}/approve`);
+    await adminClient.post(`/request/${req.params.id}/approve`);
     res.json({ status: 'approved' });
   } catch (err) {
     console.error('overseerr approve error', err.response?.data || err.message);
@@ -218,7 +221,7 @@ router.post('/requests/:id/approve', requireAuth, requireOwner, async (req, res)
 router.post('/requests/:id/decline', requireAuth, requireOwner, async (req, res) => {
   if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
   try {
-    await adminClient().post(`/request/${req.params.id}/decline`);
+    await adminClient.post(`/request/${req.params.id}/decline`);
     res.json({ status: 'declined' });
   } catch (err) {
     console.error('overseerr decline error', err.response?.data || err.message);
@@ -246,7 +249,7 @@ router.post('/issue', requireAuth, issueLimiter, async (req, res) => {
     if (!resolved.tmdbId) {
       return res.status(502).json({ error: 'Could not identify this title in Overseerr' });
     }
-    const { data: media } = await adminClient().get(`/${resolved.mediaType}/${resolved.tmdbId}`);
+    const { data: media } = await adminClient.get(`/${resolved.mediaType}/${resolved.tmdbId}`);
     const mediaId = media.mediaInfo?.id;
     if (!mediaId) {
       return res.status(502).json({ error: 'This title isn’t tracked in Overseerr yet' });
@@ -271,7 +274,7 @@ router.post('/issue', requireAuth, issueLimiter, async (req, res) => {
 // the server.
 router.get('/issues/open', requireAuth, requireOwner, async (req, res) => {
   try {
-    const { data } = await adminClient().get('/issue', {
+    const { data } = await adminClient.get('/issue', {
       params: { filter: 'open', take: 50, sort: 'added' }
     });
 
@@ -301,7 +304,7 @@ router.get('/issues/open', requireAuth, requireOwner, async (req, res) => {
 router.post('/issues/:id/resolve', requireAuth, requireOwner, async (req, res) => {
   if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
   try {
-    await adminClient().post(`/issue/${req.params.id}/resolved`);
+    await adminClient.post(`/issue/${req.params.id}/resolved`);
     res.json({ status: 'resolved' });
   } catch (err) {
     console.error('overseerr resolve issue error', err.response?.data || err.message);
