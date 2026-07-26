@@ -109,15 +109,20 @@ body {
   display: flex; align-items: center; justify-content: center;
   font-size: 1.15rem; font-weight: 600; color: #12151A; line-height: 1;
 }
+/* Report FAB reuses .fab's shape/glass styling but on the opposite side, with a
+   teal icon badge instead of amber to read as the secondary action next to the
+   amber request FAB. */
+.fab-left { right: auto; left: 1.75rem; }
+.fab-icon-teal { background: linear-gradient(135deg,#7EE0C9,var(--teal)); color: #0b1f1a; }
 .fab-text { display: flex; flex-direction: column; }
 .fab-title { font-family: var(--display); font-size: 0.82rem; font-weight: 600; line-height: 1.2; }
 .fab-subtitle { font-size: 0.66rem; opacity: 0.75; line-height: 1.2; }
 @media (max-width: 900px) {
   .fab { display: flex; bottom: 1.25rem; right: 1.25rem; }
+  .fab-left { right: auto; left: 1.25rem; }
   .hero-icons #search-btn { display: none; }
-  /* Reporting stays desktop-header-only — it's a secondary action, and mobile's
-     one FAB is already spoken for by requests. Still reachable on mobile from
-     the info popup on a Now Playing/Recently Watched item. */
+  /* The report icon button in the header is desktop-only — .fab-left below is
+     its mobile equivalent, mirroring the request FAB on the opposite side. */
   .hero-icons #report-search-btn { display: none; }
 }
 .avatar-chip {
