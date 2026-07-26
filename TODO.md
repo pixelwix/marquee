@@ -78,6 +78,9 @@
       -> episode, for relaying a problem described secondhand (e.g. over
       text) without the reporter needing to have watched it through the
       dashboard.
+- [x] "Search" button on each open issue (admin panel) — live interactive
+      search against Radarr/Sonarr's own indexers, grab a replacement
+      release right there without opening Sonarr/Radarr separately.
 
 ## Not yet started
 - [ ] Trending/Discover panel
