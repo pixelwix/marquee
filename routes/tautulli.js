@@ -109,6 +109,7 @@ router.get('/recently-watched', requireAuth, async (req, res) => {
       if (seen.has(r.rating_key)) continue;
       seen.add(r.rating_key);
       items.push({
+        ratingKey: r.rating_key,
         title: r.grandparent_title ? `${r.grandparent_title} — S${r.parent_media_index}E${r.media_index}` : r.title,
         thumb: imageUrl(r.thumb),
         progress: Math.round(r.percent_complete) || 0,
@@ -120,6 +121,21 @@ router.get('/recently-watched', requireAuth, async (req, res) => {
     res.json(items);
   } catch (err) {
     console.error('tautulli recently-watched error:', err.code || err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not reach Tautulli' });
+  }
+});
+
+// get_history doesn't include a synopsis, unlike get_recently_added/get_activity —
+// fetched on demand (only when a Recently Watched row is actually clicked) rather
+// than upfront for the whole list.
+router.get('/metadata/:ratingKey', requireAuth, async (req, res) => {
+  try {
+    const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
+      params: { apikey: process.env.TAUTULLI_API_KEY, cmd: 'get_metadata', rating_key: req.params.ratingKey }
+    });
+    res.json({ overview: data.response.data?.summary || '' });
+  } catch (err) {
+    console.error('tautulli metadata error:', err.code || err.response?.status, err.message);
     res.status(502).json({ error: 'Could not reach Tautulli' });
   }
 });
