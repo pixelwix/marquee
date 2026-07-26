@@ -25,6 +25,26 @@ const adminClient = axios.create({
   headers: { 'X-Api-Key': process.env.OVERSEERR_API_KEY }
 });
 
+// Shared by /search and /discover below — both return raw Overseerr
+// TMDB-shaped results (movie/tv) needing the same trimming + availability
+// computation.
+function mapDiscoverItem(r) {
+  return {
+    id: r.id,
+    mediaType: r.mediaType,
+    title: r.title || r.name,
+    year: (r.releaseDate || r.firstAirDate || '').slice(0, 4),
+    overview: r.overview,
+    poster: r.posterPath ? `https://image.tmdb.org/t/p/w300${r.posterPath}` : null,
+    // Overseerr media status: 4 = partially available, 5 = available — i.e.
+    // actually already in Plex, distinct from just having been requested
+    // (2 = pending, 3 = processing) or never touched (everything else).
+    availability: [4, 5].includes(r.mediaInfo?.status) ? 'available'
+      : [2, 3].includes(r.mediaInfo?.status) ? 'requested'
+      : 'none'
+  };
+}
+
 router.get('/search', requireAuth, async (req, res) => {
   try {
     // Built manually rather than via axios's `params` — its default serializer
@@ -34,23 +54,44 @@ router.get('/search', requireAuth, async (req, res) => {
     const { data } = await adminClient.get(`/search?query=${encodeURIComponent(req.query.q)}&page=1`);
     const results = data.results
       .filter(r => r.mediaType === 'movie' || r.mediaType === 'tv')
-      .map(r => ({
-        id: r.id,
-        mediaType: r.mediaType,
-        title: r.title || r.name,
-        year: (r.releaseDate || r.firstAirDate || '').slice(0, 4),
-        overview: r.overview,
-        poster: r.posterPath ? `https://image.tmdb.org/t/p/w300${r.posterPath}` : null,
-        // Overseerr media status: 4 = partially available, 5 = available — i.e.
-        // actually already in Plex, distinct from just having been requested
-        // (2 = pending, 3 = processing) or never touched (everything else).
-        availability: [4, 5].includes(r.mediaInfo?.status) ? 'available'
-          : [2, 3].includes(r.mediaInfo?.status) ? 'requested'
-          : 'none'
-      }));
+      .map(mapDiscoverItem);
     res.json(results);
   } catch (err) {
     console.error('overseerr search error', err.message);
+    res.status(502).json({ error: 'Could not reach Overseerr' });
+  }
+});
+
+// Powers the request modal's default view (shown before the user types
+// anything) — trending + upcoming movies/TV, combined and deduped, filtered
+// down to only things not already in the library or already requested, so it
+// reads as "things you could actually go request" rather than a raw TMDB
+// trending feed full of stuff you already have.
+router.get('/discover', requireAuth, async (req, res) => {
+  try {
+    const [trending1, trending2, upMovies, upTv] = await Promise.all([
+      adminClient.get('/discover/trending', { params: { page: 1 } }),
+      adminClient.get('/discover/trending', { params: { page: 2 } }),
+      adminClient.get('/discover/movies/upcoming', { params: { page: 1 } }),
+      adminClient.get('/discover/tv/upcoming', { params: { page: 1 } })
+    ]);
+
+    const seen = new Set();
+    const results = [];
+    for (const { data } of [trending1, trending2, upMovies, upTv]) {
+      for (const r of data.results) {
+        if (r.mediaType !== 'movie' && r.mediaType !== 'tv') continue;
+        const key = `${r.mediaType}-${r.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const item = mapDiscoverItem(r);
+        if (item.availability === 'none') results.push(item);
+      }
+    }
+
+    res.json(results.slice(0, 40));
+  } catch (err) {
+    console.error('overseerr discover error', err.response?.data || err.message);
     res.status(502).json({ error: 'Could not reach Overseerr' });
   }
 });
