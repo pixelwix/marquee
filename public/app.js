@@ -40,7 +40,7 @@ document.getElementById('plex-signin-btn').addEventListener('click', async () =>
   signinStatus.textContent = 'Requesting sign-in code…';
   try {
     const { code, clientId } = await api('/api/auth/plex/pin', { method: 'POST' });
-    const authUrl = `https://app.plex.tv/auth#?clientID=${clientId}&code=${code}&context[device][product]=skyn3t`;
+    const authUrl = `https://app.plex.tv/auth#?clientID=${clientId}&code=${code}&context[device][product]=Marquee`;
     const popup = window.open(authUrl, '_blank', 'width=480,height=700');
     signinStatus.textContent = 'Waiting for approval in the Plex window…';
     pollSignIn(popup);
