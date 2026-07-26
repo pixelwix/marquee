@@ -34,7 +34,12 @@ router.get('/search', requireAuth, async (req, res) => {
         year: (r.releaseDate || r.firstAirDate || '').slice(0, 4),
         overview: r.overview,
         poster: r.posterPath ? `https://image.tmdb.org/t/p/w300${r.posterPath}` : null,
-        status: r.mediaInfo?.status || 0 // 0 = not requested yet
+        // Overseerr media status: 4 = partially available, 5 = available — i.e.
+        // actually already in Plex, distinct from just having been requested
+        // (2 = pending, 3 = processing) or never touched (everything else).
+        availability: [4, 5].includes(r.mediaInfo?.status) ? 'available'
+          : [2, 3].includes(r.mediaInfo?.status) ? 'requested'
+          : 'none'
       }));
     res.json(results);
   } catch (err) {
