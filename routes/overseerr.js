@@ -3,6 +3,7 @@ const axios = require('axios');
 const requireAuth = require('./requireAuth');
 const overseerrSession = require('../lib/overseerrSession');
 const rateLimit = require('../lib/rateLimit');
+const sse = require('../lib/sse');
 const router = express.Router();
 
 // Unlike the read-only endpoints below, this has a real side effect (creates an
@@ -160,6 +161,32 @@ router.get('/requests/mine', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('overseerr requests error', err.response?.data || err.message);
     res.status(502).json({ error: 'Could not reach Overseerr' });
+  }
+});
+
+// Called by Overseerr itself (Settings -> Notifications -> Webhook), not by a
+// signed-in browser — so this can't sit behind requireAuth's session check.
+// Overseerr doesn't sign its webhook payloads, so the shared secret configured
+// into the webhook agent's "Authorization Header" field is what stops anyone
+// else from spoofing availability toasts to the whole family.
+router.post('/webhook', (req, res) => {
+  if (!process.env.OVERSEERR_WEBHOOK_SECRET || req.headers.authorization !== process.env.OVERSEERR_WEBHOOK_SECRET) {
+    return res.status(401).end();
+  }
+  res.status(200).end();
+
+  // This endpoint replaces Overseerr's previous webhook target (a pre-existing
+  // notify.helmarr.app integration) since Overseerr only supports one webhook URL
+  // at a time — forward the untouched payload on so that integration keeps
+  // working, independent of whether it's also a MEDIA_AVAILABLE event below.
+  if (process.env.OVERSEERR_WEBHOOK_FORWARD_URL) {
+    axios.post(process.env.OVERSEERR_WEBHOOK_FORWARD_URL, req.body)
+      .catch(err => console.error('overseerr webhook forward error', err.message));
+  }
+
+  const { notification_type, subject, image } = req.body;
+  if (notification_type === 'MEDIA_AVAILABLE') {
+    sse.broadcast('media-available', { title: subject, poster: image });
   }
 });
 

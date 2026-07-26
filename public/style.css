@@ -365,3 +365,28 @@ body {
 .info-stream.hidden { display: none; }
 .info-stream dt { color: var(--muted); }
 .info-stream dd { margin: 0; color: #2b3140; }
+
+/* "Available now" toast — pushed via SSE when Overseerr reports a request has
+   finished downloading. Stacks above everything, including the request modal,
+   same z-index trick as .fab since this is a small dashboard and correctness
+   here matters more than a tidy stacking context. */
+#toast-container {
+  position: fixed; bottom: 1.75rem; left: 1.75rem; z-index: 2147483647;
+  display: flex; flex-direction: column-reverse; gap: 0.6rem;
+  pointer-events: none;
+}
+.toast {
+  display: flex; gap: 0.75rem; align-items: center; width: 300px; max-width: calc(100vw - 3.5rem);
+  padding: 0.7rem; background: rgba(20,21,26,0.75); backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px; box-shadow: 0 20px 40px -16px rgba(0,0,0,0.5);
+  pointer-events: auto; cursor: pointer;
+  animation: toast-in 0.25s ease;
+}
+.toast.leaving { animation: toast-out 0.2s ease forwards; }
+.toast-poster { width: 38px; height: 54px; object-fit: cover; border-radius: 6px; background: #3a3d47; flex-shrink: 0; }
+.toast-body { min-width: 0; }
+.toast-eyebrow { font-family: var(--mono); font-size: 0.65rem; color: var(--teal); text-transform: uppercase; letter-spacing: 0.05em; }
+.toast-title { font-size: 0.85rem; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toast-out { to { opacity: 0; transform: translateY(8px); } }
