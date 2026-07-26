@@ -73,6 +73,11 @@
 - [x] "Report an issue" (Doesn't play / Wrong audio / Subtitles / Other) from
       the Now Playing / Recently Watched info popup, backed by Overseerr's own
       issue system. Admin panel gained an "Open issues" section with Resolve.
+- [x] Header button (desktop) to report an issue on *any* library item, not
+      just something recently watched — searches the actual Plex library and
+      drills show -> season -> episode, for relaying a problem described
+      secondhand (e.g. over text) without the reporter needing to have
+      watched it through the dashboard.
 
 ## Not yet started
 - [ ] Trending/Discover panel
