@@ -20,10 +20,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Persists sessions to disk so the family isn't logged out on every
-// `docker compose up -d --build` or container restart.
+// Persists sessions and saved settings to disk so configuration survives container rebuilds
 const sessionDbDir = process.env.SESSION_DB_DIR || '/app/data';
 fs.mkdirSync(sessionDbDir, { recursive: true });
+
+const persistentEnvPath = path.join(sessionDbDir, '.env');
+if (fs.existsSync(persistentEnvPath)) {
+  require('dotenv').config({ path: persistentEnvPath, override: true });
+}
+
 const sessionDb = new sqlite3.Database(path.join(sessionDbDir, 'sessions.sqlite'));
 
 app.use(express.json());

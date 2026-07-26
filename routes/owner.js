@@ -31,39 +31,52 @@ router.get('/logins', requireAuth, requireOwner, async (req, res) => {
 const path = require('path');
 
 function updateEnvFile(updates) {
-  const envPath = path.join(__dirname, '..', '.env');
-  let content = '';
-  try {
-    if (fs.existsSync(envPath)) {
-      content = fs.readFileSync(envPath, 'utf8');
-    }
-  } catch (err) {
-    console.error('Error reading .env file:', err.message);
+  const envPaths = [path.join(__dirname, '..', '.env')];
+  const sessionDbDir = process.env.SESSION_DB_DIR || '/app/data';
+  const dataEnvPath = path.join(sessionDbDir, '.env');
+  if (!envPaths.includes(dataEnvPath)) {
+    envPaths.push(dataEnvPath);
   }
 
-  let lines = content.split('\n');
-  const updatedKeys = new Set();
+  for (const envPath of envPaths) {
+    try {
+      let content = '';
+      if (fs.existsSync(envPath)) {
+        content = fs.readFileSync(envPath, 'utf8');
+      }
 
-  lines = lines.map(line => {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) return line;
-    const eqIdx = line.indexOf('=');
-    if (eqIdx === -1) return line;
-    const key = line.substring(0, eqIdx).trim();
-    if (Object.prototype.hasOwnProperty.call(updates, key)) {
-      updatedKeys.add(key);
-      return `${key}=${updates[key]}`;
-    }
-    return line;
-  });
+      let lines = content.split('\n');
+      const updatedKeys = new Set();
 
-  for (const [key, val] of Object.entries(updates)) {
-    if (!updatedKeys.has(key)) {
-      lines.push(`${key}=${val}`);
+      lines = lines.map(line => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) return line;
+        const eqIdx = line.indexOf('=');
+        if (eqIdx === -1) return line;
+        const key = line.substring(0, eqIdx).trim();
+        if (Object.prototype.hasOwnProperty.call(updates, key)) {
+          updatedKeys.add(key);
+          return `${key}=${updates[key]}`;
+        }
+        return line;
+      });
+
+      for (const [key, val] of Object.entries(updates)) {
+        if (!updatedKeys.has(key)) {
+          lines.push(`${key}=${val}`);
+        }
+      }
+
+      const dir = path.dirname(envPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      fs.writeFileSync(envPath, lines.join('\n'), 'utf8');
+    } catch (err) {
+      console.error(`Error writing env file at ${envPath}:`, err.message);
     }
   }
-
-  fs.writeFileSync(envPath, lines.join('\n'), 'utf8');
 }
 
 const ALLOWED_CONFIG_KEYS = new Set([
@@ -124,7 +137,10 @@ router.post('/settings', requireAuth, requireOwner, (req, res) => {
 
   for (const [key, value] of Object.entries(updates)) {
     if (ALLOWED_CONFIG_KEYS.has(key) && typeof value === 'string') {
-      const valStr = value.trim();
+      let valStr = value.trim();
+      if (key.endsWith('_URL') && valStr) {
+        valStr = valStr.replace(/\/+$/, '');
+      }
       process.env[key] = valStr;
       validUpdates[key] = valStr;
     }
@@ -161,7 +177,8 @@ router.get('/health', requireAuth, requireOwner, async (req, res) => {
   // Plex
   if (process.env.PLEX_SERVER_URL && process.env.PLEX_ADMIN_TOKEN) {
     checks.push(checkServiceHealth('Plex', async () => {
-      const { data } = await axios.get(`${process.env.PLEX_SERVER_URL}/identity`, {
+      const url = process.env.PLEX_SERVER_URL.replace(/\/+$/, '');
+      const { data } = await axios.get(`${url}/identity`, {
         headers: { 'X-Plex-Token': process.env.PLEX_ADMIN_TOKEN },
         timeout: 4000
       });
@@ -174,8 +191,9 @@ router.get('/health', requireAuth, requireOwner, async (req, res) => {
   // Tautulli
   if (process.env.TAUTULLI_URL && process.env.TAUTULLI_API_KEY) {
     checks.push(checkServiceHealth('Tautulli', async () => {
-      const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
-        params: { cmd: 'arn_is_running', apikey: process.env.TAUTULLI_API_KEY },
+      const url = process.env.TAUTULLI_URL.replace(/\/+$/, '');
+      const { data } = await axios.get(`${url}/api/v2`, {
+        params: { cmd: 'get_activity', apikey: process.env.TAUTULLI_API_KEY },
         timeout: 4000
       });
       if (data?.response?.result !== 'success') throw new Error(data?.response?.message || 'Invalid API response');
@@ -188,7 +206,8 @@ router.get('/health', requireAuth, requireOwner, async (req, res) => {
   // Overseerr
   if (process.env.OVERSEERR_URL && process.env.OVERSEERR_API_KEY) {
     checks.push(checkServiceHealth('Overseerr', async () => {
-      const { data } = await axios.get(`${process.env.OVERSEERR_URL}/api/v1/status`, {
+      const url = process.env.OVERSEERR_URL.replace(/\/+$/, '');
+      const { data } = await axios.get(`${url}/api/v1/status`, {
         headers: { 'X-Api-Key': process.env.OVERSEERR_API_KEY },
         timeout: 4000
       });
@@ -201,7 +220,8 @@ router.get('/health', requireAuth, requireOwner, async (req, res) => {
   // Sonarr
   if (process.env.SONARR_URL && process.env.SONARR_API_KEY) {
     checks.push(checkServiceHealth('Sonarr', async () => {
-      const { data } = await axios.get(`${process.env.SONARR_URL}/api/v3/system/status`, {
+      const url = process.env.SONARR_URL.replace(/\/+$/, '');
+      const { data } = await axios.get(`${url}/api/v3/system/status`, {
         params: { apikey: process.env.SONARR_API_KEY },
         timeout: 4000
       });
@@ -214,7 +234,8 @@ router.get('/health', requireAuth, requireOwner, async (req, res) => {
   // Radarr
   if (process.env.RADARR_URL && process.env.RADARR_API_KEY) {
     checks.push(checkServiceHealth('Radarr', async () => {
-      const { data } = await axios.get(`${process.env.RADARR_URL}/api/v3/system/status`, {
+      const url = process.env.RADARR_URL.replace(/\/+$/, '');
+      const { data } = await axios.get(`${url}/api/v3/system/status`, {
         params: { apikey: process.env.RADARR_API_KEY },
         timeout: 4000
       });
@@ -227,7 +248,8 @@ router.get('/health', requireAuth, requireOwner, async (req, res) => {
   // qBittorrent
   if (process.env.QBITTORRENT_URL) {
     checks.push(checkServiceHealth('qBittorrent', async () => {
-      const { data } = await axios.get(`${process.env.QBITTORRENT_URL}/api/v2/app/version`, { timeout: 4000 });
+      const url = process.env.QBITTORRENT_URL.replace(/\/+$/, '');
+      const { data } = await axios.get(`${url}/api/v2/app/version`, { timeout: 4000 });
       return { version: data || 'connected' };
     }));
   } else {
@@ -237,7 +259,8 @@ router.get('/health', requireAuth, requireOwner, async (req, res) => {
   // SABnzbd
   if (process.env.SABNZBD_URL && process.env.SABNZBD_API_KEY) {
     checks.push(checkServiceHealth('SABnzbd', async () => {
-      const { data } = await axios.get(`${process.env.SABNZBD_URL}/api`, {
+      const url = process.env.SABNZBD_URL.replace(/\/+$/, '');
+      const { data } = await axios.get(`${url}/api`, {
         params: { mode: 'version', output: 'json', apikey: process.env.SABNZBD_API_KEY },
         timeout: 4000
       });
