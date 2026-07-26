@@ -631,7 +631,10 @@ const modal = document.getElementById('request-modal');
 function openRequestModal() {
   closeSeasonPicker();
   modal.classList.remove('hidden');
-  document.getElementById('search-input').focus();
+  const searchInput = document.getElementById('search-input');
+  searchInput.value = '';
+  searchInput.focus();
+  loadDiscover();
 }
 // Header icon button on desktop, floating button on mobile (see CSS) — both
 // trigger the same modal.
@@ -696,30 +699,55 @@ async function loadMyRequests() {
   }
 }
 
+// Shared by the discover feed and actual search results — same item shape
+// from the backend (routes/overseerr.js's mapDiscoverItem), same row markup.
+function renderSearchResults(results, emptyMessage) {
+  const resultsEl = document.getElementById('search-results');
+  if (!results.length) { resultsEl.innerHTML = `<p class="empty-state">${emptyMessage}</p>`; return; }
+  resultsEl.innerHTML = results.map(r => `
+    <div class="result-item">
+      <img class="result-poster" src="${r.poster || ''}" onerror="this.style.visibility='hidden'">
+      <div class="result-info">
+        <div class="result-title">${escapeHtml(r.title)}</div>
+        <div class="result-year">${r.year || ''} · ${r.mediaType === 'tv' ? 'Series' : 'Movie'}</div>
+      </div>
+      <button class="request-btn pill-btn ${r.availability === 'available' ? 'available' : ''}" data-id="${r.id}" data-type="${r.mediaType}" data-title="${escapeHtml(r.title)}" ${r.availability !== 'none' ? 'disabled' : ''}>
+        <span class="state-dot ${r.availability === 'available' ? '' : 'paused'}"></span>
+        <span class="btn-label">${r.availability === 'available' ? '✓ In Plex' : r.availability === 'requested' ? 'Requested' : 'Request'}</span>
+      </button>
+    </div>
+  `).join('');
+}
+
+// Shown by default when the request modal opens (and whenever the search box
+// is cleared) — trending + upcoming, already filtered server-side to things
+// not already in the library or requested. Cached for the rest of the page
+// session so reopening the modal doesn't refetch every time.
+let discoverCache = null;
+async function loadDiscover() {
+  document.getElementById('discover-label').classList.remove('hidden');
+  if (discoverCache) { renderSearchResults(discoverCache, 'Nothing to show.'); return; }
+  document.getElementById('search-results').innerHTML = '<p class="empty-state">Loading…</p>';
+  try {
+    discoverCache = await api('/api/overseerr/discover');
+    renderSearchResults(discoverCache, 'Nothing to show.');
+  } catch (e) {
+    document.getElementById('search-results').innerHTML = '<p class="empty-state">Could not load trending titles.</p>';
+  }
+}
+
 let searchTimer;
 document.getElementById('search-input').addEventListener('input', e => {
   clearTimeout(searchTimer);
   const q = e.target.value.trim();
-  const resultsEl = document.getElementById('search-results');
-  if (!q) { resultsEl.innerHTML = ''; return; }
+  if (!q) { loadDiscover(); return; }
+  document.getElementById('discover-label').classList.add('hidden');
   searchTimer = setTimeout(async () => {
     try {
       const results = await api(`/api/overseerr/search?q=${encodeURIComponent(q)}`);
-      resultsEl.innerHTML = results.map(r => `
-        <div class="result-item">
-          <img class="result-poster" src="${r.poster || ''}" onerror="this.style.visibility='hidden'">
-          <div class="result-info">
-            <div class="result-title">${escapeHtml(r.title)}</div>
-            <div class="result-year">${r.year || ''} · ${r.mediaType === 'tv' ? 'Series' : 'Movie'}</div>
-          </div>
-          <button class="request-btn pill-btn ${r.availability === 'available' ? 'available' : ''}" data-id="${r.id}" data-type="${r.mediaType}" data-title="${escapeHtml(r.title)}" ${r.availability !== 'none' ? 'disabled' : ''}>
-            <span class="state-dot ${r.availability === 'available' ? '' : 'paused'}"></span>
-            <span class="btn-label">${r.availability === 'available' ? '✓ In Plex' : r.availability === 'requested' ? 'Requested' : 'Request'}</span>
-          </button>
-        </div>
-      `).join('');
+      renderSearchResults(results, 'No results.');
     } catch (e) {
-      resultsEl.innerHTML = '<p class="empty-state">Search failed.</p>';
+      document.getElementById('search-results').innerHTML = '<p class="empty-state">Search failed.</p>';
     }
   }, 400);
 });
