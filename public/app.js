@@ -1,7 +1,7 @@
 const signinScreen = document.getElementById('signin-screen');
 const dashboardScreen = document.getElementById('dashboard-screen');
 const signinStatus = document.getElementById('signin-status');
-const store = { nowPlaying: [], continueWatching: [], recentlyAdded: [], airingToday: [], upcoming: [] };
+const store = { nowPlaying: [], recentlyWatched: [], recentlyAdded: [], airingToday: [], upcoming: [] };
 
 async function api(path, opts = {}) {
   const res = await fetch(path, { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...opts });
@@ -62,7 +62,7 @@ function showDashboard(isOwner) {
   dashboardScreen.classList.remove('hidden');
   setHeroDate();
   connectNowPlayingStream();
-  loadContinueWatching();
+  loadRecentlyWatched();
   loadTopOfMonth();
   loadRecentlyAdded();
   loadAiringToday();
@@ -138,25 +138,31 @@ function patchNowPlayingRow({ sessionKey, state, progress }) {
   row.querySelector('.bar-fill').style.width = progress + '%';
 }
 
-// ---------- Continue Watching ----------
-async function loadContinueWatching() {
-  const body = document.getElementById('continue-watching-body');
+// ---------- Recently Watched ----------
+// Styled like Now Playing (small thumb + progress bar per row) rather than a
+// poster grid — on-deck/"continue watching" is already visible in Plex itself,
+// so this shows actual watch history instead.
+async function loadRecentlyWatched() {
+  const body = document.getElementById('recently-watched-body');
   try {
-    const items = await api('/api/plex/on-deck');
-    store.continueWatching = items;
-    if (!items.length) { body.innerHTML = '<p class="empty-state">Nothing in progress.</p>'; return; }
+    const items = await api('/api/tautulli/recently-watched');
+    store.recentlyWatched = items;
+    if (!items.length) { body.innerHTML = '<p class="empty-state">Nothing watched recently.</p>'; return; }
     body.innerHTML = items.map((i, idx) => `
-      <div class="poster-card" data-idx="${idx}">
-        <div class="poster-frame">
-          <img class="poster-img" src="${i.thumb || ''}" onerror="this.style.visibility='hidden'">
-          <span class="poster-badge">${escapeHtml(i.subtitle || '')}</span>
-          <div class="poster-overlay"><span class="poster-overlay-text">${escapeHtml(i.title)}</span></div>
-          <div class="bar poster-progress"><div class="bar-fill" style="width:${i.progress}%"></div></div>
+      <div class="now-row" data-idx="${idx}">
+        <img class="thumb" src="${i.thumb || ''}" onerror="this.style.visibility='hidden'">
+        <div style="flex:1; min-width:0;">
+          <div class="now-title">${escapeHtml(i.title)}</div>
+          <div class="now-meta">
+            <span class="${dotClass(!i.finished)}"></span>
+            ${i.finished ? 'Finished' : i.progress + '% watched'} · ${timeAgo(i.watchedAt)}
+          </div>
+          <div class="bar"><div class="bar-fill" style="width:${i.progress}%"></div></div>
         </div>
       </div>
     `).join('');
   } catch (e) {
-    body.innerHTML = '<p class="empty-state">Could not reach Plex.</p>';
+    body.innerHTML = '<p class="empty-state">Could not reach Tautulli.</p>';
   }
 }
 
@@ -568,15 +574,14 @@ document.getElementById('now-playing-body').addEventListener('click', e => {
   });
 });
 
-document.getElementById('continue-watching-body').addEventListener('click', e => {
-  const card = e.target.closest('.poster-card');
+document.getElementById('recently-watched-body').addEventListener('click', e => {
+  const card = e.target.closest('.now-row');
   if (!card) return;
-  const i = store.continueWatching[Number(card.dataset.idx)];
+  const i = store.recentlyWatched[Number(card.dataset.idx)];
   if (!i) return;
   openInfo({
-    poster: i.thumb, title: i.episodeTitle ? `${i.title} — ${i.episodeTitle}` : i.title, badge: 'CH.02 · CONTINUE WATCHING',
-    meta: `${i.subtitle || ''} · ${i.progress}% watched`,
-    overview: i.overview
+    poster: i.thumb, title: i.title, badge: 'CH.02 · RECENTLY WATCHED',
+    meta: `${i.finished ? 'Finished' : i.progress + '% watched'} · ${timeAgo(i.watchedAt)}`
   });
 });
 
