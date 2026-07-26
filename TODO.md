@@ -62,8 +62,12 @@
       also forwarded there unchanged (OVERSEERR_WEBHOOK_FORWARD_URL) rather
       than replacing that integration.
 
+- [x] PWA / installable — manifest + icon set (branded per-deployment via the
+      same SITE_NAME templating as index.html) + a minimal service worker
+      (network-first everywhere, never caches /api/ — this is a live
+      dashboard, not an offline-first app)
+
 ## Not yet started
-- [ ] PWA / installable
 - [ ] Trending/Discover panel
 - [ ] Disk space via Sonarr/Radarr diskspace API
 - [ ] Kid-safe mode
