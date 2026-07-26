@@ -85,6 +85,45 @@ router.get('/recently-added', requireAuth, async (req, res) => {
   }
 });
 
+// Personalized per signed-in user via Tautulli's user_id filter — Tautulli uses
+// the Plex account id directly as its own user_id, so no separate mapping is
+// needed (verified against real data). History can contain multiple rows for
+// the same item (resumed sessions, rewatches), so this dedupes by rating_key,
+// keeping only the most recent (get_history is already newest-first).
+router.get('/recently-watched', requireAuth, async (req, res) => {
+  try {
+    const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
+      params: {
+        apikey: process.env.TAUTULLI_API_KEY,
+        cmd: 'get_history',
+        user_id: req.session.user.id,
+        length: 40,
+        order_column: 'date',
+        order_dir: 'desc'
+      }
+    });
+    const rows = data.response.data.data || [];
+    const seen = new Set();
+    const items = [];
+    for (const r of rows) {
+      if (seen.has(r.rating_key)) continue;
+      seen.add(r.rating_key);
+      items.push({
+        title: r.grandparent_title ? `${r.grandparent_title} — S${r.parent_media_index}E${r.media_index}` : r.title,
+        thumb: imageUrl(r.thumb),
+        progress: Math.round(r.percent_complete) || 0,
+        finished: r.watched_status >= 1,
+        watchedAt: Number(r.stopped || r.date) * 1000
+      });
+      if (items.length >= 15) break;
+    }
+    res.json(items);
+  } catch (err) {
+    console.error('tautulli recently-watched error:', err.code || err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not reach Tautulli' });
+  }
+});
+
 // Rolling 30-day leaderboard, top 3 (gold/silver/bronze) each: viewer, movie, TV
 // show, anime. Tautulli's top_tv stat combines every "show"-type library
 // together, so TV and Anime are split out here by section_id rather than two

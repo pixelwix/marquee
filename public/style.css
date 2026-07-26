@@ -108,6 +108,7 @@ body {
   background: var(--card); border: 1px solid var(--card-border); border-radius: 18px; padding: 1.15rem;
   backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4);
   box-shadow: 0 16px 36px -22px rgba(20,25,35,0.28), inset 0 1px 0 rgba(255,255,255,0.5);
+  display: flex; flex-direction: column;
 }
 .card-label {
   font-family: var(--mono); font-size: 0.72rem; color: var(--muted); letter-spacing: 0.02em;
@@ -132,6 +133,14 @@ body {
 .state-dot.paused { background: var(--muted); }
 .bar { height: 5px; background: rgba(20,25,35,0.08); border-radius: 3px; margin-top: 7px; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--amber); }
+
+/* Recently Watched reuses the Now Playing row markup (.now-row/.thumb/.now-meta/
+   .bar). flex:1 on a flex-column .card fills whatever height the row's tallest
+   sibling (Now Playing) naturally wants — grid stretch then matches Now Playing's
+   card to it — so the two stay the same height dynamically either direction,
+   with overflow-y:auto for whichever has more content than fits. min-height is
+   just a floor so it doesn't collapse to almost nothing if Now Playing is empty. */
+#recently-watched-body { flex: 1; min-height: 9rem; overflow-y: auto; }
 
 /* Download queue rows — same shape as Now Playing rows but not clickable */
 .dl-row { display: flex; align-items: center; gap: 0.9rem; padding: 0.65rem 0; border-bottom: 1px solid rgba(20,25,35,0.06); }
@@ -227,6 +236,10 @@ body {
   .span1, .span2, .span4 { grid-column: span 4; }
   .bento { grid-template-columns: 1fr; }
   .frame { padding: 1.25rem; }
+  /* Cards stack into one column here, so Now Playing and Recently Watched are no
+     longer row-siblings to stretch-match — flex:1 alone would collapse this to
+     ~0 height with nothing to fill against, so cap it to roughly 8 rows instead. */
+  #recently-watched-body { flex: none; min-height: 0; max-height: 34rem; overflow-y: auto; }
 }
 
 /* ---------- Modals ---------- */
