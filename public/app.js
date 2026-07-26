@@ -779,7 +779,7 @@ function openInfo({ poster, title, badge, meta, overview, stream, ratingKey }) {
 
 function resetReportForm() {
   document.getElementById('info-report-form').classList.add('hidden');
-  document.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('#info-report-form .report-type-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('report-message').value = '';
   const submitBtn = document.getElementById('report-submit-btn');
   submitBtn.disabled = true;
@@ -796,9 +796,9 @@ document.getElementById('info-report-btn').addEventListener('click', () => {
   document.getElementById('info-report-form').classList.toggle('hidden');
 });
 
-document.querySelectorAll('.report-type-btn').forEach(btn => {
+document.querySelectorAll('#info-report-form .report-type-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('selected'));
+    document.querySelectorAll('#info-report-form .report-type-btn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     selectedReportType = btn.dataset.type;
     document.getElementById('report-submit-btn').disabled = false;
@@ -818,6 +818,170 @@ document.getElementById('report-submit-btn').addEventListener('click', async () 
         ratingKey: infoReportRatingKey,
         issueType: selectedReportType,
         message: document.getElementById('report-message').value
+      })
+    });
+    status.textContent = 'Thanks — reported.';
+    status.className = 'report-status ok';
+    submitBtn.textContent = 'Send report';
+  } catch (e) {
+    status.textContent = e.message || 'Could not submit report.';
+    status.className = 'report-status error';
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Send report';
+  }
+});
+
+// ---------- Report-an-issue modal (searches the Plex library directly) ----------
+// Lets an admin find *any* library item — not just something recently watched —
+// to report on, e.g. relaying a problem a family member described over text.
+const reportModal = document.getElementById('report-modal');
+// Trail of { ratingKey, title } from the show down to wherever browsing currently
+// is (show -> season), so "Back" can step up one level and "report an episode"
+// can still label the form with the show's title.
+let reportBrowseStack = [];
+let reportSelectedRatingKey = null;
+let reportFormSelectedType = null;
+
+function openReportModal() {
+  reportModal.classList.remove('hidden');
+  reportBrowseStack = [];
+  document.getElementById('report-search-input').value = '';
+  document.getElementById('report-search-results').innerHTML = '';
+  showReportView('search');
+  document.getElementById('report-search-input').focus();
+}
+document.getElementById('report-search-btn').addEventListener('click', openReportModal);
+document.getElementById('close-report-modal-btn').addEventListener('click', () => reportModal.classList.add('hidden'));
+
+function showReportView(view) {
+  document.getElementById('report-search-view').classList.toggle('hidden', view !== 'search');
+  document.getElementById('report-browse-view').classList.toggle('hidden', view !== 'browse');
+  document.getElementById('report-form-view').classList.toggle('hidden', view !== 'form');
+}
+
+let reportSearchTimer;
+document.getElementById('report-search-input').addEventListener('input', e => {
+  clearTimeout(reportSearchTimer);
+  const q = e.target.value.trim();
+  const resultsEl = document.getElementById('report-search-results');
+  if (!q) { resultsEl.innerHTML = ''; return; }
+  reportSearchTimer = setTimeout(async () => {
+    try {
+      const results = await api(`/api/plex/search?q=${encodeURIComponent(q)}`);
+      resultsEl.innerHTML = results.map(r => `
+        <div class="result-item" data-ratingkey="${r.ratingKey}" data-title="${escapeHtml(r.title)}" data-type="${r.type}" data-thumb="${r.thumb || ''}" data-year="${r.year || ''}">
+          <img class="result-poster" src="${r.thumb || ''}" onerror="this.style.visibility='hidden'">
+          <div class="result-info">
+            <div class="result-title">${escapeHtml(r.title)}</div>
+            <div class="result-year">${r.year || ''} · ${r.type === 'show' ? 'Series' : 'Movie'}</div>
+          </div>
+        </div>
+      `).join('');
+    } catch (e) {
+      resultsEl.innerHTML = '<p class="empty-state">Search failed.</p>';
+    }
+  }, 400);
+});
+
+document.getElementById('report-search-results').addEventListener('click', e => {
+  const item = e.target.closest('.result-item');
+  if (!item) return;
+  const { ratingkey, title, type, thumb, year } = item.dataset;
+  if (type === 'show') {
+    reportBrowseStack = [{ ratingKey: ratingkey, title }];
+    loadReportBrowse(ratingkey, title);
+  } else {
+    openReportForm({ ratingKey: ratingkey, title, subtitle: year, poster: thumb });
+  }
+});
+
+// Same endpoint drills both levels — a show's ratingKey returns seasons, a
+// season's ratingKey returns episodes.
+async function loadReportBrowse(ratingKey, title) {
+  showReportView('browse');
+  document.getElementById('report-browse-title').textContent = title;
+  const listEl = document.getElementById('report-browse-list');
+  listEl.innerHTML = '<p class="empty-state">Loading…</p>';
+  try {
+    const items = await api(`/api/plex/children/${ratingKey}`);
+    listEl.innerHTML = items.map(i => `
+      <div class="browse-row" data-ratingkey="${i.ratingKey}" data-title="${escapeHtml(i.title)}" data-type="${i.type}" data-thumb="${i.thumb || ''}">
+        <img class="browse-row-thumb" src="${i.thumb || ''}" onerror="this.style.visibility='hidden'">
+        <div class="browse-row-name">${i.type === 'episode' ? `${i.index}. ${escapeHtml(i.title)}` : escapeHtml(i.title)}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    listEl.innerHTML = '<p class="empty-state">Could not load.</p>';
+  }
+}
+
+document.getElementById('report-browse-list').addEventListener('click', e => {
+  const row = e.target.closest('.browse-row');
+  if (!row) return;
+  const { ratingkey, title, type, thumb } = row.dataset;
+  if (type === 'episode') {
+    const showTitle = reportBrowseStack[0]?.title || '';
+    openReportForm({ ratingKey: ratingkey, title: showTitle, subtitle: title, poster: thumb });
+  } else {
+    reportBrowseStack.push({ ratingKey: ratingkey, title });
+    loadReportBrowse(ratingkey, title);
+  }
+});
+
+document.getElementById('report-browse-back').addEventListener('click', () => {
+  reportBrowseStack.pop();
+  const top = reportBrowseStack[reportBrowseStack.length - 1];
+  if (top) loadReportBrowse(top.ratingKey, top.title);
+  else showReportView('search');
+});
+
+document.getElementById('report-form-back').addEventListener('click', () => {
+  const top = reportBrowseStack[reportBrowseStack.length - 1];
+  if (top) loadReportBrowse(top.ratingKey, top.title);
+  else showReportView('search');
+});
+
+function openReportForm({ ratingKey, title, subtitle, poster }) {
+  showReportView('form');
+  reportSelectedRatingKey = ratingKey;
+  reportFormSelectedType = null;
+  const posterEl = document.getElementById('report-form-poster');
+  posterEl.style.visibility = '';
+  posterEl.src = poster || '';
+  document.getElementById('report-form-title').textContent = title || '';
+  document.getElementById('report-form-subtitle').textContent = subtitle || '';
+  document.querySelectorAll('#report-form-view .report-type-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('report-form-message').value = '';
+  const submitBtn = document.getElementById('report-form-submit');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Send report';
+  const status = document.getElementById('report-form-status');
+  status.textContent = '';
+  status.className = 'report-status';
+}
+
+document.querySelectorAll('#report-form-view .report-type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#report-form-view .report-type-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    reportFormSelectedType = btn.dataset.type;
+    document.getElementById('report-form-submit').disabled = false;
+  });
+});
+
+document.getElementById('report-form-submit').addEventListener('click', async () => {
+  if (!reportSelectedRatingKey || !reportFormSelectedType) return;
+  const submitBtn = document.getElementById('report-form-submit');
+  const status = document.getElementById('report-form-status');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Sending…';
+  try {
+    await api('/api/overseerr/issue', {
+      method: 'POST',
+      body: JSON.stringify({
+        ratingKey: reportSelectedRatingKey,
+        issueType: reportFormSelectedType,
+        message: document.getElementById('report-form-message').value
       })
     });
     status.textContent = 'Thanks — reported.';
