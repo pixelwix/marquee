@@ -86,7 +86,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   'OVERSEERR_URL', 'OVERSEERR_API_KEY', 'OVERSEERR_WEBHOOK_SECRET', 'OVERSEERR_WEBHOOK_FORWARD_URL',
   'SONARR_URL', 'SONARR_API_KEY',
   'RADARR_URL', 'RADARR_API_KEY',
-  'QBITTORRENT_URL', 'QBITTORRENT_USERNAME', 'QBITTORRENT_PASSWORD',
+  'QBITTORRENT_URL', 'QBITTORRENT_API_KEY', 'QBITTORRENT_USERNAME', 'QBITTORRENT_PASSWORD',
   'SABNZBD_URL', 'SABNZBD_API_KEY',
   'UPTIME_KUMA_DB_PATH', 'UPTIME_KUMA_DATA_DIR',
   'NUT_HOST', 'NUT_PORT', 'NUT_USERNAME', 'NUT_PASSWORD', 'NUT_UPS_NAME'
@@ -249,7 +249,17 @@ router.get('/health', requireAuth, requireOwner, async (req, res) => {
   if (process.env.QBITTORRENT_URL) {
     checks.push(checkServiceHealth('qBittorrent', async () => {
       const url = process.env.QBITTORRENT_URL.replace(/\/+$/, '');
-      const { data } = await axios.get(`${url}/api/v2/app/version`, { timeout: 4000 });
+      const apiKey = process.env.QBITTORRENT_API_KEY;
+      const headers = {
+        Referer: url,
+        Origin: url,
+        ...(apiKey ? { 'X-Api-Key': apiKey, Cookie: `SID=${apiKey}` } : {})
+      };
+      const { data } = await axios.get(`${url}/api/v2/app/version`, {
+        headers,
+        ...(apiKey ? { params: { apikey: apiKey } } : {}),
+        timeout: 4000
+      });
       return { version: data || 'connected' };
     }));
   } else {

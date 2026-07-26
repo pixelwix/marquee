@@ -627,8 +627,9 @@ const SERVICE_CONFIG_SCHEMAS = {
     title: 'qBittorrent Configuration',
     fields: [
       { key: 'QBITTORRENT_URL', label: 'qBittorrent WebUI URL', placeholder: 'http://localhost:9080', hint: 'URL to reach qBittorrent WebUI.' },
-      { key: 'QBITTORRENT_USERNAME', label: 'Username', placeholder: 'admin', hint: 'WebUI username.' },
-      { key: 'QBITTORRENT_PASSWORD', label: 'Password', placeholder: '••••••••', type: 'password', hint: 'WebUI password.' }
+      { key: 'QBITTORRENT_API_KEY', label: 'API Key (Optional)', placeholder: 'API Key', hint: 'API Key for qBittorrent or reverse proxy auth. Skips username/password if set.' },
+      { key: 'QBITTORRENT_USERNAME', label: 'Username (Optional)', placeholder: 'admin', hint: 'WebUI username.' },
+      { key: 'QBITTORRENT_PASSWORD', label: 'Password (Optional)', placeholder: '••••••••', type: 'password', hint: 'WebUI password.' }
     ]
   },
   SABnzbd: {
