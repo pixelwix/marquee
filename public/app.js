@@ -9,6 +9,10 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+}
+
 // ---------- Taglines ----------
 // SITE_TAGLINES (server-injected, see server.js) — defaults to a single generic
 // phrase, but a deployment can supply its own personality via .env.
