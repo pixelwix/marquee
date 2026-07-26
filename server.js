@@ -69,32 +69,42 @@ const taglinesJson = JSON.stringify(taglines).replace(/</g, '\\u003c');
 // Busting the query string on every process start (i.e. every deploy) instead
 // forces a real cache miss, since it's a URL Cloudflare has never cached before.
 const assetVersion = String(Date.now());
+// siteName/taglinesJson/assetVersion are all fixed for the life of the process,
+// so both the disk read and the placeholder substitution are redundant on every
+// request — do each exactly once at startup and just serve the resulting string.
+// (index.html/manifest.webmanifest are read synchronously here, at startup only,
+// which is fine — nothing is serving traffic yet.)
+const renderedHtml = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8')
+  .replaceAll('{{SITE_NAME}}', siteName)
+  .replace('{{TAGLINES_JSON}}', taglinesJson)
+  .replaceAll('{{ASSET_VERSION}}', assetVersion);
+const renderedManifest = fs.readFileSync(path.join(__dirname, 'public', 'manifest.webmanifest'), 'utf8')
+  .replaceAll('{{SITE_NAME}}', siteName);
+
 app.get('/', (req, res) => {
-  fs.readFile(path.join(__dirname, 'public', 'index.html'), 'utf8', (err, html) => {
-    if (err) return res.status(500).end();
-    // Always revalidate the page shell itself, so it picks up the new asset
-    // version immediately rather than also being stuck on a stale cached copy.
-    res.set('Cache-Control', 'no-cache');
-    res.type('html').send(html
-      .replaceAll('{{SITE_NAME}}', siteName)
-      .replace('{{TAGLINES_JSON}}', taglinesJson)
-      .replaceAll('{{ASSET_VERSION}}', assetVersion));
-  });
+  // Always revalidate the page shell itself, so it picks up the new asset
+  // version immediately rather than also being stuck on a stale cached copy.
+  res.set('Cache-Control', 'no-cache');
+  res.type('html').send(renderedHtml);
 });
 // Same {{SITE_NAME}} templating as index.html, so an installed PWA's home-screen
 // label matches whatever this deployment is branded as (e.g. skyn3t.me) instead
 // of the generic default baked into the static file.
 app.get('/manifest.webmanifest', (req, res) => {
-  fs.readFile(path.join(__dirname, 'public', 'manifest.webmanifest'), 'utf8', (err, manifest) => {
-    if (err) return res.status(500).end();
-    res.set('Cache-Control', 'no-cache');
-    res.type('application/manifest+json').send(manifest.replaceAll('{{SITE_NAME}}', siteName));
-  });
+  res.set('Cache-Control', 'no-cache');
+  res.type('application/manifest+json').send(renderedManifest);
 });
 
 app.use(express.static(path.join(__dirname, 'public'), {
   index: false,
-  setHeaders: res => res.set('Cache-Control', 'no-cache')
+  setHeaders: (res, filePath) => {
+    // Icons are unversioned (no ?v= cache-buster like app.js/style.css get), but
+    // also change rarely and deliberately — a week-long cache is a real win for
+    // repeat visits without meaningfully risking a stale favicon/PWA icon.
+    res.set('Cache-Control', filePath.includes(`${path.sep}icons${path.sep}`)
+      ? 'public, max-age=604800'
+      : 'no-cache');
+  }
 }));
 
 const port = process.env.PORT || 4000;

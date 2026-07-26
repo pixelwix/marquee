@@ -70,6 +70,15 @@ router.get('/image', requireAuth, async (req, res) => {
       responseType: 'arraybuffer'
     });
     res.set('Content-Type', headers['content-type']);
+    // The path itself is content-versioned (Plex's trailing /thumb/<timestamp>
+    // changes whenever the underlying image does), so this exact URL always
+    // returns the same bytes — safe to cache for as long as browsers will keep
+    // it. Previously uncached, meaning every poster/thumbnail across the whole
+    // dashboard re-fetched through this proxy on every single page load.
+    // "private" (not "public") deliberately keeps this out of any shared/edge
+    // cache — this route requires a session to reach, so nothing should be
+    // servable to a different, unauthenticated visitor from a shared cache.
+    res.set('Cache-Control', 'private, max-age=31536000, immutable');
     res.send(data);
   } catch (err) {
     res.status(502).end();
