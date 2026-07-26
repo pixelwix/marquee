@@ -851,6 +851,7 @@ function openReportModal() {
   document.getElementById('report-search-input').focus();
 }
 document.getElementById('report-search-btn').addEventListener('click', openReportModal);
+document.getElementById('fab-report-btn').addEventListener('click', openReportModal);
 document.getElementById('close-report-modal-btn').addEventListener('click', () => reportModal.classList.add('hidden'));
 
 function showReportView(view) {
