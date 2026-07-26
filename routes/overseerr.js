@@ -126,12 +126,37 @@ router.get('/requests/mine', requireAuth, async (req, res) => {
       params: { take: 20, sort: 'added', requestedBy: session.overseerrUserId },
       headers: { Cookie: session.cookie }
     });
-    res.json(data.results.map(r => ({
-      title: r.media?.title,
-      mediaType: r.media?.mediaType,
-      status: r.status, // 1 pending, 2 approved, 3 declined, 4 available (varies by version)
-      requestedAt: r.createdAt
-    })));
+
+    // Overseerr's request list only returns tmdbId, not a title — resolved here
+    // with one lookup per request (parallel; confirmed there's no bulk endpoint).
+    const results = await Promise.all(data.results.map(async r => {
+      const mediaType = r.type; // 'movie' | 'tv'
+      const tmdbId = r.media?.tmdbId;
+      let title = null;
+      let poster = null;
+      if (tmdbId) {
+        try {
+          const { data: details } = await adminClient().get(`/${mediaType}/${tmdbId}`);
+          title = details.title || details.name;
+          poster = details.posterPath ? `https://image.tmdb.org/t/p/w300${details.posterPath}` : null;
+        } catch (e) {
+          // Leave title/poster null rather than failing the whole list over one
+          // bad lookup.
+        }
+      }
+      // Two different things worth showing distinctly: whether the request
+      // itself was approved (r.status: 1 pending, 2 approved, 3 declined), and
+      // whether the underlying media is actually available yet (r.media.status:
+      // 4/5 = available) — an approved request can still be mid-download.
+      const mediaStatus = r.media?.status;
+      const availability = r.status === 3 ? 'declined'
+        : [4, 5].includes(mediaStatus) ? 'available'
+        : r.status === 1 ? 'pending'
+        : 'downloading';
+      return { title, poster, mediaType, availability, requestedAt: r.createdAt };
+    }));
+
+    res.json(results);
   } catch (err) {
     console.error('overseerr requests error', err.response?.data || err.message);
     res.status(502).json({ error: 'Could not reach Overseerr' });

@@ -291,13 +291,36 @@ body {
 }
 .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; }
 .modal-head h3 { font-family: var(--display); margin: 0; font-weight: 600; }
+
+.modal-tabs { display: flex; gap: 1.4rem; border-bottom: 1px solid rgba(20,25,35,0.08); margin-bottom: 0.85rem; }
+.modal-tab {
+  background: none; border: none; padding: 0 0 0.6rem; margin-bottom: -1px;
+  font-family: var(--body); font-size: 0.85rem; font-weight: 600; color: var(--muted);
+  border-bottom: 2px solid transparent; cursor: pointer;
+}
+.modal-tab.active { color: var(--teal); border-bottom-color: var(--teal); }
+
+/* Both tab panes sit in the same flex-column .modal-card, so each needs to be
+   a flex column itself (min-height:0 so overflow-y:auto below actually kicks
+   in instead of the card just growing past its max-height). */
+#search-tab, #myrequests-tab { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
 #search-input {
   width: 100%; padding: 0.75rem 0.95rem; background: rgba(255,255,255,0.7);
   border: 1px solid rgba(20,25,35,0.1); border-radius: 9px; color: var(--text);
   font-family: var(--body); font-size: 0.9rem; margin-bottom: 0.85rem;
 }
 #search-input:focus { outline: none; border-color: var(--teal); }
-.search-results { overflow-y: auto; }
+.search-results { flex: 1; overflow-y: auto; }
+
+.my-requests-list { flex: 1; overflow-y: auto; }
+.my-request-row { display: flex; gap: 0.85rem; padding: 0.65rem 0; align-items: center; }
+.my-request-row + .my-request-row { border-top: 1px solid rgba(20,25,35,0.08); }
+.my-request-status { font-size: 0.74rem; font-family: var(--mono); color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 0.4rem; }
+.my-request-status.available { color: var(--teal); }
+.my-request-status.downloading { color: var(--amber); }
+.my-request-status.declined { color: var(--danger); }
+.my-request-status .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block; }
 .result-item { display: flex; gap: 0.85rem; padding: 0.65rem 0; align-items: center; }
 .result-item + .result-item { border-top: 1px solid rgba(20,25,35,0.08); }
 .result-poster { width: 42px; height: 60px; object-fit: cover; border-radius: 6px; background: #E2E6EC; }

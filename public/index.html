@@ -117,14 +117,26 @@
       <h3>Request something</h3>
       <button id="close-modal-btn" class="btn-ghost">&#10005;</button>
     </div>
-    <input id="search-input" type="text" placeholder="Search a movie or show…" autocomplete="off">
-    <div id="search-results" class="search-results"></div>
 
-    <div id="season-picker" class="season-picker hidden">
-      <button id="season-picker-back" class="btn-ghost">&#8592; Back to search</button>
-      <h4 id="season-picker-title"></h4>
-      <div id="season-picker-list" class="season-list"></div>
-      <button id="season-picker-submit" class="btn-primary">Request Selected Seasons</button>
+    <div class="modal-tabs">
+      <button id="tab-search-btn" class="modal-tab active">Search</button>
+      <button id="tab-myrequests-btn" class="modal-tab">My Requests</button>
+    </div>
+
+    <div id="search-tab">
+      <input id="search-input" type="text" placeholder="Search a movie or show…" autocomplete="off">
+      <div id="search-results" class="search-results"></div>
+
+      <div id="season-picker" class="season-picker hidden">
+        <button id="season-picker-back" class="btn-ghost">&#8592; Back to search</button>
+        <h4 id="season-picker-title"></h4>
+        <div id="season-picker-list" class="season-list"></div>
+        <button id="season-picker-submit" class="btn-primary">Request Selected Seasons</button>
+      </div>
+    </div>
+
+    <div id="myrequests-tab" class="hidden">
+      <div id="my-requests-list" class="my-requests-list"><p class="empty-state">Loading…</p></div>
     </div>
   </div>
 </div>
