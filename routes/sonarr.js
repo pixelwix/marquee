@@ -3,7 +3,15 @@ const axios = require('axios');
 const requireAuth = require('./requireAuth');
 const requireOwner = require('./requireOwner');
 const { mapReleases } = require('../lib/releaseSearch');
+const { isConfigured } = require('../lib/services');
 const router = express.Router();
+
+router.use((req, res, next) => {
+  if (!isConfigured('sonarr')) {
+    return res.status(503).json({ error: 'Sonarr is not configured', unconfigured: true });
+  }
+  next();
+});
 
 router.get('/today', requireAuth, async (req, res) => {
   try {

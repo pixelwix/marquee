@@ -3,7 +3,15 @@ const axios = require('axios');
 const requireAuth = require('./requireAuth');
 const nowPlaying = require('../lib/nowPlaying');
 const { imageUrl } = require('../lib/plexImage');
+const { isConfigured } = require('../lib/services');
 const router = express.Router();
+
+router.use((req, res, next) => {
+  if (!isConfigured('tautulli')) {
+    return res.status(503).json({ error: 'Tautulli is not configured', unconfigured: true });
+  }
+  next();
+});
 
 // Helper: lists every Plex library Tautulli knows about, with its section_id.
 // Hit this once to find the IDs you need for TAUTULLI_SECTION_* in .env.

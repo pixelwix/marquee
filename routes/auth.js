@@ -125,9 +125,20 @@ async function isAllowedOnServer(userId, userToken) {
   }
 }
 
+const { getServicesState } = require('../lib/services');
+
 router.get('/me', (req, res) => {
   if (!req.session.user) return res.status(401).json({ error: 'Not signed in' });
-  res.json({ username: req.session.user.username, thumb: req.session.user.thumb, isOwner: req.session.user.isOwner });
+  res.json({
+    username: req.session.user.username,
+    thumb: req.session.user.thumb,
+    isOwner: req.session.user.isOwner,
+    services: getServicesState()
+  });
+});
+
+router.get('/config', (req, res) => {
+  res.json({ services: getServicesState() });
 });
 
 router.post('/logout', (req, res) => {

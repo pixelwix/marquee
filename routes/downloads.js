@@ -3,7 +3,15 @@ const requireAuth = require('./requireAuth');
 const settle = require('../lib/settle');
 const qbittorrent = require('../lib/qbittorrent');
 const sabnzbd = require('../lib/sabnzbd');
+const { isConfigured } = require('../lib/services');
 const router = express.Router();
+
+router.use((req, res, next) => {
+  if (!isConfigured('downloads')) {
+    return res.status(503).json({ error: 'Download clients are not configured', unconfigured: true });
+  }
+  next();
+});
 
 router.get('/queue', requireAuth, async (req, res) => {
   const [torrents, usenet] = await Promise.all([

@@ -5,12 +5,16 @@ const settle = require('../lib/settle');
 const uptimeKuma = require('../lib/uptimeKuma');
 const ups = require('../lib/ups');
 const loginLog = require('../lib/loginLog');
+const { isConfigured } = require('../lib/services');
 const router = express.Router();
 
 const fs = require('fs');
 const axios = require('axios');
 
 router.get('/status', requireAuth, requireOwner, async (req, res) => {
+  if (!isConfigured('systemStatus')) {
+    return res.json({ monitors: [], ups: null, unconfigured: true });
+  }
   const [monitors, upsStatus] = await Promise.all([
     settle('uptime-kuma read', uptimeKuma.getMonitors(), []),
     settle('UPS query', ups.getStatus(), null)

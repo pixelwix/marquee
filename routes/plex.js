@@ -2,7 +2,15 @@ const express = require('express');
 const axios = require('axios');
 const requireAuth = require('./requireAuth');
 const { imageUrl } = require('../lib/plexImage');
+const { isConfigured } = require('../lib/services');
 const router = express.Router();
+
+router.use((req, res, next) => {
+  if (!isConfigured('plex')) {
+    return res.status(503).json({ error: 'Plex is not configured', unconfigured: true });
+  }
+  next();
+});
 
 // Only actual Plex thumb/art paths are allowed through — anything else could be used
 // to make arbitrary authenticated GET requests to the Plex server with the admin token.

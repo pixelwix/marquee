@@ -77,35 +77,96 @@ function pollSignIn(popup) {
   try {
     const me = await api('/api/auth/me');
     document.getElementById('whoami').textContent = me.username;
-    showDashboard(me.isOwner);
+    showDashboard(me.isOwner, me.services);
   } catch (e) {
     signinScreen.classList.remove('hidden');
+    checkSigninConfig();
   }
 })();
 
-function showDashboard(isOwner) {
+async function checkSigninConfig() {
+  try {
+    const cfg = await api('/api/auth/config');
+    store.services = cfg.services || {};
+    const btn = document.getElementById('plex-signin-btn');
+    if (cfg.services && !cfg.services.plex) {
+      btn.disabled = true;
+      btn.classList.add('disabled');
+      signinStatus.textContent = 'Plex server is not configured. Ask server owner to configure Plex settings.';
+    }
+  } catch {}
+}
+
+function applyServiceVisibility(services = store.services || {}) {
+  const toggle = (id, enabled) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (enabled) el.classList.remove('hidden');
+    else el.classList.add('hidden');
+  };
+
+  // Disable (hide) bento grid panels for unconfigured apps
+  toggle('panel-now-playing', !!services.tautulli);
+  toggle('panel-recently-watched', !!services.tautulli);
+  toggle('panel-top-month', !!services.tautulli);
+  toggle('panel-recently-added', !!services.tautulli);
+  toggle('panel-airing-today', !!services.sonarr);
+  toggle('panel-upcoming', !!services.radarr);
+  toggle('panel-downloads', !!services.downloads);
+
+  // Request feature buttons
+  toggle('search-btn', !!services.overseerr);
+  toggle('fab-request-btn', !!services.overseerr);
+
+  // Report issue feature buttons
+  const canReport = !!(services.plex && services.overseerr);
+  toggle('report-search-btn', canReport);
+  toggle('fab-report-btn', canReport);
+}
+
+function showDashboard(isOwner, services = {}) {
+  store.services = services;
   signinScreen.classList.add('hidden');
   dashboardScreen.classList.remove('hidden');
   setHeroDate();
-  connectNowPlayingStream();
-  loadRecentlyWatched();
-  loadTopOfMonth();
-  loadRecentlyAdded();
-  loadAiringToday();
-  loadUpcoming();
-  loadDownloads();
-  setInterval(loadDownloads, 5000);
+  applyServiceVisibility(services);
+
+  if (services.tautulli) {
+    connectNowPlayingStream();
+    loadRecentlyWatched();
+    loadTopOfMonth();
+    loadRecentlyAdded();
+  }
+  if (services.sonarr) {
+    loadAiringToday();
+  }
+  if (services.radarr) {
+    loadUpcoming();
+  }
+  if (services.downloads) {
+    loadDownloads();
+    setInterval(loadDownloads, 5000);
+  }
   if (isOwner) {
     document.getElementById('admin-settings-btn').classList.remove('hidden');
-    document.getElementById('panel-owner').classList.remove('hidden');
-    loadOwnerStatus();
-    setInterval(loadOwnerStatus, 15000);
+    if (services.systemStatus) {
+      document.getElementById('panel-owner').classList.remove('hidden');
+      loadOwnerStatus();
+      setInterval(loadOwnerStatus, 15000);
+    } else {
+      document.getElementById('panel-owner').classList.add('hidden');
+    }
     document.getElementById('panel-admin').classList.remove('hidden');
     loadAdminLogins();
-    loadPendingRequests();
-    setInterval(loadPendingRequests, 30000);
-    loadAdminIssues();
-    setInterval(loadAdminIssues, 30000);
+    if (services.overseerr) {
+      loadPendingRequests();
+      setInterval(loadPendingRequests, 30000);
+      loadAdminIssues();
+      setInterval(loadAdminIssues, 30000);
+    } else {
+      setDualHTML('admin-requests-body', 'modal-admin-requests-body', '<p class="empty-state">Overseerr is not configured.</p>');
+      setDualHTML('admin-issues-body', 'modal-admin-issues-body', '<p class="empty-state">Overseerr is not configured.</p>');
+    }
     loadServerSettings();
     loadServiceHealth();
   }
@@ -527,7 +588,9 @@ async function loadAdminIssues() {
       setDualHTML('admin-issues-body', 'modal-admin-issues-body', '<p class="empty-state">Nothing open.</p>');
       return;
     }
-    const html = results.map(r => `
+    const html = results.map(r => {
+      const canSearch = (r.mediaType === 'movie' && store.services?.radarr) || (r.mediaType === 'tv' && store.services?.sonarr);
+      return `
       <div class="pending-row" data-id="${r.id}" data-title="${escapeHtml(r.title || 'Unknown title')}"
            data-media-type="${r.mediaType || ''}" data-tmdb-id="${r.tmdbId || ''}" data-tvdb-id="${r.tvdbId || ''}"
            data-season="${r.season || ''}" data-episode="${r.episode || ''}">
@@ -541,11 +604,12 @@ async function loadAdminIssues() {
           ${r.message ? `<div class="issue-message">${escapeHtml(r.message)}</div>` : ''}
         </div>
         <div class="pending-actions">
-          <button class="search-release-btn pill-btn"><span class="state-dot"></span><span class="btn-label">Search</span></button>
+          ${canSearch ? '<button class="search-release-btn pill-btn"><span class="state-dot"></span><span class="btn-label">Search</span></button>' : ''}
           <button class="approve-btn pill-btn"><span class="state-dot"></span><span class="btn-label">Resolve</span></button>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
     setDualHTML('admin-issues-body', 'modal-admin-issues-body', html);
   } catch (e) {
     setDualHTML('admin-issues-body', 'modal-admin-issues-body', '<p class="empty-state">Could not load issues.</p>');
@@ -872,12 +936,21 @@ if (editSettingForm) {
         editModalStatus.className = 'report-status ok';
       }
 
-      setTimeout(() => {
+      setTimeout(async () => {
         editSettingModal.classList.add('hidden');
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save Changes';
         loadServerSettings();
         loadServiceHealth();
+        const me = await api('/api/auth/me').catch(() => null);
+        if (me && me.services) {
+          store.services = me.services;
+          applyServiceVisibility(me.services);
+        }
+        if (store.services?.tautulli) {
+          loadRecentlyAdded();
+          loadTopOfMonth();
+        }
       }, 600);
     } catch (err) {
       saveBtn.disabled = false;
@@ -1311,7 +1384,7 @@ function openInfo({ poster, title, badge, meta, overview, stream, ratingKey, req
   // for details first, then request from here instead of committing blind.
   infoRequestItem = request || null;
   const requestSection = document.getElementById('info-request-section');
-  requestSection.classList.toggle('hidden', !request);
+  requestSection.classList.toggle('hidden', !request || !store.services?.overseerr);
   if (request) {
     const btn = document.getElementById('info-request-btn');
     btn.disabled = request.availability !== 'none';
@@ -1326,7 +1399,8 @@ function openInfo({ poster, title, badge, meta, overview, stream, ratingKey, req
   // have nothing to report a playback problem with yet.
   infoReportRatingKey = ratingKey || null;
   resetReportForm();
-  document.getElementById('info-report-section').classList.toggle('hidden', !ratingKey);
+  const canReport = !!(store.services?.plex && store.services?.overseerr);
+  document.getElementById('info-report-section').classList.toggle('hidden', !ratingKey || !canReport);
 
   infoModal.classList.remove('hidden');
 }

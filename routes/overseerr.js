@@ -6,7 +6,15 @@ const overseerrSession = require('../lib/overseerrSession');
 const rateLimit = require('../lib/rateLimit');
 const sse = require('../lib/sse');
 const tautulliMedia = require('../lib/tautulliMedia');
+const { isConfigured } = require('../lib/services');
 const router = express.Router();
+
+router.use((req, res, next) => {
+  if (!isConfigured('overseerr')) {
+    return res.status(503).json({ error: 'Overseerr is not configured', unconfigured: true });
+  }
+  next();
+});
 
 // Unlike the read-only endpoints below, these have a real side effect (creates an
 // actual request against Sonarr/Radarr, or a real Overseerr issue) — worth capping
