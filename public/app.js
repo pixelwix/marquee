@@ -485,6 +485,7 @@ async function loadUpcoming() {
           <span class="poster-badge">${formatDate(i.releaseDate)}</span>
           <div class="poster-overlay"><span class="poster-overlay-text">${escapeHtml(i.title)}</span></div>
         </div>
+        <div class="poster-meta ${i.hasFile ? 'available' : ''}">${i.hasFile ? '<span class="state-dot"></span> Available' : 'Releasing Soon'}</div>
       </div>
     `).join('');
   } catch (e) {
@@ -1472,7 +1473,7 @@ function openInfo({ poster, title, badge, meta, overview, stream, ratingKey, req
   posterEl.src = poster || '';
   document.getElementById('info-title').textContent = title || '';
   document.getElementById('info-badge').textContent = badge || '';
-  document.getElementById('info-meta').textContent = meta || '';
+  document.getElementById('info-meta').innerHTML = meta || '';
   document.getElementById('info-overview').textContent = overview || 'No synopsis available.';
 
   const streamEl = document.getElementById('info-stream');
@@ -1859,7 +1860,7 @@ document.getElementById('upcoming-body').addEventListener('click', e => {
   if (!i) return;
   openInfo({
     poster: i.poster, title: i.title, badge: 'CH.06 · RELEASING SOON',
-    meta: `Releases ${formatDate(i.releaseDate)}`,
+    meta: `Releases ${formatDate(i.releaseDate)}${i.hasFile ? ' · <span style="color: var(--teal); font-weight: 600;"><span class="state-dot"></span> Available</span>' : ''}`,
     overview: i.overview
   });
 });

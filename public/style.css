@@ -894,6 +894,14 @@ body {
   color: var(--muted);
   font-family: var(--mono);
   margin-top: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.poster-meta.available {
+  color: var(--teal);
+  font-weight: 600;
 }
 
 /* Positioning modifier for .bar when it overlays a poster instead of sitting inline */
