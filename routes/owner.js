@@ -257,7 +257,11 @@ router.get('/health', requireAuth, requireOwner, async (req, res) => {
       const headers = {
         Referer: url,
         Origin: url,
-        ...(apiKey ? { 'X-Api-Key': apiKey, Cookie: `SID=${apiKey}` } : {})
+        ...(apiKey ? {
+          Authorization: `Bearer ${apiKey}`,
+          'X-Api-Key': apiKey,
+          Cookie: `SID=${apiKey}`
+        } : {})
       };
       const { data } = await axios.get(`${url}/api/v2/app/version`, {
         headers,
