@@ -44,6 +44,7 @@ function mapDiscoverItem(r) {
     year: (r.releaseDate || r.firstAirDate || '').slice(0, 4),
     overview: r.overview,
     poster: r.posterPath ? `https://image.tmdb.org/t/p/w300${r.posterPath}` : null,
+    backdrop: r.backdropPath ? `https://image.tmdb.org/t/p/w1280${r.backdropPath}` : null,
     // Overseerr media status: 4 = partially available, 5 = available — i.e.
     // actually already in Plex, distinct from just having been requested
     // (2 = pending, 3 = processing) or never touched (everything else).

@@ -40,6 +40,11 @@
 
     <!-- HERO MASTHEAD -->
     <div class="hero">
+      <div class="hero-bg" id="hero-bg">
+        <div class="hero-bg-slide slide-a active"></div>
+        <div class="hero-bg-slide slide-b"></div>
+        <div class="hero-bg-overlay"></div>
+      </div>
       <div class="hero-top">
         <div>
           <div class="logo">{{SITE_NAME}}</div>
@@ -61,9 +66,12 @@
           <div class="hero-headline" id="hero-headline">Loading…</div>
           <div class="hero-sub" id="live-indicator">CH.01 &middot; ON AIR</div>
         </div>
-        <div class="date-pill">
-          <div class="date-num" id="date-num"></div>
-          <div class="date-txt" id="date-txt"></div>
+        <div class="hero-mid-right">
+          <div class="date-pill">
+            <div class="date-num" id="date-num"></div>
+            <div class="date-txt" id="date-txt"></div>
+          </div>
+          <div id="hero-featured-tag" class="hero-featured-tag hidden"></div>
         </div>
       </div>
     </div>

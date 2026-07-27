@@ -130,6 +130,7 @@ function showDashboard(isOwner, services = {}) {
   dashboardScreen.classList.remove('hidden');
   setHeroDate();
   applyServiceVisibility(services);
+  initHeroBanners(services);
 
   if (services.tautulli) {
     connectNowPlayingStream();
@@ -219,8 +220,111 @@ function showAvailableToast({ title, poster }) {
   };
   toast.addEventListener('click', dismiss);
   setTimeout(dismiss, 8000);
-  container.prepend(toast);
 }
+
+// ---------- Hero Backdrop Banners ----------
+let heroBanners = [];
+let heroBannerIndex = 0;
+let heroBannerTimer = null;
+
+async function initHeroBanners(services = {}) {
+  if (heroBannerTimer) {
+    clearInterval(heroBannerTimer);
+    heroBannerTimer = null;
+  }
+  heroBanners = [];
+  heroBannerIndex = 0;
+
+  if (services.overseerr) {
+    try {
+      const items = await api('/api/overseerr/discover');
+      heroBanners = (items || []).filter(i => i && i.backdrop);
+    } catch (e) {
+      console.warn('Could not load Overseerr discover items for hero background', e);
+    }
+  }
+
+  if (!heroBanners.length) {
+    const pool = [];
+    if (store.recentlyAdded && store.recentlyAdded.all) {
+      pool.push(...store.recentlyAdded.all);
+    }
+    if (store.topOfMonth && Array.isArray(store.topOfMonth)) {
+      pool.push(...store.topOfMonth);
+    }
+    heroBanners = pool
+      .map(i => ({
+        backdrop: i.art || i.thumb || i.poster,
+        title: i.title || i.name,
+        year: i.year || ''
+      }))
+      .filter(i => i.backdrop);
+  }
+
+  if (!heroBanners.length) return;
+
+  const slideA = document.querySelector('#hero-bg .slide-a');
+  const slideB = document.querySelector('#hero-bg .slide-b');
+  if (!slideA || !slideB) return;
+
+  const initial = heroBanners[0];
+  const img = new Image();
+  img.onload = () => {
+    slideA.style.backgroundImage = `url("${initial.backdrop}")`;
+    slideA.classList.add('active');
+    slideB.classList.remove('active');
+    updateHeroFeaturedTag(initial);
+  };
+  img.src = initial.backdrop;
+
+  if (heroBanners.length > 1) {
+    heroBannerTimer = setInterval(rotateHeroBanner, 12000);
+  }
+}
+
+function rotateHeroBanner() {
+  if (!heroBanners.length) return;
+  const nextIndex = (heroBannerIndex + 1) % heroBanners.length;
+  const slideA = document.querySelector('#hero-bg .slide-a');
+  const slideB = document.querySelector('#hero-bg .slide-b');
+  if (!slideA || !slideB) return;
+
+  const activeSlide = slideA.classList.contains('active') ? slideA : slideB;
+  const inactiveSlide = activeSlide === slideA ? slideB : slideA;
+
+  const item = heroBanners[nextIndex];
+  const img = new Image();
+  img.onload = () => {
+    inactiveSlide.style.backgroundImage = `url("${item.backdrop}")`;
+    activeSlide.classList.remove('active');
+    inactiveSlide.classList.add('active');
+    updateHeroFeaturedTag(item);
+    heroBannerIndex = nextIndex;
+  };
+  img.src = item.backdrop;
+}
+
+function updateHeroFeaturedTag(item) {
+  const tag = document.getElementById('hero-featured-tag');
+  if (!tag || !item) return;
+  const label = item.year ? `${escapeHtml(item.title)} (${item.year})` : escapeHtml(item.title);
+  tag.innerHTML = `<span style="opacity:0.65;font-weight:600;letter-spacing:0.04em;">FEATURED BACKDROP</span> &bull; ${label} &nbsp;&#8594;`;
+  tag.classList.remove('hidden');
+}
+
+document.getElementById('hero-featured-tag').addEventListener('click', () => {
+  if (!heroBanners.length) return;
+  const currentItem = heroBanners[heroBannerIndex];
+  if (!currentItem) return;
+  openInfo({
+    poster: currentItem.poster || currentItem.backdrop,
+    title: currentItem.title,
+    badge: currentItem.mediaType === 'tv' ? 'FEATURED SERIES' : 'FEATURED MOVIE',
+    meta: currentItem.year || '',
+    overview: currentItem.overview,
+    request: currentItem
+  });
+});
 
 function renderNowPlaying(sessions) {
   const body = document.getElementById('now-playing-body');
