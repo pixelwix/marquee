@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.5.1.**
+v1.5.3.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -637,5 +637,35 @@ gets versioned as it ships, not reconstructed later.
       pattern elsewhere, not a live visual confirmation against real
       non-empty data — worth a glance next time something's actually
       downloading or stuck.
+
+## v1.5.2 — Fix: Top of the Month now tracks the calendar month, not a rolling 30 days
+
+- [x] `/api/tautulli/top-of-month`'s main leaderboard call (viewer/movie/TV)
+      used a hardcoded `time_range: 30` against Tautulli's `get_home_stats` —
+      a rolling trailing-30-days window with no relationship to the actual
+      calendar month, so e.g. on the 2nd of a new month it was still mostly
+      reflecting last month's plays. Tautulli's `time_range` is just "N days
+      back from now", so swapped the hardcoded `30` for
+      `new Date().getDate()` (days elapsed since the 1st) — resets to 1 on
+      the 1st and grows a day at a time from there automatically, no
+      rollover logic needed. Anime's separate 90-day/50-pool call is
+      deliberately left alone (not tied to month-to-date) — it's already
+      wider than any single calendar month specifically to compensate for
+      low anime volume; shrinking it early in the month would starve it
+      even more than the old fixed 30-day version did.
+
+## v1.5.3 — Anime leaderboard now tracks the calendar month too
+
+- [x] Owner reconsidered v1.5.2's choice to leave anime on a fixed 90-day
+      window: anime now shares the same month-to-date `time_range` as
+      viewer/movie/TV, so all four leaderboards reset together on the 1st.
+      Since anime and TV were already being sliced from the same `top_tv`
+      stat by `section_id`, this collapsed what used to be two
+      `get_home_stats` calls into one (using the larger 50-row pool for
+      everything, so anime still gets a real chance to surface in a
+      combined top_tv ranking dominated by regular TV). Tradeoff accepted
+      knowingly: anime will run sparse/empty for the first few days of a
+      new month — genuinely low volume, no way around that once it's tied
+      to the same shrinking window as everything else.
 
 ## Ideas

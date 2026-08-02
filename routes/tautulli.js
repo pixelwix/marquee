@@ -213,33 +213,39 @@ router.get('/metadata/:ratingKey', requireAuth, async (req, res) => {
   }
 });
 
-// Rolling 30-day leaderboard, top 3 (gold/silver/bronze) each: viewer, movie, TV
-// show, anime. Tautulli's top_tv stat combines every "show"-type library
+// True calendar-month leaderboard, top 3 (gold/silver/bronze) each: viewer,
+// movie, TV show, anime. Tautulli's time_range is "N days back from now", so
+// month-to-date is just today's day-of-month number as that N — resets itself
+// to 1 on the 1st and grows a day at a time from there, no separate rollover
+// logic needed. Tautulli's top_tv stat combines every "show"-type library
 // together, so TV and Anime are split out here by section_id rather than two
-// separate calls. Anime gets its own wider 90-day/larger-pool call — it's much
-// lower-volume than regular TV, so a 30-day top-20 combined list usually
-// surfaces only one anime title (regular TV dominates the shared ranking).
+// separate slices of the same call (anime used to get its own wider/separate
+// call — no longer needed now that both share the same month-to-date window,
+// one get_home_stats call covers all four leaderboards with a large enough
+// pool (50) that anime has a real chance to surface in top_tv alongside
+// regular TV). Anime will still run sparse for the first few days of a new
+// month — genuinely lower volume, no way around that once it's tied to the
+// same shrinking window as everything else.
 router.get('/top-of-month', requireAuth, async (req, res) => {
   try {
-    const homeStats = (timeRange, statsCount) => axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
-      params: { apikey: process.env.TAUTULLI_API_KEY, cmd: 'get_home_stats', time_range: timeRange, stats_type: 'plays', stats_count: statsCount }
+    const daysElapsedThisMonth = new Date().getDate();
+    const { data: main } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
+      params: { apikey: process.env.TAUTULLI_API_KEY, cmd: 'get_home_stats', time_range: daysElapsedThisMonth, stats_type: 'plays', stats_count: 50 }
     });
-    const [main, animeExtended] = await Promise.all([homeStats(30, 20), homeStats(90, 50)]);
-    const rowsFor = (payload, statId) => (payload.data.response.data || []).find(s => s.stat_id === statId)?.rows || [];
+    const rowsFor = (statId) => (main.response.data || []).find(s => s.stat_id === statId)?.rows || [];
     const { TAUTULLI_SECTION_TV, TAUTULLI_SECTION_ANIME } = process.env;
 
-    const tvRows = rowsFor(main, 'top_tv');
+    const tvRows = rowsFor('top_tv');
     const topTv = (TAUTULLI_SECTION_TV
       ? tvRows.filter(r => String(r.section_id) === TAUTULLI_SECTION_TV)
       : tvRows
     ).slice(0, 3);
-    const animeRows = rowsFor(animeExtended, 'top_tv');
     const topAnime = (TAUTULLI_SECTION_ANIME
-      ? animeRows.filter(r => String(r.section_id) === TAUTULLI_SECTION_ANIME)
+      ? tvRows.filter(r => String(r.section_id) === TAUTULLI_SECTION_ANIME)
       : []
     ).slice(0, 3);
-    const topMovies = rowsFor(main, 'top_movies').slice(0, 3);
-    const topUsers = rowsFor(main, 'top_users').slice(0, 3);
+    const topMovies = rowsFor('top_movies').slice(0, 3);
+    const topUsers = rowsFor('top_users').slice(0, 3);
 
     res.json({
       user: topUsers.map(u => ({
