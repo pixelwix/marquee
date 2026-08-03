@@ -5,6 +5,7 @@ const requireOwner = require('./requireOwner');
 const { mapReleases } = require('../lib/releaseSearch');
 const { mapFileInfo } = require('../lib/fileInfo');
 const { classifyQueueRecord, isFileFromThisGrab } = require('../lib/grabStatus');
+const radarrClient = require('../lib/radarrClient');
 const router = express.Router();
 
 router.get('/upcoming', requireAuth, async (req, res) => {
@@ -190,26 +191,12 @@ router.get('/grab-status', requireAuth, requireOwner, async (req, res) => {
 // Radarr's own view of in-progress downloads — surfaced here only when
 // something's actually wrong (stuck import, download client reports an
 // error, ...), not the whole queue, since a healthy download in progress
-// isn't something the owner needs to act on.
+// isn't something the owner needs to act on. Fetch logic lives in
+// lib/radarrClient.js — shared with lib/issueWatchdog.js, which feeds these
+// into the Alerts panel/push pipeline.
 router.get('/queue', requireAuth, requireOwner, async (req, res) => {
   try {
-    const { data } = await axios.get(`${process.env.RADARR_URL}/api/v3/queue`, {
-      params: { includeMovie: true, pageSize: 50 },
-      headers: { 'X-Api-Key': process.env.RADARR_API_KEY }
-    });
-    const results = (data.records || [])
-      .filter(r => r.trackedDownloadStatus && r.trackedDownloadStatus !== 'ok')
-      .map(r => ({
-        id: r.id,
-        title: r.movie?.title || r.title,
-        poster: r.movie?.images?.find(i => i.coverType === 'poster')?.remoteUrl || null,
-        status: r.trackedDownloadStatus,
-        reason: (r.statusMessages || []).flatMap(s => s.messages || []).join('; ') || r.errorMessage || 'Import issue',
-        // Needed to look up manual-import candidates for this specific download —
-        // Radarr's own /manualimport lookup is keyed by downloadId, not queue id.
-        downloadId: r.downloadId || null
-      }));
-    res.json(results);
+    res.json(await radarrClient.fetchImportQueue());
   } catch (err) {
     console.error('radarr queue error:', err.code || err.response?.status, err.message);
     res.status(502).json({ error: 'Could not reach Radarr' });

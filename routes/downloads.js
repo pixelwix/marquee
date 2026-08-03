@@ -1,18 +1,10 @@
 const express = require('express');
 const requireAuth = require('./requireAuth');
 const requireOwner = require('./requireOwner');
-const settle = require('../lib/settle');
 const qbittorrent = require('../lib/qbittorrent');
 const sabnzbd = require('../lib/sabnzbd');
+const { fetchAll } = require('../lib/downloadsClient');
 const router = express.Router();
-
-async function fetchAll() {
-  const [torrents, usenet] = await Promise.all([
-    settle('qbittorrent queue', process.env.QBITTORRENT_URL ? qbittorrent.getTorrents() : Promise.resolve([]), []),
-    settle('sabnzbd queue', process.env.SABNZBD_URL ? sabnzbd.getQueue() : Promise.resolve([]), [])
-  ]);
-  return [...torrents, ...usenet];
-}
 
 const ID_RE = /^[a-zA-Z0-9_]+$/;
 

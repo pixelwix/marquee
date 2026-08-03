@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.5.3.**
+v1.8.1.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -236,13 +236,22 @@ gets versioned as it ships, not reconstructed later.
       same confirm-dialog-then-delete-files pattern as Download Issues.
       Torrent-only, matching the details feature above. Zero-downtime static
       deploy, verified served live
-- [x] Disk Space moved from the Stack card into the admin hero masthead
-      (previously buried several scrolls down, now the first thing the
-      owner sees) and rendered as a per-volume donut gauge instead of a
-      linear bar — same amber/danger color semantics as before, extracted
-      the dedup-by-capacity logic into lib/diskspace.js. Hero sizes to its
-      content instead of the family dashboard's fixed height (which has no
-      cycling banner to justify it here, and was clipping volumes on mobile)
+- [x] Disk Space now prefers real physical-volume storage data read directly
+      off a bind-mounted host path (`MEDIA_MOUNT_DIR`, optional — falls back
+      to the existing Radarr/Sonarr diskspace API when unset), instead of
+      only ever reflecting whatever root folders those two apps happen to
+      have configured. Uses Node's `fs.statfs()` directly, no external API
+      call or credentials needed. Extracted the dedup-by-capacity logic
+      (lib/diskspace.js) so both sources share it. Required a full container
+      recreate (new bind mount, not just a restart) — rebuilt from the fully
+      synced source first so none of tonight's earlier hotfixes were lost in
+      the process. Verified live end-to-end: real volumes, correctly deduped
+      down from 7 mount points to 3 actual volumes, matching host `df`
+      exactly. Also swapped the panel's linear bar for a per-volume donut
+      gauge, same amber/danger color semantics as before
+- [ ] Note: the NAS-specific integration piece of this (bind mount details,
+      real host paths/share layout) stays local to this deployment only —
+      not committed/pushed to GitHub, per owner's request
 - [x] Wanted/Missing moved from Stack to the top of the admin Family card and
       now proactively flags stuck releases in the same list, instead of a
       second near-duplicate section (tried that first, merged after
@@ -311,8 +320,8 @@ gets versioned as it ships, not reconstructed later.
       of truth, year computed once at startup. Bumped 1.0.0 -> 1.1.0 (122
       commits deep, version had never been bumped once) to reflect tonight's
       batch as a real minor release rather than silently accumulating forever
-      under the original number. Verified live on both pages, correctly
-      showing this deployment's site name, the new version, and the year
+      under the original number. Verified live on both pages: "skyn3t v1.1.0
+      · © 2026"
 
 ## v1.2.0 — Releasing Soon parity, My Stats, Watchlist removed
 
@@ -667,5 +676,111 @@ gets versioned as it ships, not reconstructed later.
       knowingly: anime will run sparse/empty for the first few days of a
       new month — genuinely low volume, no way around that once it's tied
       to the same shrinking window as everything else.
+
+## v1.6.0 — Alerts panel: arr-stack health watchdog
+
+- [x] New owner-only Alerts panel, first in the `/admin` bento grid for
+      zero-scroll visibility. Populated by a new external cron script
+      (`/mnt/docker/scripts/arr-health-watchdog.mjs` on docker-host, every
+      15 minutes) that checks Sonarr/Radarr/Prowlarr's own structured
+      `/health` endpoints (reliable, no LLM) plus a secondary log-triage
+      pass — recent warn/error/fatal log lines get judged by CLIProxyAPI
+      (subscription-backed, not metered) for whether they're a real
+      actionable problem versus routine noise, biased toward silence on
+      any failure (network, parse, LLM outage) rather than risking a false
+      alert. Detect-and-alert only, deliberately no auto-fix — the owner
+      still does the actual fixing. qBittorrent/SABnzbd left out of scope:
+      neither has a `/health` concept, and their failure modes already
+      have dedicated auto-remediation scripts (`qbit-stalled-cleanup.mjs`,
+      `qbit-disk-guard.mjs`) that this would have mostly just narrated.
+- [x] New `lib/alerts.js` (sqlite, same lazy-open pattern as `lib/
+      notice.js`) + `routes/alerts.js`: `POST /api/alerts/ingest` (shared-
+      secret auth, exact mirror of the existing `OVERSEERR_WEBHOOK_SECRET`
+      pattern — not session-based, since the watchdog is an external
+      script), `GET /api/alerts`, `POST /api/alerts/:key/dismiss`, all
+      reconciled against a `scopes` list so a partial-failure run (an
+      unreachable app, a down LLM) can never wrongly auto-resolve a real
+      open alert — it just omits that scope and leaves prior state alone.
+      Dismiss (`acknowledged_at`) is deliberately not the same as Resolve
+      (`resolved_at`, only ever set by the watchdog observing a condition
+      actually clear) — a dismissed alert resurfaces if it reopens or
+      escalates in severity, so it can't go permanently silent while still
+      broken, but stays quietly suppressed if it's just still open at the
+      same severity you already looked at.
+- [x] Pure reconciliation logic (`planReconciliation`) factored out and
+      unit-tested (`test/alerts.test.js`, 8 cases) the same way `lib/
+      notice.js` separates `computeStatus` from DB I/O.
+
+## v1.7.0 — Web Push notifications, brought back scoped to stack alerts only
+
+- [x] Web Push was removed entirely in v1.5.0 for going unused (the old
+      version covered general family notifications — nobody had it on).
+      Rebuilt from that same git history, adapted to a narrower, genuinely
+      high-value case: the owner gets pinged the instant a NEW or reopened
+      arr-stack alert lands (see v1.6.0's Alerts panel), even without the
+      dashboard open. Owner-only throughout — `routes/push.js`'s three
+      endpoints are all `requireAuth`+`requireOwner`, subscriptions live in a
+      dedicated `lib/pushSubscriptions.js` (fresh `owner-push.sqlite`, not a
+      resurrection of the old family-wide `push.sqlite` file the removal left
+      on disk — that data is stale and the wrong shape for an owner-only
+      feature anyway). `lib/alerts.js`'s `reconcile()` fires one batched
+      notification per ingest run for whatever's newly-inserted or reopened —
+      deliberately NOT for an alert that's simply still open on this cycle,
+      which would re-notify for the same unresolved thing every 15 minutes
+      and risk becoming exactly the kind of nagging that made the original
+      version go unused. Notification click opens `/admin` directly (was `/`
+      before, back when it served the whole family). VAPID keys reused the
+      ones already sitting unused in production `.env` since the v1.5.0
+      removal, rather than generating a new pair.
+- [x] Real bug caught by `npm test` before deploy: `lib/pushSubscriptions.js`
+      initially ported the old code's eager DB-open (`mkdirSync` at module
+      load), which crashes outside a container where `/app/data` doesn't
+      exist and doesn't match the lazy-open convention every other storage
+      module here uses (`lib/notice.js`, `lib/alerts.js`). Fixed to match.
+
+## v1.8.0 — Alerts/push extended to open issues, import issues, downloads, stuck wanted
+
+- [x] The Alerts panel and push pipeline (v1.6.0/v1.7.0) now also cover the four
+      other "needs the owner's action" categories already surfaced in `/admin`'s
+      existing panels: Overseerr open issues, Radarr/Sonarr stuck imports, stuck
+      downloads, and stuck Wanted/Missing releases (overdue 3+ days, same threshold
+      `lib/stuckRequests.js` already used). Deliberately excludes new pending
+      requests — too routine/frequent, the exact kind of thing that made the
+      original Web Push feature go unused before its v1.5.0 removal.
+- [x] New `lib/issueWatchdog.js`: an in-process scheduler (same `setInterval`
+      shape as `lib/nowPlaying.js`, checks every 5 minutes — no LLM calls
+      involved here unlike the external arr-health-watchdog, so it can afford
+      to check more often) that feeds these into the exact same `lib/
+      alerts.js` reconcile/push pipeline the arr-stack watchdog already uses —
+      same panel, same dismiss/auto-resolve, same push-only-on-new-or-reopened
+      behavior, zero new UI or storage code.
+- [x] Refactor alongside it: extracted the fetch-and-map logic these panels
+      already used (previously inlined in `routes/overseerr.js`, `radarr.js`,
+      `sonarr.js`, `downloads.js`, `owner.js`) into new/extended `lib/`
+      clients — `lib/overseerrClient.js` (added `fetchOpenIssues`, moved
+      `resolveMedia`), `lib/radarrClient.js` and `lib/sonarrClient.js` (new —
+      import-queue + wanted/missing fetchers), `lib/downloadsClient.js` (new
+      — the qBittorrent/SABnzbd merge). Route handlers are now thin
+      call-and-respond wrappers around the same lib functions the new
+      watchdog also calls — zero HTTP response shape changes, confirmed via
+      the full `npm test` suite (87/87) both before and after.
+
+## v1.8.1 — Fix: Alerts panel flashing "Could not load" on transient blips
+
+- [x] Owner reported the new Alerts panel (v1.8.0) intermittently flashing
+      "Could not load alerts" mid-session, then recovering a poll or two
+      later. Checked `docker logs skyn3t` across the reported window: zero
+      server-side errors — the request never reached Express, ruling out a
+      bug in the new code. Root cause: this panel polls every 30s (twice
+      most others' 60s) using the same "wipe the whole panel to an error
+      state on any fetch failure" pattern every panel in this app already
+      uses — a momentary blip (network handoff, iOS backgrounding the PWA
+      tab, whatever) shows up here first and most often purely because it
+      checks twice as frequently, not because anything is actually broken.
+      Fixed in `loadAlerts()` only (scoped to what was reported): a failed
+      poll now only replaces the panel with an error state if nothing's
+      already on screen (a genuine first-load failure) — a mid-session blip
+      just leaves the last-known-good list up instead of erasing real,
+      still-actionable alerts for one missed poll.
 
 ## Ideas

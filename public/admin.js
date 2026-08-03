@@ -13,8 +13,12 @@
     return;
   }
 
+  initNotifyToggle();
+
   // System Status and Recent Sign-ins now live under Settings tabs (see
   // below) — loaded lazily on first view rather than eagerly here.
+  loadAlerts();
+  setInterval(loadAlerts, 30000);
   loadWanted();
   setInterval(loadWanted, 60000);
   loadPendingRequests();
@@ -264,6 +268,89 @@ document.getElementById('admin-issues-body').addEventListener('click', async e =
   const row = e.target.closest('.pending-row');
   if (!row) return;
   openIssueFileInfo(row.dataset);
+});
+
+// ---------- Alerts (arr-stack health watchdog findings) ----------
+// Populated by an external cron script (arr-health-watchdog.mjs on docker-host),
+// which POSTs to /api/alerts/ingest on a 15-minute cycle — this panel just polls
+// Marquee's own reconciled view of that data, same pattern as loadAdminIssues above.
+function alertSeverityDotClass(severity) {
+  if (severity === 'error') return 'state-dot danger';
+  if (severity === 'warning') return 'state-dot warning';
+  return 'state-dot paused'; // 'notice' — neutral
+}
+
+// One label per lib/alerts.js `source` value — arr-health-watchdog.mjs reports
+// 'health'/'log-triage', lib/issueWatchdog.js reports the rest.
+function alertSourceLabel(source) {
+  return {
+    'log-triage': 'Log triage',
+    health: 'Health check',
+    issue: 'Reported issue',
+    import: 'Import stuck',
+    attention: 'Download stuck',
+    wanted: 'Wanted/missing',
+  }[source] || source;
+}
+
+function createAlertRow() {
+  const row = document.createElement('div');
+  row.className = 'pending-row';
+  row.innerHTML = `
+    <div class="result-info">
+      <div class="result-title"><span class="alert-dot"></span><span class="alert-title-text"></span></div>
+      <div class="pending-requester"><span class="requester-text"></span></div>
+      <div class="issue-message hidden"></div>
+    </div>
+    <div class="pending-actions">
+      <button class="dismiss-alert-btn pill-btn"><span class="btn-label">Dismiss</span></button>
+    </div>
+  `;
+  return row;
+}
+
+function updateAlertRow(row, a) {
+  row.dataset.key = a.key;
+  row.querySelector('.alert-dot').className = alertSeverityDotClass(a.severity);
+  row.querySelector('.alert-title-text').textContent = a.title;
+  row.querySelector('.requester-text').textContent =
+    `${a.app} · ${alertSourceLabel(a.source)} · ${timeAgo(a.lastSeenAt)}`;
+  const msgEl = row.querySelector('.issue-message');
+  if (a.detail) { msgEl.textContent = a.detail; msgEl.classList.remove('hidden'); }
+  else msgEl.classList.add('hidden');
+}
+
+async function loadAlerts() {
+  const body = document.getElementById('alerts-body');
+  try {
+    const results = await api('/api/alerts');
+    if (!results.length) { body.innerHTML = '<p class="empty-state">No open issues — stack is healthy.</p>'; return; }
+    reconcileList(body, results, a => a.key, createAlertRow, updateAlertRow);
+  } catch (e) {
+    // This panel polls every 30s (twice most others' 60s), so a momentary
+    // network blip shows up here first and most often. Only replace the
+    // panel with an error state if there's nothing already on screen (a
+    // genuine first-load failure) — a transient hiccup mid-session should
+    // just leave the last-known-good list up rather than flashing it away
+    // and erasing real, still-actionable data for one missed poll.
+    if (!body.children.length) body.innerHTML = '<p class="empty-state">Could not load alerts.</p>';
+  }
+}
+
+document.getElementById('alerts-body').addEventListener('click', async e => {
+  const btn = e.target.closest('.dismiss-alert-btn');
+  if (!btn) return;
+  const row = btn.closest('.pending-row');
+  btn.disabled = true;
+  try {
+    await api(`/api/alerts/${encodeURIComponent(row.dataset.key)}/dismiss`, { method: 'POST' });
+    row.remove();
+    if (!document.getElementById('alerts-body').children.length) {
+      document.getElementById('alerts-body').innerHTML = '<p class="empty-state">No open issues — stack is healthy.</p>';
+    }
+  } catch (err) {
+    btn.disabled = false;
+  }
 });
 
 // Looks up what's currently on disk for a reported item, so the owner sees
@@ -1358,3 +1445,80 @@ document.getElementById('notice-clear-btn').addEventListener('click', async () =
     document.getElementById('notice-save-status').textContent = 'Could not clear notice.';
   }
 });
+
+// ---------- Push notifications (owner-only) ----------
+// Pings this device the moment a NEW or reopened stack alert lands (see
+// lib/alerts.js's reconcile()), even without the dashboard open — unlike the
+// old family-wide version of this feature (removed in v1.5.0 for going
+// unused), this one is scoped to something actually worth a ping. Button
+// stays hidden entirely if this deployment has no VAPID key configured, or
+// the browser doesn't support Push at all — same graceful-absence pattern as
+// every other optional integration in this app.
+async function initNotifyToggle() {
+  const btn = document.getElementById('notify-toggle-btn');
+  if (!window.VAPID_PUBLIC_KEY || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  btn.classList.remove('hidden');
+
+  const registration = await navigator.serviceWorker.ready;
+  const existing = await registration.pushManager.getSubscription();
+  btn.classList.toggle('active', !!existing);
+
+  // Every step here (service worker readiness, the browser's own permission
+  // prompt, the subscribe/unsubscribe call, the backend round trip) can fail
+  // or just never resolve — catching each explicitly means a denied/ignored
+  // permission prompt or a failed subscribe() tells the owner why, instead
+  // of the click looking like it did nothing at all.
+  btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const current = await reg.pushManager.getSubscription();
+      if (current) {
+        await current.unsubscribe();
+        await api('/api/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint: current.endpoint }) });
+        btn.classList.remove('active');
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        alert('Notifications are blocked for this site — check your browser\'s site settings (usually the padlock/site info icon next to the address bar) to allow them, then try again.');
+        return;
+      }
+      // Relying on subscribe() to implicitly trigger the permission prompt
+      // works on Chrome but isn't reliable on Safari — it can reject
+      // straight away with no prompt ever shown. Requesting permission
+      // explicitly first is the standard cross-browser-safe pattern.
+      if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          alert(permission === 'denied'
+            ? 'Notifications weren\'t enabled — permission was denied.'
+            : 'Notifications weren\'t enabled — no response to the permission prompt.');
+          return;
+        }
+      }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(window.VAPID_PUBLIC_KEY)
+      });
+      await api('/api/push/subscribe', { method: 'POST', body: JSON.stringify(sub) });
+      btn.classList.add('active');
+    } catch (err) {
+      console.error('push toggle failed:', err);
+      const detail = err && (err.name && err.message ? `${err.name}: ${err.message}` : err.message || err.name || String(err));
+      alert('Could not update notification settings (' + (detail || 'unknown error') + '). If your browser showed a permission prompt, it may need a response first — try clicking again.');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+// Web Push's applicationServerKey needs a Uint8Array — VAPID public keys are
+// handed out base64url-encoded, this is the standard conversion (same as
+// MDN's own push notification guide).
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}

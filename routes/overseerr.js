@@ -6,7 +6,7 @@ const overseerrSession = require('../lib/overseerrSession');
 const rateLimit = require('../lib/rateLimit');
 const sse = require('../lib/sse');
 const tautulliMedia = require('../lib/tautulliMedia');
-const { adminClient, mapDiscoverItem } = require('../lib/overseerrClient');
+const { adminClient, mapDiscoverItem, resolveMedia, fetchOpenIssues } = require('../lib/overseerrClient');
 const downloadQueueIds = require('../lib/downloadQueueIds');
 const { computeAvailability } = require('../lib/requestAvailability');
 const router = express.Router();
@@ -139,23 +139,6 @@ router.post('/request', requireAuth, requestLimiter, async (req, res) => {
   }
 });
 
-// Overseerr's request list only returns tmdbId, not a title — resolved here with
-// one lookup per request (parallel at each call site; confirmed there's no bulk
-// endpoint). Shared by /requests/mine and /requests/pending below.
-async function resolveMedia(mediaType, tmdbId) {
-  if (!tmdbId) return { title: null, poster: null };
-  try {
-    const { data } = await adminClient.get(`/${mediaType}/${tmdbId}`);
-    return {
-      title: data.title || data.name,
-      poster: data.posterPath ? `https://image.tmdb.org/t/p/w300${data.posterPath}` : null
-    };
-  } catch (e) {
-    // Leave title/poster null rather than failing the whole list over one bad lookup.
-    return { title: null, poster: null };
-  }
-}
-
 router.get('/requests/mine', requireAuth, async (req, res) => {
   try {
     const session = await overseerrSession.getSession(req.session.user.id, req.session.user.plexToken);
@@ -249,8 +232,6 @@ router.post('/requests/:id/decline', requireAuth, requireOwner, async (req, res)
 // can't be used to inject an arbitrary Overseerr issueType value. Matches
 // Overseerr's own IssueType enum (VIDEO/AUDIO/SUBTITLES/OTHER = 1-4).
 const ISSUE_TYPES = { doesnt_play: 1, wrong_audio: 2, subtitles: 3, other: 4 };
-const ISSUE_TYPE_LABELS = { 1: "Doesn't play", 2: 'Wrong audio', 3: 'Subtitles', 4: 'Other' };
-
 router.post('/issue', requireAuth, issueLimiter, async (req, res) => {
   const { ratingKey, issueType, message } = req.body;
   const type = ISSUE_TYPES[issueType];
@@ -287,36 +268,11 @@ router.post('/issue', requireAuth, issueLimiter, async (req, res) => {
 // Admin-wide open issues, with enough context (title/poster/reporter/message) to
 // act on without opening Overseerr separately. Same PII discipline as
 // /requests/pending — createdBy's email/permissions/quota fields never leave
-// the server.
+// the server. Fetch logic lives in lib/overseerrClient.js — shared with
+// lib/issueWatchdog.js, which feeds these into the Alerts panel/push pipeline.
 router.get('/issues/open', requireAuth, requireOwner, async (req, res) => {
   try {
-    const { data } = await adminClient.get('/issue', {
-      params: { filter: 'open', take: 50, sort: 'added' }
-    });
-
-    const results = await Promise.all(data.results.map(async r => {
-      const { title, poster } = await resolveMedia(r.media?.mediaType, r.media?.tmdbId);
-      return {
-        id: r.id,
-        title,
-        poster,
-        issueType: ISSUE_TYPE_LABELS[r.issueType] || 'Other',
-        season: r.problemSeason,
-        episode: r.problemEpisode,
-        message: r.comments?.[0]?.message || '',
-        reportedBy: r.createdBy?.displayName || r.createdBy?.plexUsername || 'Unknown',
-        reportedByAvatar: r.createdBy?.avatar || null,
-        reportedAt: r.createdAt,
-        // For the "search Radarr/Sonarr" action — routes to the right service
-        // and its own id scheme (Radarr keys movies by tmdbId, Sonarr keys
-        // series by tvdbId).
-        mediaType: r.media?.mediaType,
-        tmdbId: r.media?.tmdbId,
-        tvdbId: r.media?.tvdbId
-      };
-    }));
-
-    res.json(results);
+    res.json(await fetchOpenIssues());
   } catch (err) {
     console.error('overseerr open issues error', err.response?.data || err.message);
     res.status(502).json({ error: 'Could not reach Overseerr' });

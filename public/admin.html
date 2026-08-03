@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="style.css?v={{ASSET_VERSION}}">
 <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<script>window.VAPID_PUBLIC_KEY = "{{VAPID_PUBLIC_KEY}}";</script>
 </head>
 <body>
 
@@ -22,6 +23,12 @@
       </div>
       <div class="hero-icons">
         <a href="/" class="icon-btn" aria-label="Back to dashboard">&#8592;</a>
+        <button id="notify-toggle-btn" class="icon-btn hidden" aria-label="Enable notifications">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+        </button>
         <button id="open-settings-btn" class="icon-btn" aria-label="Settings">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
@@ -39,6 +46,12 @@
 
   <!-- BENTO GRID -->
   <div class="bento">
+
+    <section class="card span4" id="panel-alerts">
+      <div class="card-label"><span class="chan">CH.08</span> Alerts</div>
+      <h4 class="admin-subhead">Stack Health</h4>
+      <div id="alerts-body"><p class="empty-state">Loading…</p></div>
+    </section>
 
     <section class="card span4" id="panel-admin">
       <div class="card-label"><span class="chan">CH.09</span> Family</div>

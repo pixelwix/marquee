@@ -5,6 +5,7 @@ const requireOwner = require('./requireOwner');
 const { mapReleases } = require('../lib/releaseSearch');
 const { mapFileInfo } = require('../lib/fileInfo');
 const { classifyQueueRecord, isFileFromThisGrab } = require('../lib/grabStatus');
+const sonarrClient = require('../lib/sonarrClient');
 const router = express.Router();
 
 router.get('/today', requireAuth, async (req, res) => {
@@ -285,30 +286,12 @@ router.get('/grab-status', requireAuth, requireOwner, async (req, res) => {
 
 // Sonarr's own view of in-progress downloads — surfaced here only when
 // something's actually wrong (stuck import, download client reports an
-// error, ...), not the whole queue.
+// error, ...), not the whole queue. Fetch logic lives in lib/sonarrClient.js
+// — shared with lib/issueWatchdog.js, which feeds these into the Alerts
+// panel/push pipeline.
 router.get('/queue', requireAuth, requireOwner, async (req, res) => {
   try {
-    const { data } = await axios.get(`${process.env.SONARR_URL}/api/v3/queue`, {
-      params: { includeSeries: true, includeEpisode: true, pageSize: 50 },
-      headers: { 'X-Api-Key': process.env.SONARR_API_KEY }
-    });
-    const results = (data.records || [])
-      .filter(r => r.trackedDownloadStatus && r.trackedDownloadStatus !== 'ok')
-      .map(r => {
-        const seriesTitle = r.series?.title;
-        const epLabel = r.episode ? ` — S${r.episode.seasonNumber}E${r.episode.episodeNumber}` : '';
-        return {
-          id: r.id,
-          title: seriesTitle ? `${seriesTitle}${epLabel}` : r.title,
-          poster: r.series?.images?.find(i => i.coverType === 'poster')?.remoteUrl || null,
-          status: r.trackedDownloadStatus,
-          reason: (r.statusMessages || []).flatMap(s => s.messages || []).join('; ') || r.errorMessage || 'Import issue',
-          // Needed to look up manual-import candidates for this specific download —
-          // Sonarr's own /manualimport lookup is keyed by downloadId, not queue id.
-          downloadId: r.downloadId || null
-        };
-      });
-    res.json(results);
+    res.json(await sonarrClient.fetchImportQueue());
   } catch (err) {
     console.error('sonarr queue error:', err.code || err.response?.status, err.message);
     res.status(502).json({ error: 'Could not reach Sonarr' });

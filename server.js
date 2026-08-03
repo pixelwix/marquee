@@ -28,10 +28,11 @@ app.use((req, res, next) => {
 // header whose host matches the request's own Host header (works the same
 // whichever hostname/port this is actually reached on — Cloudflare domain or
 // direct LAN IP — no hardcoded origin to keep in sync).
-// Exempt: Overseerr's own webhook, which is called server-to-server (never
-// carries a browser Origin) and is already authenticated by its own shared
-// secret — see routes/overseerr.js's /webhook handler.
-const CSRF_EXEMPT_PATHS = new Set(['/api/overseerr/webhook']);
+// Exempt: Overseerr's own webhook and the arr-health watchdog's alert ingest,
+// both called server-to-server (never carry a browser Origin) and both already
+// authenticated by their own shared secret — see routes/overseerr.js's /webhook
+// and routes/alerts.js's /ingest handlers.
+const CSRF_EXEMPT_PATHS = new Set(['/api/overseerr/webhook', '/api/alerts/ingest']);
 const CSRF_ERROR_MESSAGES = {
   missing: 'Missing Origin header',
   invalid: 'Invalid Origin header',
@@ -72,6 +73,7 @@ app.use(session({
 }));
 
 require('./lib/nowPlaying').start();
+require('./lib/issueWatchdog').start();
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/plex', require('./routes/plex'));
@@ -84,6 +86,8 @@ app.use('/api/owner', require('./routes/owner'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/notice', require('./routes/notice'));
 app.use('/api/prowlarr', require('./routes/prowlarr'));
+app.use('/api/alerts', require('./routes/alerts'));
+app.use('/api/push', require('./routes/push'));
 
 // index.html carries a {{SITE_NAME}} placeholder so this same image can show a generic
 // "Marquee" brand out of the box, or your own (e.g. via SITE_NAME=MyPlexHub in .env).
@@ -120,11 +124,16 @@ const renderedManifest = fs.readFileSync(path.join(__dirname, 'public', 'manifes
 // control happens server-side on every /api/owner, /api/*/queue,
 // /api/*/releases, etc. route (requireAuth + requireOwner) — this page is
 // just a shell, same as index.html.
+// VAPID_PUBLIC_KEY is deliberately only templated into the owner page, not
+// index.html — Web Push here is owner-only (see routes/push.js), unlike the
+// family-wide version this replaces (removed entirely in v1.5.0 for going
+// unused; this one is scoped to something actually worth a ping: stack alerts).
 const renderedAdminHtml = fs.readFileSync(path.join(__dirname, 'public', 'admin.html'), 'utf8')
   .replaceAll('{{SITE_NAME}}', siteName)
   .replaceAll('{{ASSET_VERSION}}', assetVersion)
   .replaceAll('{{APP_VERSION}}', appVersion)
-  .replaceAll('{{COPYRIGHT_YEAR}}', copyrightYear);
+  .replaceAll('{{COPYRIGHT_YEAR}}', copyrightYear)
+  .replaceAll('{{VAPID_PUBLIC_KEY}}', process.env.VAPID_PUBLIC_KEY || '');
 
 app.get('/', (req, res) => {
   // Always revalidate the page shell itself, so it picks up the new asset
