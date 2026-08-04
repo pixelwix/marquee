@@ -23,3 +23,10 @@ services:
       # UPTIME_KUMA_DB_PATH=/app/uptime-kuma-data/kuma.db to match the destination
       # below. Left unset, this harmlessly re-mounts ./data and the feature stays off.
       - ${UPTIME_KUMA_DATA_DIR:-./data}:/app/uptime-kuma-data:ro
+      # Optional, for the owner-only Disk Space panel: read-only bind mount of a
+      # directory containing your NAS's media share mounts (one subdirectory per
+      # share/volume) — powers real physical-volume storage data independent of
+      # Radarr/Sonarr's own diskspace API. Set MEDIA_MOUNT_DIR in .env to that
+      # directory on the host. Left unset, this harmlessly re-mounts ./data and
+      # the feature stays off (falls back to the Radarr/Sonarr diskspace API).
+      - ${MEDIA_MOUNT_DIR:-./data}:/app/media-mount:ro

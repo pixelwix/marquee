@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.9.0.**
+v1.10.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -809,5 +809,32 @@ gets versioned as it ships, not reconstructed later.
       (the tested reconciliation logic) — only one small additive `getByKey`
       export, so the existing 8-case `test/alerts.test.js` needed no changes
       and stayed a valid safety net (87/87 still passing after).
+
+## v1.10.0 — Owner Disk Space panel: real physical-volume storage
+
+- [x] Admin Disk Space panel now prefers real filesystem data read directly off
+      a bind-mounted NAS share directory (`MEDIA_MOUNT_DIR` in `.env`, mounted
+      read-only at `/app/media-mount`) — independent of Radarr/Sonarr's own
+      diskspace API, which only reflects whatever root folders those two apps
+      happen to have configured, not the NAS's actual storage pools. Falls
+      back to the existing Radarr/Sonarr diskspace API when no mount is
+      configured, so this is a strict addition, not a breaking change for
+      other deployments.
+- [x] New `lib/mediaStorage.js` (reads `statfs` per subdirectory under the
+      mount) is deliberately **not** committed — gitignored alongside its test
+      file, same as the rest of the Synology-specific integration. New
+      `lib/diskspace.js` holds the actual shared/committed logic (grouping
+      volumes by total capacity, deduping mount points that share the same
+      physical volume) and is fully generic — no host paths, IPs, or NAS
+      specifics anywhere in it.
+- [x] `GET /api/owner/diskspace` stays owner-gated (`requireAuth` +
+      `requireOwner`, unchanged) and only ever returns share labels (e.g.
+      "movies, tv") plus byte counts — no host filesystem paths, no local IPs,
+      nothing NAS-identifying in the response payload or the rendered admin
+      panel.
+- [x] `mediaStorage` added to `lib/serviceHealth.js`'s health-check registry
+      and `lib/serviceRegistry.js`'s settings page (Media Storage — Mount
+      Directory), so `MEDIA_MOUNT_DIR` is configured the same way every other
+      integration is: through `.env`/the settings UI, never hardcoded.
 
 ## Ideas
