@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.8.1.**
+v1.9.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -782,5 +782,32 @@ gets versioned as it ships, not reconstructed later.
       already on screen (a genuine first-load failure) — a mid-session blip
       just leaves the last-known-good list up instead of erasing real,
       still-actionable alerts for one missed poll.
+
+## v1.9.0 — "Suggest fix" button for log-triage/import alerts
+
+- [x] Owner asked whether alerts should get a Fix button that has an agent look
+      at the problem and show possible solutions. Explicit requirement: no risk
+      of the agent breaking anything by accident. Built as a strictly read-only
+      suggestion, not an action — the CLIProxyAPI request behind it has no
+      `tools` param at all, so structurally (not just by prompt instruction) it
+      cannot execute anything against Sonarr/Radarr/Prowlarr/qBittorrent/etc.,
+      only generate text. New `lib/cliproxyClient.js` (thin client, mirrors the
+      call shape already proven in `/mnt/docker/scripts/
+      arr-health-watchdog.mjs`), new `POST /api/alerts/:key/suggest-fix`
+      (owner-gated, rate-limited).
+- [x] Scoped to exactly two alert `source` types — `log-triage` and `import` —
+      the only ones with enough specific context (an LLM-written log summary; a
+      service's own stated rejection reason) to get a genuinely useful
+      suggestion rather than a restatement of the symptom. Deliberately NOT
+      `health` alerts: a useful diagnosis there (like the real Mylar/Prowlarr
+      port-mapping bug found earlier this session) needs actual tool access —
+      running `docker inspect`, testing connectivity — which is a meaningfully
+      bigger, riskier feature intentionally deferred rather than half-built.
+      Restricted server-side (not just hidden in the UI), so the endpoint 400s
+      on any other alert type even via a direct API call.
+- [x] Zero changes to `lib/alerts.js`'s existing `reconcile`/`planReconciliation`
+      (the tested reconciliation logic) — only one small additive `getByKey`
+      export, so the existing 8-case `test/alerts.test.js` needed no changes
+      and stayed a valid safety net (87/87 still passing after).
 
 ## Ideas

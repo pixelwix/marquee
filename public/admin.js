@@ -293,7 +293,15 @@ function alertSourceLabel(source) {
   }[source] || source;
 }
 
-function createAlertRow() {
+// Suggest-fix is only offered for alert sources with enough specific context to
+// be worth reasoning over (matches routes/alerts.js's FIX_PROMPTS keys exactly —
+// see TODO.md's v1.9.0 entry for why 'health'/'wanted'/'issue'/'attention' aren't
+// included yet).
+function canSuggestFix(source) {
+  return source === 'log-triage' || source === 'import';
+}
+
+function createAlertRow(a) {
   const row = document.createElement('div');
   row.className = 'pending-row';
   row.innerHTML = `
@@ -301,8 +309,10 @@ function createAlertRow() {
       <div class="result-title"><span class="alert-dot"></span><span class="alert-title-text"></span></div>
       <div class="pending-requester"><span class="requester-text"></span></div>
       <div class="issue-message hidden"></div>
+      <div class="fix-suggestion issue-message hidden"></div>
     </div>
     <div class="pending-actions">
+      ${canSuggestFix(a.source) ? '<button class="suggest-fix-btn pill-btn"><span class="btn-label">Suggest fix</span></button>' : ''}
       <button class="dismiss-alert-btn pill-btn"><span class="btn-label">Dismiss</span></button>
     </div>
   `;
@@ -338,6 +348,26 @@ async function loadAlerts() {
 }
 
 document.getElementById('alerts-body').addEventListener('click', async e => {
+  const suggestBtn = e.target.closest('.suggest-fix-btn');
+  if (suggestBtn) {
+    const row = suggestBtn.closest('.pending-row');
+    const fixEl = row.querySelector('.fix-suggestion');
+    suggestBtn.disabled = true;
+    suggestBtn.querySelector('.btn-label').textContent = 'Thinking…';
+    try {
+      const { suggestion } = await api(`/api/alerts/${encodeURIComponent(row.dataset.key)}/suggest-fix`, { method: 'POST' });
+      fixEl.textContent = `Suggested fix: ${suggestion}`;
+      fixEl.classList.remove('hidden');
+    } catch (err) {
+      fixEl.textContent = 'Could not get a suggestion right now.';
+      fixEl.classList.remove('hidden');
+    } finally {
+      suggestBtn.disabled = false;
+      suggestBtn.querySelector('.btn-label').textContent = 'Suggest fix';
+    }
+    return;
+  }
+
   const btn = e.target.closest('.dismiss-alert-btn');
   if (!btn) return;
   const row = btn.closest('.pending-row');

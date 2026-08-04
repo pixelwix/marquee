@@ -28,11 +28,12 @@ app.use((req, res, next) => {
 // header whose host matches the request's own Host header (works the same
 // whichever hostname/port this is actually reached on — Cloudflare domain or
 // direct LAN IP — no hardcoded origin to keep in sync).
-// Exempt: Overseerr's own webhook and the arr-health watchdog's alert ingest,
-// both called server-to-server (never carry a browser Origin) and both already
-// authenticated by their own shared secret — see routes/overseerr.js's /webhook
-// and routes/alerts.js's /ingest handlers.
-const CSRF_EXEMPT_PATHS = new Set(['/api/overseerr/webhook', '/api/alerts/ingest']);
+// Exempt: Overseerr's own webhook, Uptime Kuma's own webhook, and the arr-health
+// watchdog's alert ingest, all called server-to-server (never carry a browser
+// Origin) and all already authenticated by their own shared secret — see
+// routes/overseerr.js's /webhook, routes/uptimeKuma.js's /webhook, and
+// routes/alerts.js's /ingest handlers.
+const CSRF_EXEMPT_PATHS = new Set(['/api/overseerr/webhook', '/api/uptime-kuma/webhook', '/api/alerts/ingest']);
 const CSRF_ERROR_MESSAGES = {
   missing: 'Missing Origin header',
   invalid: 'Invalid Origin header',
@@ -87,6 +88,7 @@ app.use('/api/settings', require('./routes/settings'));
 app.use('/api/notice', require('./routes/notice'));
 app.use('/api/prowlarr', require('./routes/prowlarr'));
 app.use('/api/alerts', require('./routes/alerts'));
+app.use('/api/uptime-kuma', require('./routes/uptimeKuma'));
 app.use('/api/push', require('./routes/push'));
 
 // index.html carries a {{SITE_NAME}} placeholder so this same image can show a generic
