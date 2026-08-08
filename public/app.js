@@ -83,6 +83,7 @@ function showDashboard(owner) {
   isOwner = owner;
   signinScreen.classList.add('hidden');
   dashboardScreen.classList.remove('hidden');
+  startPlexUptime();
   setHeroDate();
   loadNotice();
   loadHeroBanners();
@@ -1470,4 +1471,3 @@ document.getElementById('upcoming-body').addEventListener('click', e => {
     overview: i.overview
   });
 });
-

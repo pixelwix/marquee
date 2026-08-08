@@ -52,6 +52,35 @@ function formatBytes(bytes) {
   // routinely cross into TB.
   return gb >= 1000 ? (gb / 1024).toFixed(1) + ' TB' : gb.toFixed(1) + ' GB';
 }
+
+function formatUptime(seconds) {
+  const totalMinutes = Math.max(0, Math.floor(seconds / 60));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days) return `${days}d ${hours}h`;
+  if (hours) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+let plexUptimeTimer = null;
+async function loadPlexUptime() {
+  const el = document.getElementById('plex-uptime-footer');
+  if (!el) return;
+  try {
+    const uptime = await api('/api/uptime-kuma/plex-uptime');
+    if (uptime.status === 'up') el.textContent = ` · Plex uptime ${formatUptime(uptime.seconds)}`;
+    else if (uptime.status === 'down') el.textContent = ' · Plex down';
+    else el.textContent = '';
+  } catch (e) {
+    el.textContent = '';
+  }
+}
+
+function startPlexUptime() {
+  loadPlexUptime();
+  if (!plexUptimeTimer) plexUptimeTimer = setInterval(loadPlexUptime, 60000);
+}
 function titleCase(str) {
   return str.replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1));
 }

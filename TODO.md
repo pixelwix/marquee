@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.18.0.**
+v1.19.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1192,5 +1192,19 @@ forgotten.
 - [x] New owner-only `GET /api/owner/audit` and an Audit Log tab under
       Settings show the latest actor, action, result, time, and masked
       network. Added tests for IP masking and normalized event persistence.
+
+## v1.19.0 — Current Plex uptime in the footer
+
+- [x] Both authenticated page footers now show Plex's current uninterrupted
+      uptime beside the app version (for example, `Plex uptime 2d 16h`) and
+      refresh it once a minute. A current down state reads `Plex down`; an
+      unconfigured or stale monitor stays hidden instead of presenting an
+      old heartbeat as current health.
+- [x] New authenticated `GET /api/uptime-kuma/plex-uptime` reads the existing
+      Uptime Kuma database mount. The streak begins at the first successful
+      heartbeat after the most recent non-up heartbeat—not at container
+      startup and not at an arbitrary calendar boundary.
+- [x] Added unit coverage for up/down/stale/missing monitor states. The full
+      suite is now 118 tests.
 
 ## Ideas

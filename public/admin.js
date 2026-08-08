@@ -14,6 +14,7 @@
   }
 
   initNotifyToggle();
+  startPlexUptime();
 
   // System Status and Recent Sign-ins now live under Settings tabs (see
   // below) — loaded lazily on first view rather than eagerly here.

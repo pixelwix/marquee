@@ -1,6 +1,18 @@
 const express = require('express');
 const alerts = require('../lib/alerts');
+const uptimeKuma = require('../lib/uptimeKuma');
+const requireAuth = require('./requireAuth');
 const router = express.Router();
+
+router.get('/plex-uptime', requireAuth, async (req, res) => {
+  try {
+    const uptime = await uptimeKuma.getCurrentUptime('plex');
+    res.json(uptime || { status: 'unconfigured' });
+  } catch (err) {
+    console.error('plex uptime read error:', err.message);
+    res.status(500).json({ error: 'Could not read Plex uptime' });
+  }
+});
 
 // Called by Uptime Kuma itself (Settings -> Notifications -> Webhook), not by a
 // signed-in browser — same shared-secret pattern as routes/overseerr.js's /webhook.
