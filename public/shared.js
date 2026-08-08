@@ -69,8 +69,8 @@ async function loadPlexUptime() {
   if (!el) return;
   try {
     const uptime = await api('/api/uptime-kuma/plex-uptime');
-    if (uptime.status === 'up') el.textContent = ` · Plex uptime ${formatUptime(uptime.seconds)}`;
-    else if (uptime.status === 'down') el.textContent = ' · Plex down';
+    if (uptime.status === 'up') el.textContent = ` · plex uptime ${formatUptime(uptime.seconds)}`;
+    else if (uptime.status === 'down') el.textContent = ' · plex down';
     else el.textContent = '';
   } catch (e) {
     el.textContent = '';

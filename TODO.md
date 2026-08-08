@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.19.0.**
+v1.19.1.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1206,5 +1206,10 @@ forgotten.
       startup and not at an arbitrary calendar boundary.
 - [x] Added unit coverage for up/down/stale/missing monitor states. The full
       suite is now 118 tests.
+
+## v1.19.1 — Footer label uses lowercase plex
+
+- [x] Changed the new footer status copy from `Plex uptime` / `Plex down` to
+      lowercase `plex uptime` / `plex down` to match the requested styling.
 
 ## Ideas
