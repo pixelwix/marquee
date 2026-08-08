@@ -171,6 +171,7 @@
       <button id="tab-settings-status-btn" class="modal-tab pill-btn"><span class="state-dot"></span>System Status</button>
       <button id="tab-settings-signins-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Recent Sign-ins</button>
       <button id="tab-settings-notice-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Notice Board</button>
+      <button id="tab-settings-newsletter-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Newsletter</button>
     </div>
 
     <div id="settings-services-tab" class="settings-body">
@@ -226,6 +227,19 @@
         <button id="notice-save-btn" class="btn-primary">Post Notice</button>
       </div>
       <p id="notice-save-status" class="settings-status hidden"></p>
+    </div>
+
+    <div id="settings-newsletter-tab" class="settings-body hidden">
+      <div class="settings-section-row">
+        <h4 class="admin-subhead" id="newsletter-period-label">Monthly Recap</h4>
+        <button id="newsletter-select-all-btn" class="pill-btn">Select All</button>
+      </div>
+      <p class="settings-field-block-desc">Only people with real activity this month are listed. Nothing sends automatically — pick who gets it below.</p>
+      <div id="newsletter-candidates-body"><p class="empty-state">Loading…</p></div>
+      <div class="settings-edit-actions">
+        <button id="newsletter-send-btn" class="btn-primary" disabled>Send Recap</button>
+      </div>
+      <p id="newsletter-send-status" class="settings-status hidden"></p>
     </div>
   </div>
 </div>

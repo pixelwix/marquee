@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.10.0.**
+v1.16.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -836,5 +836,322 @@ gets versioned as it ships, not reconstructed later.
       and `lib/serviceRegistry.js`'s settings page (Media Storage — Mount
       Directory), so `MEDIA_MOUNT_DIR` is configured the same way every other
       integration is: through `.env`/the settings UI, never hardcoded.
+
+## v1.10.1 — Fix: My Stats now uses true calendar year/month, not rolling windows
+
+- [x] `hours`, family `rank`, and `topWatched` on the My Stats tab switch from
+      a rolling 365-day window to true calendar year-to-date — same technique
+      Top of the Month already used for its month-to-date window (Tautulli's
+      `time_range`/`query_days` only mean "N days back from now", so N is
+      computed as days-elapsed-since-the-period-started, resetting itself on
+      Jan 1 with no separate rollover logic).
+- [x] `playsThisMonth` switches from a rolling 30-day window to true
+      calendar-month-to-date, matching Top of the Month exactly (`N = today's
+      day-of-month`) — it was labeled "this month" but had the identical
+      rolling-window bug Top of the Month had before v1.5.2.
+- [x] `streakDays` deliberately stays on its own genuinely-rolling 60-day
+      `get_history` call, split out from the one `topWatched` now uses — a
+      streak spanning Dec 31 into January would otherwise look truncated for
+      the first few days of a new year, since a Jan-1-onward window has no
+      visibility into the prior year's plays.
+- [x] `activity` (day-of-week / hour-of-day) intentionally left as a rolling
+      30-day window, not calendar-month — "your viewing pattern over the last
+      month" reads more useful than year-to-date, and stays meaningful in the
+      first few days of a new month.
+- [x] Guarded against `query_days` receiving a literal duplicate value (in
+      January, days-elapsed-this-month and days-elapsed-this-year are
+      numerically identical) by deduping before the request.
+- [x] The hours-watched hero number's caption still hardcoded "Last 12
+      months" from the old rolling window — updated to "Year to date" to
+      match what it now actually shows.
+
+## v1.10.2 — Releasing Soon: "Downloaded" now reads "Available now"
+
+- [x] A movie on the Releasing Soon shelf that already has a file feels
+      different from a TV episode that's aired and downloaded (Airing Today,
+      unchanged) — "Available now" reads correctly for something you can
+      watch tonight, where "Downloaded" read like a technical status. Scoped
+      to just the Releasing Soon poster grid; Airing Today's own "Downloaded"
+      label (and its detail-modal meta line) are a separate panel and
+      intentionally untouched.
+
+## v1.10.3 — Self-verifying deploy script
+
+- [x] Bare `scp` of multiple files to docker-host's build context was
+      observed twice to silently drop the largest file (`public/app.js`,
+      ~65KB) with no error and exit 0, while the smaller files in the same
+      command succeeded — not reproducible on demand (10/10 clean in
+      isolated retesting, both solo and multi-file, and the destination is
+      plain local ext4, not network storage), so likely a transient
+      condition rather than a fixable deterministic bug. Rather than chase
+      that further, built `deploy.sh`: rsyncs the working tree, then
+      SHA-256-verifies every git-tracked file actually landed correctly
+      before rebuilding — a dropped/corrupted file now fails loudly and
+      stops the deploy instead of shipping unnoticed. Safe to re-run;
+      rsync only re-transfers files that differ.
+- [x] Reconciled `docker-compose.yml` with what was actually already running
+      in production — the live container had Traefik routing labels/network
+      that had been added directly on the host at some point and never
+      synced back to git, so the checked-in file was stale relative to
+      reality. Now identical; the deploy script would otherwise have
+      silently overwritten production's Traefik config with the old
+      host-port-mapping version on the next run.
+
+## v1.10.4 — Fix: season-picker crash from the info modal; Plex-unconfigured startup crash
+
+- [x] Requesting a TV show from the info modal (e.g. the hero banner's
+      featured tag, or clicking a search result's poster/title rather than
+      its Request button directly) called `openSeasonPicker()` without its
+      `returnTabId` argument, throwing on `document.getElementById(undefined)`
+      and breaking the request outright. Guarded both `openSeasonPicker` and
+      `closeSeasonPicker` against a missing `returnTabId` (only the request
+      modal's own tab system has one to hide/restore), and fixed the actual
+      call site to also show `#request-modal` itself — the season picker
+      lives inside it, so it rendered invisibly even once the crash was
+      patched, since this entry point never opens the request modal the way
+      every other season-picker call site does.
+- [x] `lib/nowPlaying.js` assumed `PLEX_SERVER_URL`/`PLEX_ADMIN_TOKEN` are
+      always set and connected to Plex's notification socket unconditionally
+      at startup — a fresh/incomplete `.env` (first boot, before setup) would
+      throw synchronously on the missing URL and crash the entire process,
+      not just leave Now Playing empty. Added `plexConfigured()`, guarding
+      `connectPlexSocket()` the same way `tautulliConfigured()` already
+      guards Tautulli, with a log message instead of a hard crash.
+
+## v1.11.0 — Monthly recap email: reusable template + data layer
+
+- [x] New `lib/monthlyRecap.js`: per-user recap data for a specific past
+      calendar month (defaults to the most recently completed one) — hours
+      watched, plays, longest binge streak, Family Rank among everyone active
+      that month, top 5 titles, and a "headliner" (the month's most-played
+      title, grouped by `rating_key` the same way `computeTopWatched` in
+      `lib/myStats.js` does). Deliberately its own functions rather than
+      reusing `myStats.js`'s `computeStreak`/rank logic as-is: those are
+      correctly built around "year to date" and "streak counting back from
+      right now" (see v1.10.1), neither of which describes a month that's
+      already over. `computeMonthlyRank` sums real per-user duration across
+      an exact date range instead of leaning on `get_home_stats`, which can
+      only express a trailing N-days-from-now window, not an arbitrary past
+      month.
+- [x] Tautulli's `before` param turned out fuzzy in testing (spilled a day
+      past the requested cutoff) — fetches by `after` alone, same as every
+      other Tautulli call in this codebase already does, and bounds the
+      upper edge itself against each row's own unix `date` instead.
+- [x] New `lib/monthlyRecapTemplate.js`: pure `renderMonthlyRecapEmail(data)`
+      → HTML string. Same visual system as the dashboard itself — the three
+      real fonts from `public/fonts/` (Space Grotesk / Inter / JetBrains
+      Mono), the same dark palette, and a real still from the recipient's
+      own top-watched title as the header image. Handles a quiet month
+      (zero plays) without crashing — no headliner section, no rank number,
+      just a plain message.
+- [x] `fetchHeadlinerImage()` embeds the header art as a `data:` URI at
+      generation time (same Tautulli-metadata-then-Plex-bytes shape as
+      `routes/plex.js`'s `/image` proxy, just run server-side) rather than
+      linking to it — most email clients block remote images by default,
+      and this render is already per-recipient, so there's no shared-image
+      caching being given up.
+- [x] `lib/uptimeKuma.js` gained `getMonthlyUptime(monitorName, period)` for
+      the recap's Service Status line. Guards against a low-sample month:
+      found live that the `plex` monitor here logged only 8 heartbeats in
+      all of July before its check interval was tightened in early August —
+      an uptime percentage built from 8 samples would have been misleading,
+      so this now requires at least one heartbeat per day of the period on
+      average, returning `null` (quietly omitting the section) otherwise.
+- [x] `test/monthlyRecap.test.js` covers the pure functions — month-boundary
+      math (including a December→January rollover), longest-streak-in-range
+      vs. myStats.js's live streak, and rank/headliner grouping — same
+      `node:test` style as `test/myStats.test.js`.
+- [x] Verified end-to-end against real data (Tautulli + the real Uptime Kuma
+      DB, run inside the actual container): a real July 2026 recap for one
+      user rendered correctly, uptime guard correctly returned `null` for
+      July's sparse sample and a real percentage for a well-sampled window.
+- [x] Sending is intentionally out of scope for this pass — no SMTP
+      dependency exists in this project yet, no per-user email opt-in/
+      unsubscribe tracking, no cron trigger. This ships the template and
+      data layer only; wiring an actual send is future work.
+
+## v1.12.0 — Monthly recap: real sending, routed through Tautulli
+
+- [x] New `lib/mailer.js`: `sendEmail`/`sendEmailBatch`, routed through
+      Tautulli's own Email notifier (`cmd=notify`) instead of adding a new
+      SMTP dependency to this app. Two things forced its exact shape,
+      confirmed live against Tautulli's own behavior rather than assumed
+      from its docs:
+      1. `notify` has no per-recipient override (`EMAIL.agent_notify` always
+         reads the recipient from the notifier's own saved config) — sending
+         to a specific person means updating that field immediately before
+         triggering the send.
+      2. `set_notifier_config` is a full replace, not a merge — omitting a
+         field resets it to default. Confirmed live: a partial update (only
+         changing the recipient) silently wiped the saved SMTP password.
+         `get_notifier_config` can't be used to read the rest back first
+         either, since Tautulli masks the password on read (returns four
+         spaces, not the real value). So this app holds its own copy of the
+         full SMTP config in `.env` (`EMAIL_SMTP_*`, `EMAIL_FROM*`,
+         `TAUTULLI_EMAIL_NOTIFIER_ID`) and resends every field on every send.
+- [x] **Incident, found and fixed during setup**: the first real end-to-end
+      send used the unresized header image straight from Plex
+      (`fetchHeadlinerImage` in `lib/monthlyRecap.js` had no width/height),
+      producing a ~1.6MB email. POSTing that through Tautulli's `notify` API
+      pinned its process at 100%+ CPU and stopped it from responding to
+      *anything* — including its own live Plex activity polling — for
+      several minutes, until the container was restarted. Root-caused, not
+      just retried: `fetchHeadlinerImage` now goes through Tautulli's own
+      `pms_image_proxy` at 1200x400 (the same size already proven to work
+      fine, ~200KB, before this was wired into real code) instead of the
+      unresized original.
+- [x] Also caught before it caused the same failure twice: `lib/mailer.js`'s
+      first version sent the `notify` call as a GET with the HTML body in
+      `params` — fine for a plain-text test, but a 431 (request line too
+      large) the moment a real recipient's email carries any real content.
+      Switched to POST with a form-encoded body.
+- [x] Verified end-to-end for real: a real July 2026 recap, sent to a real
+      inbox, through the real Tautulli Email notifier, confirmed via
+      Tautulli's own notification log (`success: 1`) after the fix — not
+      just a syntax check.
+- [x] Still not built: per-user opt-in/unsubscribe tracking (the template's
+      unsubscribe link is still `href="#"`) and a monthly trigger (cron or
+      otherwise) to actually run this for every user. `sendEmailBatch`
+      exists and is sequential-by-design (concurrent sends would race on
+      the notifier's single saved recipient field), but nothing calls it
+      for the full user list yet.
+
+## v1.13.0 — Monthly recap: unsubscribe/resubscribe
+
+- [x] New `lib/recapUnsubscribe.js`: signs/verifies the unsubscribe link's
+      token (HMAC-SHA256 of the user id, reusing `SESSION_SECRET` rather than
+      adding a second secret to `.env`). Has to work without an active
+      session — whoever clicks the link in their inbox isn't necessarily
+      signed into the dashboard on that device — so the token itself is the
+      authorization, not `requireAuth`. `buildUnsubscribeUrl(userId, baseUrl)`
+      is what a future sender should call to put a real link in the email
+      (the template's own default is still the placeholder `href="#"` until
+      something wires this in).
+- [x] New `lib/recapUnsubscribes.js`: persists opt-outs, same dedicated-
+      sqlite-file pattern as `lib/pushSubscriptions.js`. **Found and fixed a
+      real race while verifying live**, not just in theory: the shared
+      lazy-`getDb()` pattern (open the file, fire off `CREATE TABLE IF NOT
+      EXISTS` without waiting for it, return the connection) lets the very
+      first query after a truly fresh file lose the race and fail with
+      `SQLITE_ERROR: no such table`. Reproduced it reliably against a fresh
+      file, then fixed by tracking a `ready` promise every query now awaits
+      before running. `lib/pushSubscriptions.js` has the identical
+      unguarded pattern — likely never hit in practice there only because
+      its file was created long ago, not because the pattern is actually
+      safe. Worth the same fix if it's ever touched again; not done here,
+      out of scope for this pass.
+- [x] New `routes/recap.js`: `GET /api/recap/unsubscribe` and `/resubscribe`,
+      both public (no `requireAuth`), both return a small self-contained
+      HTML confirmation page rather than JSON — a person clicks this from
+      their inbox, not the app. Registered in `server.js` alongside the
+      other `/api/*` mounts.
+- [x] `test/recapUnsubscribe.test.js` covers the token logic (accepts a
+      real token, rejects one signed for a different user, rejects
+      garbage/missing tokens).
+- [x] Verified end-to-end for real, through the live public domain (not
+      just `docker exec`): a real signed link hit the deployed site, correctly
+      unsubscribed, a tampered token correctly got a 403, and resubscribing
+      flipped the DB row back — confirmed via `isUnsubscribed()` after each
+      step, not assumed from the HTTP response alone.
+- [x] Still not built: nothing calls `buildUnsubscribeUrl` or checks
+      `isUnsubscribed` from an actual send yet — there's still no monthly
+      batch/cron trigger (see v1.12.0's own note). This ships the opt-out
+      primitive itself, ready for whenever that trigger exists.
+
+## v1.14.0 — Monthly recap: activity threshold + owner-selected sending
+
+- [x] `lib/monthlyRecap.js` gained `MIN_MONTHLY_PLAYS` (5) and
+      `computeCandidates`/`listRecapCandidates` — everyone with at least 5
+      real plays in the given month, cross-referenced against Tautulli's
+      user list for name/email, sorted by plays descending. Pure compute
+      function (`computeCandidates`) separate from the fetch, same split as
+      everything else in this file.
+- [x] New owner-only routes in `routes/recap.js`: `GET /candidates` (the
+      eligible list, each row flagged with current unsubscribe status) and
+      `POST /send` (`{ userIds: [...] }`). Deliberately no "send to
+      everyone" endpoint — the owner reviews `/candidates` and sends only
+      the `userIds` they actually pass in. `/send` re-derives the eligible
+      list itself rather than trusting whatever the client saw when it
+      called `/candidates` earlier, so the threshold/eligibility check
+      holds at send time, not just at review time.
+      Real per-recipient handling: skips (with a reason) anyone not in the
+      eligible list, anyone with no email on file, and anyone who's
+      unsubscribed — checked again here even though `/candidates` already
+      flags it, since a real `/send` call could theoretically arrive with
+      stale `userIds` gathered from an older `/candidates` response.
+      Builds each recipient's own real unsubscribe link
+      (`buildUnsubscribeUrl`) into their email — the first thing to
+      actually pass a non-placeholder link into the template.
+- [x] Verified the eligibility computation against real July 2026 data: 39
+      of 48 active users met the 5-play threshold, correctly sorted,
+      correctly cross-referenced for name/email. Verified both new routes
+      correctly reject unauthenticated requests. Could not verify the full
+      authenticated owner click-through here — that needs a real Plex OAuth
+      browser session, not something curl can produce.
+- [x] `test/monthlyRecap.test.js` gained 3 more cases for
+      `computeCandidates` (threshold filtering, sort/name/email mapping,
+      fallback to userId when a user has no friendly_name).
+- [x] Still not built: a monthly cron/trigger. This is now a real,
+      usable owner workflow (list candidates, pick who, send) but someone
+      still has to call it — nothing runs it automatically yet.
+
+## v1.15.0 — Monthly recap: Newsletter tab in Settings
+
+- [x] New "Newsletter" tab in the admin Settings modal (after Notice
+      Board), same lazy-loaded tab pattern as Services/System Status/Recent
+      Sign-ins/Notice Board. Lists this month's eligible candidates
+      (`GET /api/recap/candidates`) as a checkbox list — name, plays, hours,
+      and a visible note (disabled + greyed out) for anyone unsubscribed or
+      missing an email. "Select All" only selects the actually-selectable
+      rows. Send button shows the live count ("Send Recap to N"), confirms
+      before sending ("This sends real email right now"), and reports back
+      sent/failed/skipped counts from the real `POST /api/recap/send`
+      response.
+- [x] This is the actual answer to "where do I go to select who to send
+      it to" — until now `/candidates` and `/send` only existed as raw API
+      endpoints with no way to use them short of a manual authenticated
+      HTTP request.
+- [x] New CSS (`.newsletter-candidate-row`) — first checkbox-select list in
+      this app; everything else reused existing classes (`now-title`,
+      `now-meta`, `pill-btn`, `btn-primary`, `settings-status`,
+      `confirmDialog`).
+
+## v1.16.0 — Monthly recap: end-of-month reminder
+
+- [x] New `lib/recapReminder.js`: reminds the owner via push notification
+      (same channel `lib/issueWatchdog.js` already uses) to go review and
+      send last month's recap from the admin Newsletter tab. There's no
+      auto-send anywhere in this feature by design (see v1.14.0's note),
+      so without a reminder it's easy to just forget the whole thing exists
+      some months.
+- [x] In-process `setInterval` scheduler (checked every 6h), same shape as
+      `lib/issueWatchdog.js`/`lib/nowPlaying.js` — this app has no external
+      cron to hook into, so "the monthly cron trigger" from the last few
+      entries' own "still not built" notes turned out to mean this, not a
+      system-level cron job.
+- [x] Fires once within the first 3 days of a new month (a grace window,
+      not exactly the 1st — if the app/host happens to be down right at the
+      boundary, it still catches up instead of silently missing the whole
+      month), tracked against a persisted "last reminded month" so it never
+      double-fires. Own dedicated sqlite file, built with the `ready`-promise
+      pattern from v1.13.0's fix from the start, not retrofitted after
+      hitting the same race again.
+- [x] The push notification body includes the real eligible-candidate count
+      for that month (via `listRecapCandidates`), not just a generic
+      "check your email" — e.g. "12 people are eligible for July 2026's
+      recap."
+- [x] `test/recapReminder.test.js` covers the pure scheduling logic
+      (`shouldRemind`/`monthKeyOf`) — grace window boundaries, already-
+      reminded-this-month suppression.
+- [x] Verified live: DB initializes cleanly on a truly fresh file (no
+      crash, no error log), and — since today is past the grace window —
+      correctly stays silent rather than firing, confirmed against the real
+      current date rather than assumed from reading the code.
+
+This closes out the monthly recap feature end to end: real per-user data,
+a real template, real sending through Tautulli, unsubscribe/resubscribe,
+an activity threshold, owner-selected recipients through a real UI tab, and
+now a reminder so the whole thing actually gets used monthly instead of
+forgotten.
 
 ## Ideas

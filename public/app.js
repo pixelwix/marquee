@@ -492,7 +492,7 @@ async function loadUpcoming() {
           <span class="poster-badge">${formatDate(i.releaseDate)}</span>
           <div class="poster-overlay"><span class="poster-overlay-text">${escapeHtml(i.title)}</span></div>
         </div>
-        ${i.hasFile ? '<div class="poster-meta">Downloaded</div>' : ''}
+        ${i.hasFile ? '<div class="poster-meta">Available now</div>' : ''}
       </div>
     `).join('');
   } catch (e) {
@@ -755,7 +755,7 @@ async function loadMyStats() {
     body.innerHTML = `
       <div class="stat-hero">
         <div><span class="stat-hero-num">${s.hours}</span><span class="stat-hero-unit">hrs watched</span></div>
-        <div class="stat-hero-cap">Last 12 months</div>
+        <div class="stat-hero-cap">Year to date</div>
       </div>
       <div class="stat-tiles">
         ${tiles.map(t => `
@@ -1004,7 +1004,9 @@ async function openSeasonPicker(id, title, button, returnTabId) {
   listEl.innerHTML = '<p class="empty-state">Loading seasons…</p>';
   submitBtn.disabled = false;
   submitBtn.textContent = 'Request Selected Seasons';
-  document.getElementById(returnTabId).classList.add('hidden');
+  // returnTabId is optional — a caller outside the request modal's own tab system
+  // (e.g. the info modal's Request button) has no tab of its own to hide/restore.
+  if (returnTabId) document.getElementById(returnTabId).classList.add('hidden');
   document.getElementById('season-picker').classList.remove('hidden');
 
   try {
@@ -1035,7 +1037,7 @@ async function openSeasonPicker(id, title, button, returnTabId) {
 
 function closeSeasonPicker() {
   document.getElementById('season-picker').classList.add('hidden');
-  if (seasonPickerContext) {
+  if (seasonPickerContext?.returnTabId) {
     document.getElementById(seasonPickerContext.returnTabId).classList.remove('hidden');
   }
   seasonPickerContext = null;
@@ -1122,7 +1124,13 @@ document.getElementById('info-request-btn').addEventListener('click', async () =
 
   if (mediaType === 'tv') {
     infoModal.classList.add('hidden');
-    openSeasonPicker(id, title, inlineBtn || btn);
+    // This button can be reached from the info modal directly (e.g. the hero
+    // banner tag), where the request modal was never opened at all — show it
+    // now so the season picker (which lives inside it) is actually visible,
+    // and return to the default Search tab rather than crashing on a
+    // returnTabId that was never passed for this entry point.
+    modal.classList.remove('hidden');
+    openSeasonPicker(id, title, inlineBtn || btn, 'search-tab');
     return;
   }
 

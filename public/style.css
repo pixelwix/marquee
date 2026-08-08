@@ -499,7 +499,11 @@ body {
 .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; }
 .modal-head h3 { font-family: var(--display); margin: 0; font-weight: 600; }
 
-.modal-tabs { display: flex; gap: 0.5rem; margin-bottom: 0.85rem; }
+/* Wraps onto a second line rather than scrolling/shrinking — with 5 tabs
+   now (Newsletter added, see the recap feature), the row no longer fits a
+   narrow viewport on one line. */
+.modal-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.85rem; }
+.modal-tab { flex: none; white-space: nowrap; }
 .modal-tab .state-dot { background: var(--muted); }
 .modal-tab.active .state-dot { background: var(--teal); }
 .modal-tab.active { color: var(--text); border-color: rgba(15,143,118,0.35); background: rgba(15,143,118,0.08); }
@@ -785,6 +789,17 @@ body {
 .settings-input-full:focus { outline: none; border-color: var(--teal); }
 .settings-input-full:disabled { opacity: 0.5; cursor: not-allowed; }
 .settings-field-block-desc { font-size: 0.75rem; color: var(--muted); margin-top: 0.3rem; }
+/* Newsletter tab's candidate list — a checkbox-select row, not a purely
+   informational one like most other list rows in this app, so the whole
+   row is a <label> (click anywhere to toggle) rather than just the input. */
+.newsletter-candidate-row {
+  display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(20,25,35,0.06); cursor: pointer;
+}
+.newsletter-candidate-row:last-child { border-bottom: none; }
+.newsletter-candidate-row-disabled { opacity: 0.5; cursor: not-allowed; }
+.newsletter-candidate-row input[type="checkbox"] { flex: none; }
+.newsletter-candidate-row .now-title { flex: 1; }
 /* Cancel and the primary action (Save Changes / OK) share the same shape and
    size — Cancel keeps its own lighter fill/border, just resized/reshaped to
    match rather than sitting next to it as a small pill. Applies everywhere

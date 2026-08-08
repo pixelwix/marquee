@@ -1156,7 +1156,8 @@ const settingsTabs = [
   { btn: document.getElementById('tab-settings-services-btn'), pane: document.getElementById('settings-services-tab') },
   { btn: document.getElementById('tab-settings-status-btn'), pane: document.getElementById('settings-status-tab') },
   { btn: document.getElementById('tab-settings-signins-btn'), pane: document.getElementById('settings-signins-tab') },
-  { btn: document.getElementById('tab-settings-notice-btn'), pane: document.getElementById('settings-notice-tab') }
+  { btn: document.getElementById('tab-settings-notice-btn'), pane: document.getElementById('settings-notice-tab') },
+  { btn: document.getElementById('tab-settings-newsletter-btn'), pane: document.getElementById('settings-newsletter-tab') }
 ];
 function activateSettingsTab(btn) {
   for (const t of settingsTabs) {
@@ -1168,6 +1169,7 @@ function activateSettingsTab(btn) {
 let ownerStatusLoaded = false;
 let adminLoginsLoaded = false;
 let noticeSettingsLoaded = false;
+let newsletterCandidatesLoaded = false;
 
 settingsTabs[0].btn.addEventListener('click', () => activateSettingsTab(settingsTabs[0].btn));
 settingsTabs[1].btn.addEventListener('click', () => {
@@ -1181,6 +1183,10 @@ settingsTabs[2].btn.addEventListener('click', () => {
 settingsTabs[3].btn.addEventListener('click', () => {
   activateSettingsTab(settingsTabs[3].btn);
   if (!noticeSettingsLoaded) { noticeSettingsLoaded = true; loadNoticeSettings(); }
+});
+settingsTabs[4].btn.addEventListener('click', () => {
+  activateSettingsTab(settingsTabs[4].btn);
+  if (!newsletterCandidatesLoaded) { newsletterCandidatesLoaded = true; loadNewsletterCandidates(); }
 });
 
 async function openSettings() {
@@ -1429,6 +1435,77 @@ async function loadNoticeSettings() {
     statusEl.textContent = 'Could not load notice.';
   }
 }
+
+// Newsletter (monthly recap) — deliberately no "send to everyone" anywhere
+// here. /api/recap/candidates already only lists people with real activity
+// that month (see MIN_MONTHLY_PLAYS in lib/monthlyRecap.js); this just lets
+// the owner pick which of those actually get sent to, matching /send's own
+// requirement of an explicit userIds list.
+async function loadNewsletterCandidates() {
+  const label = document.getElementById('newsletter-period-label');
+  const body = document.getElementById('newsletter-candidates-body');
+  try {
+    const { period, candidates } = await api('/api/recap/candidates');
+    label.textContent = `Monthly Recap — ${period.label}`;
+    if (!candidates.length) {
+      body.innerHTML = '<p class="empty-state">No one hit the activity threshold this month.</p>';
+      return;
+    }
+    body.innerHTML = candidates.map(c => {
+      const disabled = c.unsubscribed || !c.email;
+      const note = c.unsubscribed ? 'unsubscribed' : !c.email ? 'no email on file' : '';
+      return `
+        <label class="newsletter-candidate-row${disabled ? ' newsletter-candidate-row-disabled' : ''}">
+          <input type="checkbox" class="newsletter-candidate-checkbox" value="${escapeHtml(c.userId)}" ${disabled ? 'disabled' : ''}>
+          <span class="now-title">${escapeHtml(c.name)}</span>
+          <span class="now-meta">${c.plays} plays &middot; ${c.hours}h${note ? ` &middot; ${note}` : ''}</span>
+        </label>`;
+    }).join('');
+    updateNewsletterSendButton();
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not load candidates.</p>';
+  }
+}
+
+function updateNewsletterSendButton() {
+  const checked = document.querySelectorAll('.newsletter-candidate-checkbox:checked').length;
+  const btn = document.getElementById('newsletter-send-btn');
+  btn.disabled = checked === 0;
+  btn.textContent = checked ? `Send Recap to ${checked}` : 'Send Recap';
+}
+
+document.getElementById('newsletter-candidates-body').addEventListener('change', e => {
+  if (e.target.classList.contains('newsletter-candidate-checkbox')) updateNewsletterSendButton();
+});
+
+document.getElementById('newsletter-select-all-btn').addEventListener('click', () => {
+  document.querySelectorAll('.newsletter-candidate-checkbox:not(:disabled)').forEach(cb => { cb.checked = true; });
+  updateNewsletterSendButton();
+});
+
+document.getElementById('newsletter-send-btn').addEventListener('click', async () => {
+  const userIds = [...document.querySelectorAll('.newsletter-candidate-checkbox:checked')].map(cb => cb.value);
+  if (!userIds.length) return;
+  const ok = await confirmDialog(`Send this month's recap to ${userIds.length} ${userIds.length === 1 ? 'person' : 'people'}? This sends real email right now.`);
+  if (!ok) return;
+
+  const btn = document.getElementById('newsletter-send-btn');
+  const status = document.getElementById('newsletter-send-status');
+  btn.disabled = true;
+  status.classList.remove('hidden');
+  status.textContent = 'Sending…';
+  try {
+    const result = await api('/api/recap/send', { method: 'POST', body: JSON.stringify({ userIds }) });
+    const parts = [`Sent ${result.sent} of ${result.requested}.`];
+    if (result.failed.length) parts.push(`${result.failed.length} failed.`);
+    if (result.skipped.length) parts.push(`${result.skipped.length} skipped.`);
+    status.textContent = parts.join(' ');
+  } catch (e) {
+    status.textContent = `Send failed: ${e.message}`;
+  } finally {
+    updateNewsletterSendButton();
+  }
+});
 
 document.getElementById('notice-save-btn').addEventListener('click', async () => {
   const message = document.getElementById('notice-message-input').value.trim();
