@@ -8,6 +8,7 @@ const ups = require('../lib/ups');
 const loginLog = require('../lib/loginLog');
 const auditLog = require('../lib/auditLog');
 const dbBackup = require('../lib/dbBackup');
+const mediaCache = require('../lib/mediaCache');
 const mediaStorage = require('../lib/mediaStorage');
 const { shortestLabelRows, combinedLabelRows } = require('../lib/diskspace');
 const { annotateAndSort } = require('../lib/stuckRequests');
@@ -65,6 +66,30 @@ router.post('/db-backups/run', requireAuth, requireOwner, async (req, res) => {
   } catch (err) {
     console.error('db backup run error', err.message);
     res.status(500).json({ error: err.message || 'Backup failed' });
+  }
+});
+
+router.get('/media-cache', requireAuth, requireOwner, async (req, res) => {
+  try {
+    await mediaCache.ensureIndex();
+    res.json(mediaCache.stats());
+  } catch (err) {
+    console.error('media cache stats error', err.message);
+    res.status(500).json({ error: 'Could not read cache stats' });
+  }
+});
+
+router.post('/media-cache/flush', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const result = await mediaCache.flush();
+    auditLog.record({ kind: 'admin', action: 'POST /api/owner/media-cache/flush', actorId: req.session.user.id,
+      actorName: req.session.user.username, success: true, statusCode: 200,
+      detail: result, ...auditLog.requestContext(req) })
+      .catch((err) => console.error('audit log write error:', err.message));
+    res.json(result);
+  } catch (err) {
+    console.error('media cache flush error', err.message);
+    res.status(500).json({ error: err.message || 'Flush failed' });
   }
 });
 

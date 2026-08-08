@@ -135,6 +135,35 @@ document.getElementById('run-db-backup-btn').addEventListener('click', async () 
   }
 });
 
+// ---------- Image Cache ----------
+async function loadMediaCacheStats() {
+  const summary = document.getElementById('media-cache-summary');
+  try {
+    const { bytes, count, maxBytes } = await api('/api/owner/media-cache');
+    summary.textContent = `${count} cached image${count === 1 ? '' : 's'} · ${formatBytes(bytes)} of ${formatBytes(maxBytes)} used.`;
+  } catch (e) {
+    summary.textContent = 'Could not load cache stats.';
+  }
+}
+
+document.getElementById('flush-media-cache-btn').addEventListener('click', async () => {
+  if (!await confirmDialog('Flush the entire image cache? Every poster and thumbnail will be re-fetched from Plex the next time it’s viewed.')) return;
+  const btn = document.getElementById('flush-media-cache-btn');
+  const status = document.getElementById('media-cache-status');
+  btn.disabled = true;
+  status.classList.remove('hidden');
+  status.textContent = 'Flushing…';
+  try {
+    const { removed, freedBytes } = await api('/api/owner/media-cache/flush', { method: 'POST' });
+    status.textContent = `Flushed ${removed} image${removed === 1 ? '' : 's'} (${formatBytes(freedBytes)} freed).`;
+    loadMediaCacheStats();
+  } catch (e) {
+    status.textContent = `Failed: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ---------- Family (recent sign-ins, pending requests, open issues) ----------
 async function loadAdminLogins() {
   const body = document.getElementById('admin-logins-body');
@@ -1229,7 +1258,7 @@ let auditLogLoaded = false;
 settingsTabs[0].btn.addEventListener('click', () => activateSettingsTab(settingsTabs[0].btn));
 settingsTabs[1].btn.addEventListener('click', () => {
   activateSettingsTab(settingsTabs[1].btn);
-  if (!ownerStatusLoaded) { ownerStatusLoaded = true; loadOwnerStatus(); loadDbBackups(); }
+  if (!ownerStatusLoaded) { ownerStatusLoaded = true; loadOwnerStatus(); loadDbBackups(); loadMediaCacheStats(); }
 });
 settingsTabs[2].btn.addEventListener('click', () => {
   activateSettingsTab(settingsTabs[2].btn);

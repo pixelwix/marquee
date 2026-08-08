@@ -198,6 +198,13 @@
       <p class="settings-field-block-desc">Every database gets an integrity check before it's backed up — a database that fails the check is skipped and flagged, not copied. Runs automatically once a day; backups older than 14 days are pruned.</p>
       <p id="db-backup-status" class="settings-status hidden"></p>
       <div id="db-backup-body"><p class="empty-state">Loading…</p></div>
+
+      <div class="settings-section-row settings-section-row-spaced">
+        <h4 class="admin-subhead">Image Cache</h4>
+        <button id="flush-media-cache-btn" class="pill-btn"><span class="state-dot"></span>Flush Cache</button>
+      </div>
+      <p id="media-cache-summary" class="settings-field-block-desc">Loading…</p>
+      <p id="media-cache-status" class="settings-status hidden"></p>
     </div>
 
     <div id="settings-signins-tab" class="settings-body hidden">

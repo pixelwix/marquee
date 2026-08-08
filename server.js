@@ -103,6 +103,7 @@ require('./lib/nowPlaying').start();
 require('./lib/issueWatchdog').start();
 require('./lib/recapReminder').start();
 require('./lib/dbBackup').start();
+require('./lib/mediaCache').start();
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/plex', require('./routes/plex'));
@@ -119,6 +120,10 @@ app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/uptime-kuma', require('./routes/uptimeKuma'));
 app.use('/api/push', require('./routes/push'));
 app.use('/api/recap', require('./routes/recap'));
+// Deliberately mounted outside /api — sw.js's fetch handler only skips
+// caching requests under /api/, so keeping this bare lets the existing
+// service worker start caching these client-side too, for free.
+app.use('/img', require('./lib/mediaCache'));
 
 // index.html carries a {{SITE_NAME}} placeholder so this same image can show a generic
 // "Marquee" brand out of the box, or your own (e.g. via SITE_NAME=MyPlexHub in .env).
