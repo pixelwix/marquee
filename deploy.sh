@@ -18,6 +18,8 @@ echo "==> Syncing to $HOST:$DEST"
 rsync -av --checksum \
   --exclude '.git' \
   --exclude 'node_modules' \
+  --exclude '.DS_Store' \
+  --exclude '._*' \
   --exclude '.env' \
   --exclude 'data' \
   . "$HOST:$DEST/"
