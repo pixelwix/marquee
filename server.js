@@ -102,6 +102,7 @@ app.use((req, res, next) => {
 require('./lib/nowPlaying').start();
 require('./lib/issueWatchdog').start();
 require('./lib/recapReminder').start();
+require('./lib/dbBackup').start();
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/plex', require('./routes/plex'));

@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.19.1.**
+v1.21.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1211,5 +1211,77 @@ forgotten.
 
 - [x] Changed the new footer status copy from `Plex uptime` / `Plex down` to
       lowercase `plex uptime` / `plex down` to match the requested styling.
+
+## v1.20.0 — Newsletter admin configuration UI
+
+- [x] Email/recap SMTP config (`TAUTULLI_EMAIL_NOTIFIER_ID`, `EMAIL_SMTP_*`,
+      `EMAIL_FROM*`) is now a first-class entry in `lib/serviceRegistry.js`,
+      which means it gets the exact same Settings → Services treatment as
+      every other integration (live health check, "Edit" popup, secret
+      masking) with zero new frontend code — the existing service-card
+      system is already fully data-driven off that registry.
+- [x] New `checkEmail()` in `lib/serviceHealth.js` — deliberately doesn't
+      send anything on every Settings-modal open. Confirms the configured
+      Tautulli notifier actually exists and is really an `email` agent
+      (catches the most common misconfiguration, a wrong/stale
+      `TAUTULLI_EMAIL_NOTIFIER_ID`, with zero side effect).
+- [x] New `POST /api/recap/test-email`, and a "Send Test Email" button at
+      the top of the Newsletter tab. Sends a small, clearly-labeled test
+      message through the *exact* same `lib/mailer.js` path a real recap
+      uses, so success here means the whole pipeline (SMTP credentials,
+      Tautulli's notifier, network path) is actually confirmed end to end —
+      not just that config values are present. Defaults the recipient to
+      the requesting owner's own email (looked up from Tautulli by their
+      Plex session user id) so the common case needs no typing.
+- [x] Verified for real: the health check confirms the real configured
+      notifier; the test-send resolved the real owner email
+      (`m.abrahams@me.com`) automatically and the message landed,
+      confirmed via Tautulli's own notification log (`success: 1`) — same
+      standard as every other piece of this feature all along, not just a
+      code read.
+
+## v1.21.0 — Database lifecycle: automated backups + integrity checks
+
+- [x] New `lib/dbBackup.js` — every `*.sqlite` file in `SESSION_DB_DIR` (9
+      of them: sessions, notices, alerts, logins, push subscriptions, recap
+      unsubscribes/reminders/sends, audit log) previously had zero backup
+      path at all. A lost or corrupted data volume meant losing all of it
+      with no recovery option.
+- [x] Runs `PRAGMA integrity_check` on each database *before* backing it
+      up — a database that's already corrupt is skipped and flagged in the
+      manifest, not silently copied forward under a reassuring "backup
+      completed" label.
+- [x] Backs up via `VACUUM INTO`, not a raw file copy — confirmed live
+      against the real `sqlite3` driver in this container (v3.52.0) that
+      it produces a consistent snapshot of a live/open database. A plain
+      copy risks an inconsistent read against a database with pending WAL
+      writes; `VACUUM INTO` goes through SQLite's own transactional
+      machinery and is documented as safe to run against a live database.
+- [x] Runs automatically once a day (in-process `setInterval`, same
+      scheduler shape as `lib/issueWatchdog.js`/`lib/recapReminder.js` —
+      this app has no external cron to hook into), writing each run into
+      `data/backups/<ISO-stamp>/` alongside a `manifest.json`. Backup
+      directories older than 14 days are pruned automatically.
+- [x] New owner-only routes: `GET /api/owner/db-backups` (recent history,
+      read straight from the manifest files on disk — no new database
+      needed to track backup history) and `POST /api/owner/db-backups/run`
+      (manual trigger, audit-logged, same pattern as `/audit`).
+- [x] New "Database Backups" section on Settings → System Status: shows
+      recent runs with per-database pass/fail, and a "Run Backup Now"
+      button.
+- [x] Tests cover the retention/pruning cutoff logic, a full backup round
+      trip against a real sqlite file, and confirm a deliberately corrupted
+      file is skipped rather than backed up.
+- [x] Deliberately scoped out: a formal schema-migration/versioning
+      framework. Every table so far is `CREATE TABLE IF NOT EXISTS` and
+      additive-only across 9 small, single/few-table databases — a
+      migration framework would be disproportionate engineering for the
+      app's actual current scale. Worth revisiting if a future change ever
+      needs to alter or drop a column on data that must be preserved.
+- [x] Restore is manual by design (documented in README): stop the
+      container, copy the desired backup's `.sqlite` files over the live
+      ones in `data/`, restart. No one-click restore button — a destructive
+      action like overwriting live data with a backup shouldn't be a single
+      accidental click away.
 
 ## Ideas

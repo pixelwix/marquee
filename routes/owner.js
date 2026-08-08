@@ -7,6 +7,7 @@ const uptimeKuma = require('../lib/uptimeKuma');
 const ups = require('../lib/ups');
 const loginLog = require('../lib/loginLog');
 const auditLog = require('../lib/auditLog');
+const dbBackup = require('../lib/dbBackup');
 const mediaStorage = require('../lib/mediaStorage');
 const { shortestLabelRows, combinedLabelRows } = require('../lib/diskspace');
 const { annotateAndSort } = require('../lib/stuckRequests');
@@ -38,6 +39,32 @@ router.get('/audit', requireAuth, requireOwner, async (req, res) => {
   } catch (err) {
     console.error('audit log read error', err.message);
     res.status(500).json({ error: 'Could not read audit history' });
+  }
+});
+
+router.get('/db-backups', requireAuth, requireOwner, async (req, res) => {
+  try {
+    res.json({ backups: dbBackup.listRecentBackups(req.query.limit), retentionDays: dbBackup.RETENTION_DAYS });
+  } catch (err) {
+    console.error('db backup list error', err.message);
+    res.status(500).json({ error: 'Could not read backup history' });
+  }
+});
+
+// Runs the same backup+prune pass the daily scheduler runs (lib/dbBackup.js)
+// on demand — useful right before a risky change, or just to confirm the
+// pipeline is actually healthy rather than waiting up to 24h to find out.
+router.post('/db-backups/run', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const result = await dbBackup.runBackupAndPrune();
+    auditLog.record({ kind: 'admin', action: 'POST /api/owner/db-backups/run', actorId: req.session.user.id,
+      actorName: req.session.user.username, success: true, statusCode: 200,
+      detail: { results: result.results }, ...auditLog.requestContext(req) })
+      .catch((err) => console.error('audit log write error:', err.message));
+    res.json(result);
+  } catch (err) {
+    console.error('db backup run error', err.message);
+    res.status(500).json({ error: err.message || 'Backup failed' });
   }
 });
 

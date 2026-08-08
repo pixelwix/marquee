@@ -15,6 +15,18 @@ test('maskIp retains a useful network prefix without storing a full address', ()
   assert.equal(auditLog.maskIp('not-an-ip'), null);
 });
 
+test('maskIp expands "::" compression before masking, not just splits on ":"', () => {
+  // These previously produced malformed output like "fe80::1::/64" (a
+  // double-colon, invalid CIDR string) and — worse — didn't actually mask
+  // the address at all, since a naive split(':').slice(0,4) on a string
+  // compressed *within* its first 4 groups just echoes those groups back
+  // verbatim. The existing test above compresses only *after* the 4th
+  // group ("...5678:abcd::1"), which never exercises this path.
+  assert.equal(auditLog.maskIp('fe80::1'), 'fe80:0:0:0::/64');
+  assert.equal(auditLog.maskIp('::1'), '0:0:0:0::/64');
+  assert.equal(auditLog.maskIp('2001:db8::1:2:3:4'), '2001:db8:0:0::/64');
+});
+
 test('record persists normalized audit fields and structured detail', async () => {
   await auditLog.record({ kind: 'admin', action: 'POST /api/test', actorId: 7,
     actorName: 'owner', success: false, statusCode: 409, ip: '203.0.113.42',

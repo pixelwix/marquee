@@ -3,9 +3,9 @@ const requireAuth = require('./requireAuth');
 const requireOwner = require('./requireOwner');
 const { verify, sign, buildUnsubscribeUrl } = require('../lib/recapUnsubscribe');
 const unsubscribes = require('../lib/recapUnsubscribes');
-const { previousMonthRange, listRecapCandidates, fetchUserRecapData, MIN_MONTHLY_PLAYS } = require('../lib/monthlyRecap');
+const { previousMonthRange, listRecapCandidates, fetchUserRecapData, fetchAllUsers, MIN_MONTHLY_PLAYS } = require('../lib/monthlyRecap');
 const { renderMonthlyRecapEmail } = require('../lib/monthlyRecapTemplate');
-const { sendEmailBatch } = require('../lib/mailer');
+const { sendEmail, sendEmailBatch } = require('../lib/mailer');
 const sendLog = require('../lib/recapSendLog');
 const auditLog = require('../lib/auditLog');
 const uptimeKuma = require('../lib/uptimeKuma');
@@ -100,6 +100,40 @@ router.get('/history', requireAuth, requireOwner, async (req, res) => {
   } catch (err) {
     console.error('recap history error:', err.message);
     res.status(500).json({ error: 'Could not load recap history' });
+  }
+});
+
+// Sends a small, clearly-labeled test message — not a real recap — through
+// the exact same lib/mailer.js path a real send uses, so "it worked" here
+// means the whole pipeline (Tautulli notifier config, SMTP credentials,
+// network path) is actually confirmed end to end, not just that config
+// values are present. Defaults the recipient to the requesting owner's own
+// Tautulli email (matched by their Plex session user id) so the common case
+// needs no typing; `to` in the body overrides that when given.
+router.post('/test-email', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const to = (req.body && req.body.to) || (await fetchAllUsers()).find(
+      (u) => String(u.user_id) === String(req.session.user.id)
+    )?.email;
+    if (!to) {
+      return res.status(400).json({ error: "No email on file for your account in Tautulli — pass a \"to\" address explicitly." });
+    }
+    await sendEmail({
+      to,
+      subject: `${siteName} — test email`,
+      html: `<div style="font-family:-apple-system,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+        <h2 style="margin:0 0 12px">This is a test</h2>
+        <p style="color:#555;line-height:1.6">If you're reading this, ${siteName}'s recap email pipeline is configured correctly — SMTP credentials, Tautulli's notifier, and the network path all worked.</p>
+        <p style="color:#999;font-size:12px;margin-top:24px">Sent from Settings → Newsletter, ${new Date().toISOString()}</p>
+      </div>`,
+    });
+    auditLog.record({ kind: 'admin', action: 'POST /api/recap/test-email', actorId: req.session.user.id,
+      actorName: req.session.user.username, success: true, statusCode: 200, detail: { to },
+      ...auditLog.requestContext(req) }).catch((err) => console.error('audit log write error:', err.message));
+    res.json({ status: 'ok', to });
+  } catch (err) {
+    console.error('recap test-email error:', err.message);
+    res.status(502).json({ error: err.message || 'Send failed' });
   }
 });
 

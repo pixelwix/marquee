@@ -85,6 +85,31 @@ handles auth entirely.
 - All the widgets poll on page load; "Now Playing" also refreshes every 15s.
   Adjust intervals in `public/app.js` if you want them snappier or lighter.
 
+## 5. Database backups & restore
+
+Every SQLite file in `./data` (sessions, notices, alerts, sign-in history,
+push subscriptions, recap unsubscribes/reminders/sends, audit log) is backed
+up automatically once a day by `lib/dbBackup.js`, into
+`data/backups/<timestamp>/`. Each database gets a `PRAGMA integrity_check`
+before it's backed up — one that fails is skipped and flagged, not copied.
+Backups older than 14 days are pruned automatically. Trigger a backup
+on-demand from Settings → System Status → "Run Backup Now" (owner only), or
+by calling `POST /api/owner/db-backups/run`.
+
+There's no restore button — restoring means overwriting live data, which
+shouldn't be a single accidental click away. To restore a backup manually:
+
+```sh
+docker compose stop skyn3t
+cp data/backups/<timestamp>/*.sqlite data/
+docker compose start skyn3t
+```
+
+This restores every database from that backup together. To restore only
+one database (e.g. just `notice.sqlite`), copy that single file instead of
+the whole set — but be aware other databases will then be out of sync with
+whatever point in time you picked, since they weren't restored together.
+
 ## Project structure
 
 ```

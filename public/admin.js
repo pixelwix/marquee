@@ -83,6 +83,58 @@ function formatUpsStatus(status) {
   return status.split(' ').map(f => flags[f] || f).join(' · ');
 }
 
+// ---------- Database Backups ----------
+function renderDbBackups(backups) {
+  const body = document.getElementById('db-backup-body');
+  if (!backups.length) {
+    body.innerHTML = '<p class="empty-state">No backups yet.</p>';
+    return;
+  }
+  body.innerHTML = backups.map(b => {
+    const results = b.results || [];
+    const failed = results.filter(r => !r.ok);
+    const ok = results.filter(r => r.ok);
+    const summary = results.length
+      ? `${ok.length}/${results.length} databases backed up${failed.length ? ` · ${failed.length} failed` : ''}`
+      : 'No databases found';
+    return `
+      <div class="audit-row">
+        <span class="state-dot ${failed.length ? 'danger' : ''}"></span>
+        <div class="audit-row-main">
+          <div class="now-title">${b.startedAt ? timeAgo(b.startedAt) : b.stamp}</div>
+          <div class="now-meta">${escapeHtml(summary)}${failed.length ? ` — ${failed.map(f => escapeHtml(f.name + ': ' + f.reason)).join('; ')}` : ''}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function loadDbBackups() {
+  const body = document.getElementById('db-backup-body');
+  try {
+    const { backups } = await api('/api/owner/db-backups?limit=10');
+    renderDbBackups(backups);
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not load backup history.</p>';
+  }
+}
+
+document.getElementById('run-db-backup-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('run-db-backup-btn');
+  const status = document.getElementById('db-backup-status');
+  btn.disabled = true;
+  status.classList.remove('hidden');
+  status.textContent = 'Running backup…';
+  try {
+    await api('/api/owner/db-backups/run', { method: 'POST' });
+    status.textContent = 'Backup complete.';
+    loadDbBackups();
+  } catch (e) {
+    status.textContent = `Failed: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ---------- Family (recent sign-ins, pending requests, open issues) ----------
 async function loadAdminLogins() {
   const body = document.getElementById('admin-logins-body');
@@ -1177,7 +1229,7 @@ let auditLogLoaded = false;
 settingsTabs[0].btn.addEventListener('click', () => activateSettingsTab(settingsTabs[0].btn));
 settingsTabs[1].btn.addEventListener('click', () => {
   activateSettingsTab(settingsTabs[1].btn);
-  if (!ownerStatusLoaded) { ownerStatusLoaded = true; loadOwnerStatus(); }
+  if (!ownerStatusLoaded) { ownerStatusLoaded = true; loadOwnerStatus(); loadDbBackups(); }
 });
 settingsTabs[2].btn.addEventListener('click', () => {
   activateSettingsTab(settingsTabs[2].btn);
@@ -1442,6 +1494,23 @@ async function loadNoticeSettings() {
     statusEl.textContent = 'Could not load notice.';
   }
 }
+
+document.getElementById('newsletter-test-email-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('newsletter-test-email-btn');
+  const status = document.getElementById('newsletter-test-email-status');
+  const to = document.getElementById('newsletter-test-email-to').value.trim();
+  btn.disabled = true;
+  status.classList.remove('hidden');
+  status.textContent = 'Sending…';
+  try {
+    const result = await api('/api/recap/test-email', { method: 'POST', body: JSON.stringify(to ? { to } : {}) });
+    status.textContent = `Sent to ${result.to}. Check that inbox to confirm it actually arrived.`;
+  } catch (e) {
+    status.textContent = `Failed: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // Newsletter (monthly recap) — deliberately no "send to everyone" anywhere
 // here. /api/recap/candidates already only lists people with real activity
