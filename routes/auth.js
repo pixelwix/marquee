@@ -3,6 +3,7 @@ const axios = require('axios');
 const { parseStringPromise } = require('xml2js');
 const rateLimit = require('../lib/rateLimit');
 const loginLog = require('../lib/loginLog');
+const auditLog = require('../lib/auditLog');
 const router = express.Router();
 
 const PLEX_HEADERS = {
@@ -57,6 +58,9 @@ router.get('/plex/poll', pollLimiter, async (req, res) => {
 
     const { allowed, isOwner } = await isAllowedOnServer(plexUser.id, data.authToken);
     if (!allowed) {
+      auditLog.record({ kind: 'security', action: 'login_denied', ...auditLog.requestContext(req),
+        actorId: plexUser.id, actorName: plexUser.username || plexUser.title,
+        success: false, statusCode: 403 }).catch(err => console.error('audit log write error:', err.message));
       return res.status(403).json({ status: 'denied', error: 'This Plex account does not have access to the server.' });
     }
 
@@ -68,10 +72,15 @@ router.get('/plex/poll', pollLimiter, async (req, res) => {
       isOwner
     };
     loginLog.record(req.session.user);
+    auditLog.record({ kind: 'security', action: 'login_success', success: true, statusCode: 200,
+      ...auditLog.requestContext(req) }).catch(err => console.error('audit log write error:', err.message));
     res.clearCookie('plex_pin_id');
     res.json({ status: 'ok', user: req.session.user.username, isOwner });
   } catch (err) {
     console.error('plex poll error', err.response?.data || err.message);
+    auditLog.record({ kind: 'security', action: 'login_verification_error', success: false, statusCode: 502,
+      ...auditLog.requestContext(req), detail: { upstreamStatus: err.response?.status || null } })
+      .catch(writeErr => console.error('audit log write error:', writeErr.message));
     res.status(502).json({ error: 'Could not verify sign-in' });
   }
 });
@@ -135,6 +144,9 @@ router.get('/me', (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
+  const context = auditLog.requestContext(req);
+  auditLog.record({ kind: 'security', action: 'logout', success: true, statusCode: 200, ...context })
+    .catch(err => console.error('audit log write error:', err.message));
   req.session.destroy(() => res.json({ status: 'ok' }));
 });
 

@@ -1157,7 +1157,8 @@ const settingsTabs = [
   { btn: document.getElementById('tab-settings-status-btn'), pane: document.getElementById('settings-status-tab') },
   { btn: document.getElementById('tab-settings-signins-btn'), pane: document.getElementById('settings-signins-tab') },
   { btn: document.getElementById('tab-settings-notice-btn'), pane: document.getElementById('settings-notice-tab') },
-  { btn: document.getElementById('tab-settings-newsletter-btn'), pane: document.getElementById('settings-newsletter-tab') }
+  { btn: document.getElementById('tab-settings-newsletter-btn'), pane: document.getElementById('settings-newsletter-tab') },
+  { btn: document.getElementById('tab-settings-audit-btn'), pane: document.getElementById('settings-audit-tab') }
 ];
 function activateSettingsTab(btn) {
   for (const t of settingsTabs) {
@@ -1170,6 +1171,7 @@ let ownerStatusLoaded = false;
 let adminLoginsLoaded = false;
 let noticeSettingsLoaded = false;
 let newsletterCandidatesLoaded = false;
+let auditLogLoaded = false;
 
 settingsTabs[0].btn.addEventListener('click', () => activateSettingsTab(settingsTabs[0].btn));
 settingsTabs[1].btn.addEventListener('click', () => {
@@ -1187,6 +1189,10 @@ settingsTabs[3].btn.addEventListener('click', () => {
 settingsTabs[4].btn.addEventListener('click', () => {
   activateSettingsTab(settingsTabs[4].btn);
   if (!newsletterCandidatesLoaded) { newsletterCandidatesLoaded = true; loadNewsletterCandidates(); }
+});
+settingsTabs[5].btn.addEventListener('click', () => {
+  activateSettingsTab(settingsTabs[5].btn);
+  if (!auditLogLoaded) { auditLogLoaded = true; loadAuditLog(); }
 });
 
 async function openSettings() {
@@ -1452,20 +1458,36 @@ async function loadNewsletterCandidates() {
       return;
     }
     body.innerHTML = candidates.map(c => {
-      const disabled = c.unsubscribed || !c.email;
-      const note = c.unsubscribed ? 'unsubscribed' : !c.email ? 'no email on file' : '';
+      const alreadySent = c.sendStatus === 'sent';
+      const disabled = c.unsubscribed || !c.email || alreadySent;
+      const note = c.unsubscribed ? 'unsubscribed' : !c.email ? 'no email on file'
+        : alreadySent ? `sent ${timeAgo(c.sentAt)}` : c.sendStatus === 'sending' ? 'send in progress' : '';
       return `
-        <label class="newsletter-candidate-row${disabled ? ' newsletter-candidate-row-disabled' : ''}">
+        <label class="newsletter-candidate-row${disabled ? ' newsletter-candidate-row-disabled' : ''}" data-sent="${alreadySent ? 'true' : 'false'}" data-base-disabled="${c.unsubscribed || !c.email ? 'true' : 'false'}">
           <input type="checkbox" class="newsletter-candidate-checkbox" value="${escapeHtml(c.userId)}" ${disabled ? 'disabled' : ''}>
           <span class="now-title">${escapeHtml(c.name)}</span>
           <span class="now-meta">${c.plays} plays &middot; ${c.hours}h${note ? ` &middot; ${note}` : ''}</span>
         </label>`;
     }).join('');
     updateNewsletterSendButton();
+    loadNewsletterHistory();
   } catch (e) {
     body.innerHTML = '<p class="empty-state">Could not load candidates.</p>';
   }
 }
+
+function applyNewsletterResendMode() {
+  const allow = document.getElementById('newsletter-allow-resend').checked;
+  document.querySelectorAll('.newsletter-candidate-row[data-sent="true"]').forEach(row => {
+    const cb = row.querySelector('.newsletter-candidate-checkbox');
+    cb.disabled = row.dataset.baseDisabled === 'true' || !allow;
+    row.classList.toggle('newsletter-candidate-row-disabled', cb.disabled);
+    if (cb.disabled) cb.checked = false;
+  });
+  updateNewsletterSendButton();
+}
+
+document.getElementById('newsletter-allow-resend').addEventListener('change', applyNewsletterResendMode);
 
 function updateNewsletterSendButton() {
   const checked = document.querySelectorAll('.newsletter-candidate-checkbox:checked').length;
@@ -1486,7 +1508,8 @@ document.getElementById('newsletter-select-all-btn').addEventListener('click', (
 document.getElementById('newsletter-send-btn').addEventListener('click', async () => {
   const userIds = [...document.querySelectorAll('.newsletter-candidate-checkbox:checked')].map(cb => cb.value);
   if (!userIds.length) return;
-  const ok = await confirmDialog(`Send this month's recap to ${userIds.length} ${userIds.length === 1 ? 'person' : 'people'}? This sends real email right now.`);
+  const resend = document.getElementById('newsletter-allow-resend').checked;
+  const ok = await confirmDialog(`${resend ? 'Send or resend' : 'Send'} this month's recap to ${userIds.length} ${userIds.length === 1 ? 'person' : 'people'}? This sends real email right now.`);
   if (!ok) return;
 
   const btn = document.getElementById('newsletter-send-btn');
@@ -1495,17 +1518,54 @@ document.getElementById('newsletter-send-btn').addEventListener('click', async (
   status.classList.remove('hidden');
   status.textContent = 'Sending…';
   try {
-    const result = await api('/api/recap/send', { method: 'POST', body: JSON.stringify({ userIds }) });
+    const result = await api('/api/recap/send', { method: 'POST', body: JSON.stringify({ userIds, resend }) });
     const parts = [`Sent ${result.sent} of ${result.requested}.`];
     if (result.failed.length) parts.push(`${result.failed.length} failed.`);
     if (result.skipped.length) parts.push(`${result.skipped.length} skipped.`);
     status.textContent = parts.join(' ');
+    await loadNewsletterCandidates();
   } catch (e) {
     status.textContent = `Send failed: ${e.message}`;
   } finally {
     updateNewsletterSendButton();
   }
 });
+
+async function loadNewsletterHistory() {
+  const body = document.getElementById('newsletter-history-body');
+  try {
+    const rows = await api('/api/recap/history?limit=30');
+    body.innerHTML = rows.length ? rows.map(row => `
+      <div class="audit-row">
+        <span class="state-dot ${row.status === 'sent' ? '' : row.status === 'sending' ? 'paused' : 'danger'}"></span>
+        <div class="audit-row-main">
+          <div class="now-title">${escapeHtml(row.recipientName || row.userId)}${row.isResend ? ' · Resend' : ''}</div>
+          <div class="now-meta">${escapeHtml(row.periodKey)} · ${escapeHtml(row.status)} · ${timeAgo(row.startedAt)}${row.error ? ` · ${escapeHtml(row.error)}` : ''}</div>
+        </div>
+      </div>`).join('') : '<p class="empty-state">No sends recorded yet.</p>';
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not load send history.</p>';
+  }
+}
+
+async function loadAuditLog() {
+  const body = document.getElementById('audit-log-body');
+  try {
+    const rows = await api('/api/owner/audit?limit=100');
+    body.innerHTML = rows.length ? rows.map(row => `
+      <div class="audit-row">
+        <span class="state-dot ${row.success ? '' : 'danger'}"></span>
+        <div class="audit-row-main">
+          <div class="now-title">${escapeHtml(row.action)}</div>
+          <div class="now-meta">${escapeHtml(row.actorName || 'Unknown actor')} · ${row.statusCode || '—'} · ${timeAgo(row.at)}${row.ipPrefix ? ` · ${escapeHtml(row.ipPrefix)}` : ''}</div>
+        </div>
+      </div>`).join('') : '<p class="empty-state">No audit events recorded yet.</p>';
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not load audit history.</p>';
+  }
+}
+
+document.getElementById('refresh-audit-btn').addEventListener('click', loadAuditLog);
 
 document.getElementById('notice-save-btn').addEventListener('click', async () => {
   const message = document.getElementById('notice-message-input').value.trim();

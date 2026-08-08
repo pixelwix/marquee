@@ -8,7 +8,9 @@ The server owner also gets `/admin` — a separate page (not visible to shared
 users) for approving requests, resolving reported issues, searching Radarr/
 Sonarr's indexers for a replacement release, managing the download queue,
 and checking Prowlarr indexer health, all without opening each service's own
-UI.
+UI. It also includes owner-reviewed monthly recap emails with unsubscribe,
+duplicate-send protection, send history, and a privacy-conscious security/
+owner-action audit log.
 
 ## 1. Configure
 
@@ -99,7 +101,11 @@ marquee/
     overseerr.js              # search/discover, request, issues, webhook
     downloads.js               # qBittorrent/SABnzbd queue + owner actions
     owner.js                    # system status, sign-in log, wanted/missing
+    recap.js                    # monthly recap review/send/unsubscribe/history
     prowlarr.js                  # indexer health
+  lib/
+    recapSendLog.js             # per-recipient/month send state + attempts
+    auditLog.js                 # security and owner-action event history
   public/
     index.html            # family dashboard
     admin.html              # owner-only control page

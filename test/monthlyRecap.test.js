@@ -7,6 +7,7 @@ const secondsAt = (isoDate) => Math.floor(new Date(`${isoDate}T12:00:00Z`).getTi
 test('previousMonthRange gives the full prior calendar month regardless of where in the current month `now` falls', () => {
   const early = previousMonthRange(new Date('2026-08-01T00:00:00Z'));
   const late = previousMonthRange(new Date('2026-08-29T23:00:00Z'));
+  assert.equal(early.key, '2026-07');
   assert.equal(early.startIso, '2026-07-01');
   assert.equal(late.startIso, '2026-07-01');
   assert.equal(early.endUnix, late.endUnix);

@@ -73,6 +73,32 @@ app.use(session({
   }
 }));
 
+// Durable, privacy-conscious audit trail for owner mutations. Capture the
+// actor before the response finishes (logout can destroy the session), then
+// write asynchronously after the final status code is known. Request bodies
+// are deliberately never recorded — they may contain secrets or tokens.
+const auditLog = require('./lib/auditLog');
+app.use((req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  const context = auditLog.requestContext(req);
+  const wasOwner = Boolean(req.session?.user?.isOwner);
+  res.on('finish', () => {
+    if (wasOwner) {
+      auditLog.record({
+        kind: 'admin', action: `${req.method} ${req.path}`, ...context,
+        success: res.statusCode < 400, statusCode: res.statusCode,
+      }).catch((err) => console.error('audit log write error:', err.message));
+    } else if ((res.statusCode === 401 || res.statusCode === 403) && req.path.startsWith('/api/')) {
+      auditLog.record({
+        kind: 'security', action: 'access_denied', ...context,
+        success: false, statusCode: res.statusCode,
+        detail: { method: req.method, path: req.path },
+      }).catch((err) => console.error('audit log write error:', err.message));
+    }
+  });
+  next();
+});
+
 require('./lib/nowPlaying').start();
 require('./lib/issueWatchdog').start();
 require('./lib/recapReminder').start();

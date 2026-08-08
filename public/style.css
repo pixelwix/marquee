@@ -800,6 +800,11 @@ body {
 .newsletter-candidate-row-disabled { opacity: 0.5; cursor: not-allowed; }
 .newsletter-candidate-row input[type="checkbox"] { flex: none; }
 .newsletter-candidate-row .now-title { flex: 1; }
+.newsletter-resend-toggle { display: flex; align-items: center; gap: 8px; margin: 12px 0; color: var(--ink-dim); font-size: 12px; }
+.audit-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.audit-row:last-child { border-bottom: none; }
+.audit-row .state-dot { margin-top: 5px; flex: none; }
+.audit-row-main { min-width: 0; flex: 1; }
 /* Cancel and the primary action (Save Changes / OK) share the same shape and
    size — Cancel keeps its own lighter fill/border, just resized/reshaped to
    match rather than sitting next to it as a small pill. Applies everywhere

@@ -6,6 +6,7 @@ const settle = require('../lib/settle');
 const uptimeKuma = require('../lib/uptimeKuma');
 const ups = require('../lib/ups');
 const loginLog = require('../lib/loginLog');
+const auditLog = require('../lib/auditLog');
 const mediaStorage = require('../lib/mediaStorage');
 const { shortestLabelRows, combinedLabelRows } = require('../lib/diskspace');
 const { annotateAndSort } = require('../lib/stuckRequests');
@@ -28,6 +29,15 @@ router.get('/logins', requireAuth, requireOwner, async (req, res) => {
   } catch (err) {
     console.error('login log read error', err.message);
     res.status(500).json({ error: 'Could not read sign-in history' });
+  }
+});
+
+router.get('/audit', requireAuth, requireOwner, async (req, res) => {
+  try {
+    res.json(await auditLog.recent(req.query.limit));
+  } catch (err) {
+    console.error('audit log read error', err.message);
+    res.status(500).json({ error: 'Could not read audit history' });
   }
 });
 

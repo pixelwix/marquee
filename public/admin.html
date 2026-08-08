@@ -172,6 +172,7 @@
       <button id="tab-settings-signins-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Recent Sign-ins</button>
       <button id="tab-settings-notice-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Notice Board</button>
       <button id="tab-settings-newsletter-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Newsletter</button>
+      <button id="tab-settings-audit-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Audit Log</button>
     </div>
 
     <div id="settings-services-tab" class="settings-body">
@@ -235,11 +236,26 @@
         <button id="newsletter-select-all-btn" class="pill-btn">Select All</button>
       </div>
       <p class="settings-field-block-desc">Only people with real activity this month are listed. Nothing sends automatically — pick who gets it below.</p>
+      <label class="newsletter-resend-toggle">
+        <input id="newsletter-allow-resend" type="checkbox">
+        Allow explicit resends to people already sent this month
+      </label>
       <div id="newsletter-candidates-body"><p class="empty-state">Loading…</p></div>
       <div class="settings-edit-actions">
         <button id="newsletter-send-btn" class="btn-primary" disabled>Send Recap</button>
       </div>
       <p id="newsletter-send-status" class="settings-status hidden"></p>
+      <h4 class="admin-subhead">Recent Send History</h4>
+      <div id="newsletter-history-body"><p class="empty-state">Loading…</p></div>
+    </div>
+
+    <div id="settings-audit-tab" class="settings-body hidden">
+      <div class="settings-section-row">
+        <h4 class="admin-subhead">Security &amp; Owner Actions</h4>
+        <button id="refresh-audit-btn" class="pill-btn">Refresh</button>
+      </div>
+      <p class="settings-field-block-desc">Successful sign-ins, denied access, opt-outs, and owner changes. Network addresses are masked and request bodies are never stored.</p>
+      <div id="audit-log-body"><p class="empty-state">Loading…</p></div>
     </div>
   </div>
 </div>

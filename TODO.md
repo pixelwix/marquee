@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.16.0.**
+v1.18.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1153,5 +1153,44 @@ a real template, real sending through Tautulli, unsubscribe/resubscribe,
 an activity threshold, owner-selected recipients through a real UI tab, and
 now a reminder so the whole thing actually gets used monthly instead of
 forgotten.
+
+## v1.17.0 — Monthly recap send ledger and duplicate prevention
+
+- [x] New `lib/recapSendLog.js` persists a state row per recipient/month and
+      a durable record for every attempt in `recap-sends.sqlite`: sending,
+      sent, or failed; start/completion times; requesting owner; resend flag;
+      and a bounded error message. The Newsletter tab shows the recent
+      history instead of requiring a Tautulli container-log search.
+- [x] Sending now atomically claims each recipient/month before generating
+      or delivering the message. A double-click or concurrent request sees
+      `sending` and skips; a completed send sees `sent` and skips. Failed
+      attempts remain retryable without special handling.
+- [x] A process crash cannot leave a recipient permanently locked in
+      `sending`: active claims block duplicates for 15 minutes, after which
+      an abandoned claim is safely reclaimable.
+- [x] Resending a successful month requires an explicit `resend:true` API
+      flag and an owner-visible "Allow explicit resends" checkbox. Already-
+      sent candidates are disabled by default and annotated with when they
+      were sent. This preserves intentional resends without making duplicate
+      delivery an easy accident.
+- [x] Added focused SQLite-backed tests for first claims, concurrent
+      duplicate suppression, successful-send blocking, explicit resends,
+      failed-send retry, and the new stable `YYYY-MM` period key.
+
+## v1.18.0 — Security and owner-action audit log
+
+- [x] New `lib/auditLog.js` writes a dedicated `audit.sqlite` trail for
+      successful/denied Plex sign-ins, verification errors, sign-out,
+      newsletter unsubscribe/resubscribe events, unauthorized mutations,
+      and every authenticated owner POST/PUT/PATCH/DELETE after its real HTTP
+      result is known.
+- [x] Privacy boundaries are structural: request bodies are never stored,
+      user agents are length-limited, IPv4 addresses are reduced to `/24`
+      and IPv6 to `/64`, event detail is bounded, and records expire after
+      180 days. This gives enough context for incident review without
+      quietly building a permanent full-IP activity database.
+- [x] New owner-only `GET /api/owner/audit` and an Audit Log tab under
+      Settings show the latest actor, action, result, time, and masked
+      network. Added tests for IP masking and normalized event persistence.
 
 ## Ideas
