@@ -3,6 +3,7 @@ const requireAuth = require('./requireAuth');
 const requireOwner = require('./requireOwner');
 const alerts = require('../lib/alerts');
 const cliproxyClient = require('../lib/cliproxyClient');
+const downloadClientTest = require('../lib/downloadClientTest');
 const rateLimit = require('../lib/rateLimit');
 const router = express.Router();
 
@@ -16,6 +17,14 @@ const suggestFixLimiter = rateLimit({
 // to say anything beyond restating the symptom, which this deliberately doesn't do
 // (see TODO.md's v1.9.0 entry). Keyed here, not just hidden client-side, so this
 // can't be invoked against an unsupported alert type even via a direct API call.
+// Both prompts ask for the exact same output shape — a bare numbered list,
+// nothing before or after it — so the frontend can parse it into a real
+// <ol> (see admin.js's parseFixSteps) instead of displaying a wall of
+// prose. lib/cliproxyClient.js's truncation safety net also depends on
+// this being one step per line: an incomplete trailing line is dropped
+// wholesale rather than needing to find a sentence boundary mid-paragraph.
+const STEP_FORMAT_INSTRUCTION = 'Respond with ONLY a numbered list of 2-4 short, concrete steps (one per line, formatted like "1. ...") — no intro, no summary, no text before or after the list.';
+
 const FIX_PROMPTS = {
   'log-triage': a => `You are helping diagnose a problem on a home media server. ${a.app} (a *arr media-automation app) had this issue detected from its logs:
 
@@ -23,14 +32,14 @@ const FIX_PROMPTS = {
 
 Analysis: "${a.detail || 'none'}"
 
-In 2-4 concise, specific sentences, suggest what the owner should check or do to fix this. Be practical and actionable — assume they have admin access to ${a.app} and standard *arr/Docker home-lab tools, but don't assume you know their exact setup. If you're not confident about the root cause, say what to check first rather than guessing.`,
+${STEP_FORMAT_INSTRUCTION} Be practical and actionable — assume they have admin access to ${a.app} and standard *arr/Docker home-lab tools, but don't assume you know their exact setup. If you're not confident about the root cause, make the first step what to check to confirm it, rather than guessing.`,
   import: a => `You are helping diagnose a stuck import on a home media server. ${a.app} (a *arr media-automation app) rejected an import:
 
 "${a.title}"
 
 Reason given: "${a.detail || 'none'}"
 
-In 2-4 concise, specific sentences, suggest what the owner should check or do to resolve this — e.g. whether it looks like a naming/quality mismatch, a custom format rule, something needing a manual import, or something else implied by the reason given.`,
+${STEP_FORMAT_INSTRUCTION} Cover whether it looks like a naming/quality mismatch, a custom format rule, something needing a manual import, or something else implied by the reason given.`,
 };
 
 // Called by the arr-stack health watchdog (/mnt/docker/scripts/arr-health-watchdog.mjs
@@ -91,11 +100,52 @@ router.post('/:key/suggest-fix', requireAuth, requireOwner, suggestFixLimiter, a
     if (!alert) return res.status(404).json({ error: 'Alert not found' });
     const buildPrompt = FIX_PROMPTS[alert.source];
     if (!buildPrompt) return res.status(400).json({ error: "Fix suggestions aren't available for this alert type" });
-    const suggestion = await cliproxyClient.complete(buildPrompt(alert));
-    res.json({ suggestion });
+    const [suggestion, action] = await Promise.all([
+      cliproxyClient.complete(buildPrompt(alert)),
+      findAction(alert),
+    ]);
+    res.json({ suggestion, action });
   } catch (err) {
     console.error('alerts suggest-fix error', err.message);
     res.status(502).json({ error: 'Could not get a suggestion right now' });
+  }
+});
+
+// The one narrow exception to "read-only, human decides": offering a
+// one-click *test* (never a mutation) of a download client, but only when
+// the alert's own already-known title/detail text names a client that
+// genuinely exists right now in Sonarr/Radarr's own configuration — this
+// is never derived from the LLM's suggestion text, only from the alert
+// itself, so the model has zero influence over what action gets offered.
+async function findAction(alert) {
+  if (alert.source !== 'log-triage' || !['sonarr', 'radarr'].includes(alert.app)) return null;
+  try {
+    const clients = await downloadClientTest.listDownloadClients(alert.app);
+    const match = downloadClientTest.matchDownloadClient(alert, clients);
+    return match ? { type: 'test-download-client', app: alert.app, clientId: match.id, clientName: match.name } : null;
+  } catch (err) {
+    console.error('alerts findAction error', err.message);
+    return null; // a broken lookup just means no action is offered, not a failed suggestion
+  }
+}
+
+// Re-derives the action from scratch server-side rather than trusting
+// anything the client sends — the frontend only ever shows this button
+// when suggest-fix's own findAction() already matched one, but even a
+// direct/forged call here can only ever trigger a harmless connection test
+// against one of the owner's own already-configured download clients,
+// never anything else.
+router.post('/:key/actions/test-download-client', requireAuth, requireOwner, suggestFixLimiter, async (req, res) => {
+  try {
+    const alert = await alerts.getByKey(req.params.key);
+    if (!alert) return res.status(404).json({ error: 'Alert not found' });
+    const action = await findAction(alert);
+    if (!action) return res.status(400).json({ error: 'No matching download client for this alert' });
+    const result = await downloadClientTest.testDownloadClient(action.app, action.clientId);
+    res.json(result);
+  } catch (err) {
+    console.error('alerts test-download-client error', err.message);
+    res.status(502).json({ error: 'Could not run the connection test right now' });
   }
 });
 

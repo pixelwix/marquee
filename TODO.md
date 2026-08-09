@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.21.0.**
+v1.24.2.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1283,5 +1283,184 @@ forgotten.
       ones in `data/`, restart. No one-click restore button — a destructive
       action like overwriting live data with a backup shouldn't be a single
       accidental click away.
+
+## v1.22.0 — Disk-backed image cache for Plex artwork
+
+- [x] New `lib/mediaCache.js` — every movie/TV poster and thumbnail on the
+      site previously round-tripped live to Plex on every single page
+      load, for every visitor. Content-addressed disk cache (SHA-256 of
+      the upstream path, spread across `<cachedir>/<first2>/<hash>`
+      subdirectories) means Plex gets hit once per image, ever.
+- [x] Atomic writes: data + metadata go to `*.tmp`, get fsynced, then
+      renamed into place — a crash mid-download can never result in a
+      truncated file being served as valid.
+- [x] In-flight request dedupe via a key→Promise map cleared in a
+      `finally` block — concurrent requests for the same not-yet-cached
+      image share one upstream fetch, and a failed fetch never poisons
+      the key for the next request.
+- [x] The cache key doubles as the ETag (the upstream path is itself
+      content-versioned by Plex, same assumption the old proxy route
+      already relied on) — `If-None-Match` returns 304 without touching
+      disk.
+- [x] Mounted at bare `/img`, not `/api/img` — the existing service
+      worker's fetch handler only skips `/api/`, so this gets client-side
+      SW caching too, for free, with zero service-worker changes.
+- [x] `lib/plexImage.js`'s `imageUrl()` — the single choke point every
+      image URL on the site goes through — now points at `/img` instead
+      of the old uncached proxy, confirmed with the user before making
+      the switch live for every visitor.
+- [x] LRU pruning by total bytes (not file count) on a 15-minute timer,
+      evicting oldest-accessed-first down to 90% of `IMAGE_CACHE_MAX_BYTES`
+      (default 1GB) — never inline on a request.
+- [x] New "Image Cache" section on Settings → System Status: size/entry
+      count, and a confirm-gated Flush Cache button.
+- [x] Scope note: covers Plex-library artwork only (Now Playing, recently
+      watched, top-of-month, in-library search/browse). Discover/request
+      posters come from Overseerr/TMDB directly (never touched Plex to
+      begin with) and user profile avatars are public plex.tv CDN URLs
+      already served unproxied — neither needed or got this cache.
+- [x] Verified live end to end: real family browsing traffic populated
+      real cached entries before this was even fully built out; a warm
+      hit served in 6ms with zero upstream calls; flush genuinely emptied
+      the cache directory on disk; LRU eviction ordering confirmed via a
+      dedicated test against a real tiny-cap scenario.
+
+## v1.22.1 — Fix desktop scroll stutter
+
+- [x] Root cause: `body { background-attachment: fixed }` on the page's
+      gradient background, combined with 14+ `.card` elements each
+      running `backdrop-filter: blur(20px)` on the bento grid. Desktop's
+      wider viewport shows far more of those blurred cards at once than
+      mobile's single-column stack, and `background-attachment: fixed`
+      forces a slower repaint path in several desktop browsers — the
+      layer-promotion hint on cards alone barely helped, since the
+      underlying scroll itself was still stuck off the compositor thread.
+- [x] Fix preserves the exact same visual result: replaced
+      `background-attachment: fixed` with a `position: fixed; z-index: -1`
+      `.bg-fixed` div holding the same gradients — pixel-identical (stays
+      put behind everything while scrolling) but composites on the GPU
+      properly instead of falling back to the slower path. Added
+      `will-change: transform` to `.card` alongside it so each card
+      composites independently. Zero visual/design change — confirmed
+      by the user after testing on the live site ("much much better").
+
+## v1.22.2 — Fix Alerts panel: truncated fix suggestions, row alignment
+
+- [x] Root cause of the truncated "Suggested fix" text (would cut off
+      mid-word, e.g. "...temporarily bans an"): `lib/cliproxyClient.js`'s
+      `complete()` capped every suggest-fix completion at 300 tokens, but
+      the prompt's own "2-4 concise sentences" instruction doesn't reliably
+      hold — a genuinely compliant, detailed technical answer can already
+      run close to that cap on its own. Raised to 500 tokens, and added a
+      `trimToLastSentence()` safety net (new, tested) that trims back to
+      the last complete sentence on the rare response that still hits the
+      cap, using Anthropic's own `stop_reason: "max_tokens"` so it only
+      ever fires on a genuine truncation.
+- [x] Found and fixed a real bug in that safety net during testing:
+      `lastIndexOf('. ')` requires a trailing space after the period, which
+      misses the *final* sentence of an already-complete response (nothing
+      follows its closing period) — would have silently dropped the last
+      sentence of every properly-terminated suggestion. Rewrote using a
+      regex requiring punctuation followed by whitespace or end-of-string.
+- [x] Fixed `.pending-row`'s default `align-items: center` pinning the
+      Suggest fix/Dismiss buttons to the vertical middle of a much taller
+      wrapped-paragraph alert instead of the top — scoped the fix to
+      `#alerts-body` specifically so Wanted/Missing and other lists that
+      share `.pending-row` (correctly centered for their single-line
+      content) aren't affected.
+- [x] The Suggest fix button now relabels to "Refresh suggestion" once a
+      suggestion is already showing, instead of silently staying labeled
+      "Suggest fix" right next to a suggestion that's already there.
+- [x] Verified live against the exact real alert that surfaced this
+      (`sonarr:log-triage`, a qBittorrent 409 auth issue) — the real
+      completion now ends cleanly on a full sentence with proper
+      punctuation, confirmed via direct in-container call, not just tests.
+
+## v1.23.0 — Suggest-fix: numbered steps + copy button
+
+- [x] `routes/alerts.js`'s `FIX_PROMPTS` now request a bare numbered list
+      (2-4 steps, one per line, nothing before or after) instead of "2-4
+      concise sentences" — a wall of prose read poorly as something to
+      actually follow while working through a fix by hand.
+- [x] New `parseFixSteps()` in `admin.js` turns that into a real `<ol>`,
+      stripping the model's own "1. "/"2. " prefixes since the list
+      element numbers them; falls back to one step per line (or the whole
+      text as a single step) if the model doesn't perfectly comply, so
+      nothing is ever silently dropped for a format miss.
+- [x] `lib/cliproxyClient.js`'s truncation safety net reworked for the new
+      line-based format: `trimIncompleteTrailingStep()` drops the whole
+      trailing line unconditionally on a genuine truncation
+      (`stop_reason: "max_tokens"`), rather than trying to find a sentence
+      boundary inside a line that's already known to be untrustworthy.
+- [x] New Copy button next to each suggestion — copies a plain numbered
+      list to the clipboard so the steps are easy to reference while
+      you're actually in Sonarr/qBittorrent's settings doing them. Fails
+      quiet (no alert) if the Clipboard API is unavailable — the steps are
+      still right there on screen to select manually.
+- [x] Verified live against the real `sonarr:log-triage` alert: raw
+      completion came back as a clean 4-line numbered list, parsed
+      correctly into 4 discrete steps with no leftover numbering.
+- [x] Deliberately scoped out for now (contemplating separately): any
+      "auto fix" action that would let the agent actually execute a
+      suggested step — current design stays strictly read-only/manual.
+
+## v1.24.0 — One safe, one-click action: test download client connection
+
+- [x] Resolves the auto-fix-vs-manual-fix question from earlier: no
+      Docker socket access exists or was added (that would let this app
+      control arbitrary containers on the host — a much bigger surface
+      than anything else in this app). Instead, the only "auto action"
+      offered is a genuinely safe, reversible, read-only one: testing a
+      Sonarr/Radarr download client's connection via *arr's own `/test`
+      API — the same call its own UI's "Test" button makes. Never mutates
+      anything; a failed test changes no saved configuration.
+- [x] New `lib/downloadClientTest.js` — `matchDownloadClient()` is a pure,
+      deterministic string match against the alert's own already-known
+      title/detail text, checked against Sonarr/Radarr's *actually
+      currently configured* download clients. Never LLM-driven — the
+      model's suggestion text has zero influence over what action gets
+      offered, only the alert's own persisted fields do.
+- [x] `POST /:key/suggest-fix` now also returns an `action` alongside the
+      suggestion when one matches. New `POST /:key/actions/test-download-
+      client` re-derives the match from scratch server-side rather than
+      trusting anything client-supplied — worst case even a forged direct
+      call can only trigger a harmless connection test against one of the
+      owner's own already-configured clients.
+- [x] Verified against a real, live failure (not synthetic): qBittorrent
+      happened to be genuinely unreachable during testing (a real
+      ECONNRESET, unrelated to this feature) — the test correctly reported
+      `{ok: false, message: "Unable to connect to qBittorrent"}` with a
+      clean 200 response, not a crash. Also verified the success path
+      earlier against the real API directly. Full suggest-fix -> action
+      round trip confirmed end to end through the real mounted route.
+- [x] 5 new tests for `matchDownloadClient`'s matching logic (149/149
+      total passing).
+
+## v1.24.1 — Alert rows: app icon badges
+
+- [x] Alert rows now carry a colored app-monogram badge (SO/RA/PR/OV/DL,
+      each app's own real brand color) in the same leading-image slot
+      Wanted/Missing rows use for a poster — alerts have no media poster
+      of their own, so this fills that slot with something that still
+      identifies at a glance what the row is about.
+- [x] New `APP_ICONS`/`appIconInfo()` in `admin.js`, covering every `app`
+      value the alert pipeline actually reports (sonarr/radarr/prowlarr
+      from arr-health-watchdog.mjs, overseerr/downloads from
+      lib/issueWatchdog.js), with a graceful initials-based fallback for
+      anything unrecognized rather than a blank badge.
+- [x] Row structure/spacing was already shared with Wanted/Missing via the
+      same `.pending-row` class — this was the one piece actually missing
+      to make Alerts read the same way. Verified live against the real
+      open `sonarr:log-triage` alert.
+
+## v1.24.2 — Fix alert severity dot touching the title text
+
+- [x] `updateAlertRow` was setting the dot's `className` directly to
+      `alertSeverityDotClass()`'s result (e.g. `"state-dot warning"`),
+      which silently replaced the element's `alert-dot` class entirely —
+      the `.result-title .alert-dot { margin-right: 0.4rem }` spacing rule
+      never actually matched anything once JS ran, pinning the dot right
+      up against the title with no gap. Now preserves `alert-dot` alongside
+      the severity classes.
 
 ## Ideas

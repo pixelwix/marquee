@@ -22,14 +22,24 @@ body {
   color: var(--text);
   font-family: var(--body);
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Same gradients that used to live on body via background-attachment:fixed
+   — visually identical (stays put behind everything as you scroll), but a
+   genuine position:fixed layer composites on the GPU properly instead of
+   forcing the slower repaint path that background-attachment:fixed falls
+   back to in several desktop browsers. That was the main cause of desktop
+   scroll stutter — the 14+ backdrop-filter cards on the bento grid were
+   just the visible symptom, not the root cause. */
+.bg-fixed {
+  position: fixed; inset: 0; z-index: -1;
   background:
     radial-gradient(circle at 8% 12%, rgba(47,111,237,0.16), transparent 42%),
     radial-gradient(circle at 92% 8%, rgba(15,143,118,0.16), transparent 40%),
     radial-gradient(circle at 25% 90%, rgba(224,138,30,0.14), transparent 45%),
     radial-gradient(circle at 85% 85%, rgba(120,90,230,0.12), transparent 42%),
     var(--bg);
-  background-attachment: fixed;
-  -webkit-font-smoothing: antialiased;
 }
 
 .hidden { display: none !important; }
@@ -220,6 +230,15 @@ body {
   backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4);
   box-shadow: 0 16px 36px -22px rgba(20,25,35,0.28), inset 0 1px 0 rgba(255,255,255,0.5);
   display: flex; flex-direction: column;
+  /* The bento grid puts 14+ of these on screen at once on desktop (fewer
+     visible per screen on mobile's single-column stack), each independently
+     blurring what's behind it — without its own compositor layer, the
+     browser recalculates that blur across the whole stack together on every
+     scroll frame, which is what caused visible stutter. will-change hints
+     the browser to promote each card to its own layer up front so cards
+     composite independently and get cached between frames instead. Purely
+     a rendering hint — no visual change. */
+  will-change: transform;
 }
 .card-label {
   font-family: var(--mono); font-size: 0.72rem; color: var(--muted); letter-spacing: 0.02em;
@@ -550,6 +569,21 @@ body {
 .result-item { display: flex; gap: 0.85rem; padding: 0.65rem 0; align-items: center; cursor: pointer; }
 .result-item + .result-item { border-top: 1px solid rgba(20,25,35,0.08); }
 .result-poster { width: 42px; height: 60px; object-fit: cover; border-radius: 6px; background: #E2E6EC; }
+
+/* Alert rows have no media poster — this fills the same leading-image slot
+   with a colored app monogram instead, each app's own real brand color, so
+   a glance at the row tells you which app it's about. */
+.app-icon {
+  width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-weight: 700; font-size: 0.8rem; color: #fff; letter-spacing: -0.02em;
+}
+.app-icon.sonarr { background: linear-gradient(135deg, #4CD3F7, #1C9FD4); }
+.app-icon.radarr { background: linear-gradient(135deg, #FFCB4D, #E0A21E); }
+.app-icon.prowlarr { background: linear-gradient(135deg, #8A7CF0, #6C5CE7); }
+.app-icon.overseerr { background: linear-gradient(135deg, #7A7CF7, #5457E5); }
+.app-icon.downloads { background: linear-gradient(135deg, #5FA0E8, #2F67BA); }
+.app-icon.default { background: linear-gradient(135deg, #ABB2BC, #767C87); }
 .result-info { flex: 1; }
 .result-title { font-size: 0.87rem; font-weight: 600; }
 .result-title .alert-dot { margin-right: 0.4rem; }
@@ -656,6 +690,12 @@ body {
    in the row — pending requests and import issues only act on their explicit
    buttons. */
 #wanted-body .pending-row, #library-search-body .pending-row, #admin-issues-body .pending-row { cursor: pointer; }
+/* Alert rows can grow much taller than their action buttons once a fix
+   suggestion (a full paragraph) is showing — center alignment (the default
+   above) was pinning Suggest fix/Dismiss to the vertical middle of that
+   tall block instead of the top, which read as misaligned/broken. */
+#alerts-body .pending-row { align-items: flex-start; }
+#alerts-body .pending-actions { padding-top: 0.15rem; }
 
 /* "Request" — shown on the info modal when opened from a search/discover
    result (not yet in the library), so a title/poster click leads to details
@@ -683,6 +723,26 @@ body {
 /* Open issues admin rows — reuses .pending-row/.pending-requester/.pending-actions
    from the pending-requests section above; only the reported-message line is new. */
 .issue-message { font-size: 0.78rem; color: var(--text); margin-top: 0.3rem; font-style: italic; }
+
+/* Suggest-fix result — a short numbered list (see routes/alerts.js's
+   FIX_PROMPTS + admin.js's parseFixSteps), not prose, so it reads like an
+   actual checklist to follow rather than a paragraph to parse. */
+.fix-suggestion { margin-top: 0.5rem; padding: 0.6rem 0.75rem; background: rgba(224,138,30,0.08); border: 1px solid rgba(224,138,30,0.2); border-radius: 10px; }
+.fix-suggestion-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; }
+.fix-suggestion-label { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.02em; color: var(--amber); text-transform: uppercase; }
+.fix-suggestion .copy-fix-btn { width: 24px; height: 24px; font-size: 0.8rem; }
+.fix-steps { margin: 0; padding-left: 1.2rem; font-size: 0.78rem; color: var(--text); }
+.fix-steps li { margin: 0.15rem 0; }
+.fix-steps li + li { margin-top: 0.3rem; }
+
+/* The one deterministic one-click action (see routes/alerts.js's
+   findAction) — only ever a read-only connection test, never anything
+   that mutates config, so it sits right in the suggestion box rather than
+   needing its own confirm-dialog treatment. */
+.fix-action { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.55rem; padding-top: 0.55rem; border-top: 1px solid rgba(224,138,30,0.2); }
+.fix-action-result { font-size: 0.76rem; font-family: var(--mono); }
+.fix-action-result.ok { color: var(--teal); }
+.fix-action-result.error { color: var(--danger); }
 
 /* Release search modal (owner only) — list of indexer results for resolving
    an issue directly, without leaving the dashboard for Sonarr/Radarr. */

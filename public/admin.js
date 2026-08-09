@@ -383,15 +383,45 @@ function canSuggestFix(source) {
   return source === 'log-triage' || source === 'import';
 }
 
+// Alert rows carry no media poster (they're not about a movie/show), so the
+// same leading-image slot Wanted/Missing rows use for a poster instead gets
+// a colored app-monogram badge here — a glance at the row tells you which
+// app it's about without reading the text line. Colors are each app's own
+// real brand color, not picked arbitrarily. `app` values match exactly
+// what arr-health-watchdog.mjs/lib/issueWatchdog.js report (see
+// alertSourceLabel above) — 'default' below covers anything unrecognized
+// rather than rendering a blank badge.
+const APP_ICONS = {
+  sonarr: { label: 'SO', cls: 'sonarr' },
+  radarr: { label: 'RA', cls: 'radarr' },
+  prowlarr: { label: 'PR', cls: 'prowlarr' },
+  overseerr: { label: 'OV', cls: 'overseerr' },
+  downloads: { label: 'DL', cls: 'downloads' },
+};
+function appIconInfo(app) {
+  return APP_ICONS[app] || { label: (app || '?').slice(0, 2).toUpperCase(), cls: 'default' };
+}
+
 function createAlertRow(a) {
   const row = document.createElement('div');
   row.className = 'pending-row';
   row.innerHTML = `
+    <div class="app-icon"></div>
     <div class="result-info">
       <div class="result-title"><span class="alert-dot"></span><span class="alert-title-text"></span></div>
       <div class="pending-requester"><span class="requester-text"></span></div>
       <div class="issue-message hidden"></div>
-      <div class="fix-suggestion issue-message hidden"></div>
+      <div class="fix-suggestion hidden">
+        <div class="fix-suggestion-head">
+          <span class="fix-suggestion-label">Suggested fix</span>
+          <button class="copy-fix-btn pill-btn pill-btn-icon" type="button" title="Copy steps"><span class="btn-label">⧉</span></button>
+        </div>
+        <ol class="fix-steps"></ol>
+        <div class="fix-action hidden">
+          <button class="test-download-client-btn pill-btn" type="button"><span class="btn-label"></span></button>
+          <span class="fix-action-result"></span>
+        </div>
+      </div>
     </div>
     <div class="pending-actions">
       ${canSuggestFix(a.source) ? '<button class="suggest-fix-btn pill-btn"><span class="btn-label">Suggest fix</span></button>' : ''}
@@ -401,9 +431,30 @@ function createAlertRow(a) {
   return row;
 }
 
+// Parses routes/alerts.js's requested "1. ...\n2. ..." format into discrete
+// steps for a real <ol>, stripping the leading numbering (the <ol> itself
+// numbers them). Falls back to one step per non-empty line if the model
+// didn't number them, and to the whole text as a single step if it came
+// back as one unbroken paragraph — never silently drops content just
+// because the format wasn't followed exactly.
+function parseFixSteps(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const steps = lines.map(l => l.replace(/^\d+[.)]\s*/, '')).filter(Boolean);
+  return steps.length ? steps : [text.trim()];
+}
+
 function updateAlertRow(row, a) {
   row.dataset.key = a.key;
-  row.querySelector('.alert-dot').className = alertSeverityDotClass(a.severity);
+  const icon = appIconInfo(a.app);
+  const iconEl = row.querySelector('.app-icon');
+  iconEl.className = `app-icon ${icon.cls}`;
+  iconEl.textContent = icon.label;
+  // Preserve the alert-dot class alongside the severity classes — setting
+  // className to just alertSeverityDotClass()'s result was silently
+  // wiping it out, which broke .result-title .alert-dot's margin-right
+  // rule (it never matched anything once this ran) and pinned the dot
+  // right up against the title text with no gap.
+  row.querySelector('.alert-dot').className = `alert-dot ${alertSeverityDotClass(a.severity)}`;
   row.querySelector('.alert-title-text').textContent = a.title;
   row.querySelector('.requester-text').textContent =
     `${a.app} · ${alertSourceLabel(a.source)} · ${timeAgo(a.lastSeenAt)}`;
@@ -429,7 +480,74 @@ async function loadAlerts() {
   }
 }
 
+// Renders the parsed steps into the <ol>, and stashes a plain-text version
+// (numbered, one per line) on the container for the copy button to read —
+// simpler than re-deriving it from the rendered <li> text at copy time.
+// `action` (from suggest-fix's response) is the one narrow, deterministic
+// case where a one-click button is offered instead of a manual step — see
+// routes/alerts.js's findAction for why this is safe to offer at all.
+function renderFixSteps(fixEl, steps, { copyable, action = null }) {
+  fixEl.querySelector('.fix-steps').innerHTML = steps.map(s => `<li>${escapeHtml(s)}</li>`).join('');
+  fixEl.dataset.plainText = copyable ? steps.map((s, i) => `${i + 1}. ${s}`).join('\n') : '';
+  fixEl.querySelector('.copy-fix-btn').classList.toggle('hidden', !copyable);
+
+  const actionEl = fixEl.querySelector('.fix-action');
+  const resultEl = actionEl.querySelector('.fix-action-result');
+  resultEl.textContent = '';
+  resultEl.className = 'fix-action-result';
+  if (action?.type === 'test-download-client') {
+    actionEl.querySelector('.test-download-client-btn').querySelector('.btn-label').textContent = `Test ${action.clientName} Connection`;
+    actionEl.classList.remove('hidden');
+  } else {
+    actionEl.classList.add('hidden');
+  }
+
+  fixEl.classList.remove('hidden');
+}
+
 document.getElementById('alerts-body').addEventListener('click', async e => {
+  const copyBtn = e.target.closest('.copy-fix-btn');
+  if (copyBtn) {
+    const fixEl = copyBtn.closest('.fix-suggestion');
+    try {
+      await navigator.clipboard.writeText(fixEl.dataset.plainText || '');
+      const label = copyBtn.querySelector('.btn-label');
+      const prev = label.textContent;
+      label.textContent = '✓';
+      setTimeout(() => { label.textContent = prev; }, 1200);
+    } catch (err) {
+      // Clipboard API can be denied (permissions, non-HTTPS context, etc.) —
+      // the steps are still right there on screen to select manually, so
+      // this fails quiet rather than showing an alert for a non-critical
+      // convenience action.
+    }
+    return;
+  }
+
+  const testBtn = e.target.closest('.test-download-client-btn');
+  if (testBtn) {
+    const row = testBtn.closest('.pending-row');
+    const resultEl = testBtn.closest('.fix-action').querySelector('.fix-action-result');
+    const label = testBtn.querySelector('.btn-label');
+    const prevLabel = label.textContent;
+    testBtn.disabled = true;
+    label.textContent = 'Testing…';
+    resultEl.textContent = '';
+    resultEl.className = 'fix-action-result';
+    try {
+      const result = await api(`/api/alerts/${encodeURIComponent(row.dataset.key)}/actions/test-download-client`, { method: 'POST' });
+      resultEl.textContent = result.ok ? '✓ Connected' : `✗ ${result.message || 'Connection failed'}`;
+      resultEl.className = `fix-action-result ${result.ok ? 'ok' : 'error'}`;
+    } catch (err) {
+      resultEl.textContent = `✗ ${err.message || 'Could not run the test'}`;
+      resultEl.className = 'fix-action-result error';
+    } finally {
+      testBtn.disabled = false;
+      label.textContent = prevLabel;
+    }
+    return;
+  }
+
   const suggestBtn = e.target.closest('.suggest-fix-btn');
   if (suggestBtn) {
     const row = suggestBtn.closest('.pending-row');
@@ -437,15 +555,17 @@ document.getElementById('alerts-body').addEventListener('click', async e => {
     suggestBtn.disabled = true;
     suggestBtn.querySelector('.btn-label').textContent = 'Thinking…';
     try {
-      const { suggestion } = await api(`/api/alerts/${encodeURIComponent(row.dataset.key)}/suggest-fix`, { method: 'POST' });
-      fixEl.textContent = `Suggested fix: ${suggestion}`;
-      fixEl.classList.remove('hidden');
+      const { suggestion, action } = await api(`/api/alerts/${encodeURIComponent(row.dataset.key)}/suggest-fix`, { method: 'POST' });
+      renderFixSteps(fixEl, parseFixSteps(suggestion), { copyable: true, action });
     } catch (err) {
-      fixEl.textContent = 'Could not get a suggestion right now.';
-      fixEl.classList.remove('hidden');
+      renderFixSteps(fixEl, ['Could not get a suggestion right now.'], { copyable: false });
     } finally {
       suggestBtn.disabled = false;
-      suggestBtn.querySelector('.btn-label').textContent = 'Suggest fix';
+      // Once a suggestion is showing, relabel so the button reads as "get a
+      // different one" rather than looking like it was never clicked —
+      // previously stayed "Suggest fix" even with a suggestion already
+      // filled in right next to it.
+      suggestBtn.querySelector('.btn-label').textContent = fixEl.classList.contains('hidden') ? 'Suggest fix' : 'Refresh suggestion';
     }
     return;
   }
