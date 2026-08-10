@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.24.2.**
+v1.24.4.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1462,5 +1462,61 @@ forgotten.
       never actually matched anything once JS ran, pinning the dot right
       up against the title with no gap. Now preserves `alert-dot` alongside
       the severity classes.
+
+## v1.24.3 — Fix Alerts action buttons overflowing off-screen on mobile
+
+- [x] `.pending-row` never wraps by default, so on a phone-width viewport
+      the Suggest fix/Refresh suggestion + Dismiss buttons (and, since
+      v1.24.0, the Test Connection button) had nowhere left to go next to
+      the icon and title and were simply overflowing off the right edge
+      of the screen instead of dropping to their own line.
+- [x] Scoped to `#alerts-body` specifically (same scoping already used for
+      the row-alignment fix) rather than touching `.pending-row` globally,
+      so Wanted/Missing and other lists sharing that class are unaffected.
+      Under 900px, the row wraps and the action buttons take a full-width
+      second line, indented to line up under the title text rather than
+      the icon.
+
+## v1.24.4 — Fix container running in UTC instead of local time
+
+- [x] Root cause of "Airing Today shows tomorrow's episodes before
+      midnight": the container had no `TZ` set at all, defaulting to UTC —
+      confirmed live, the container's own clock was reporting Aug 9 04:21
+      UTC while it was actually Aug 8 23:21 CDT, a full calendar day
+      ahead. `routes/sonarr.js`'s `localDateString()` uses JS's local-time
+      getters (`getFullYear`/`getMonth`/`getDate`), which follow whatever
+      timezone the container itself is set to — not the user's actual
+      location — so "today" was being computed a day early every night
+      after ~7pm Central.
+- [x] Fixed at the source: added `TZ=America/Chicago` to the container's
+      environment in docker-compose.yml (matching the same timezone
+      already used for Kometa's own scheduler in this deployment) rather
+      than patching the date logic itself — this fixes "today" everywhere
+      it's computed server-side, not just Airing Today specifically.
+- [x] Verified live: container's own clock now reports the correct local
+      time and `localDateString(new Date())` returns the correct calendar
+      date, confirmed against real wall-clock time at the moment of the fix.
+
+## v1.24.5 — Add pull-to-refresh for the installed PWA
+
+- [x] Standalone/installed PWAs lose the browser's native pull-to-refresh
+      gesture entirely — it's chrome-level behavior tied to the address
+      bar, which disappears once the app runs without browser UI. The
+      dashboard's own data already refreshes on its own timers, but
+      there was no manual "pull down to force it now" gesture once
+      installed.
+- [x] Added `public/pull-to-refresh.js`: a small vanilla-JS touch handler,
+      gated to only attach in standalone mode (checks
+      `display-mode: standalone`), so it never doubles up with a normal
+      browser tab's native gesture. Wired to a new `refreshDashboard()`
+      in app.js, which re-runs everything `showDashboard()` loads minus
+      the one-time setup calls (`connectNowPlayingStream()` opens its own
+      persistent EventSource — calling it again would open a second one).
+- [x] Verified live: no console errors on load, and the touch-pull mechanics
+      themselves confirmed correct via synthetic touch events (bypassing the
+      standalone-mode gate) — threshold detection, ready-state, and the
+      release correctly triggering `refreshDashboard()` (Sleeper's own
+      `refreshLive()` equivalent) — all checked directly against the
+      deployed script.
 
 ## Ideas

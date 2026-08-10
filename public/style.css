@@ -697,6 +697,18 @@ body {
 #alerts-body .pending-row { align-items: flex-start; }
 #alerts-body .pending-actions { padding-top: 0.15rem; }
 
+/* On a phone-width viewport, Suggest fix/Refresh suggestion + Dismiss
+   together are wider than the row has space left for next to the icon and
+   title — .pending-row never wraps by default, so those buttons were
+   simply overflowing off the right edge of the screen instead of dropping
+   to their own line. .result-info's flex:1 already claims the row's full
+   remaining width on its own line, so enabling wrap here is what actually
+   pushes .pending-actions onto a second line instead of off-screen. */
+@media (max-width: 900px) {
+  #alerts-body .pending-row { flex-wrap: wrap; }
+  #alerts-body .pending-actions { width: 100%; padding-top: 0.6rem; padding-left: calc(42px + 0.85rem); }
+}
+
 /* "Request" — shown on the info modal when opened from a search/discover
    result (not yet in the library), so a title/poster click leads to details
    first rather than committing to a request immediately. */
@@ -895,3 +907,18 @@ body {
 .settings-toggle input:checked + .settings-toggle-slider { background: var(--teal); }
 .settings-toggle input:checked + .settings-toggle-slider::before { transform: translateX(18px); }
 .settings-toggle input:disabled + .settings-toggle-slider { opacity: 0.5; cursor: not-allowed; }
+
+/* Pull to refresh (standalone PWA only — see pull-to-refresh.js) */
+#ptr-indicator {
+  position: fixed; top: 0; left: 50%; width: 36px; height: 36px;
+  margin-left: -18px; margin-top: -44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--card); border: 1px solid var(--card-border); color: var(--muted);
+  backdrop-filter: blur(12px);
+  z-index: 999; pointer-events: none; opacity: 0;
+  transition: margin-top 0.2s ease, opacity 0.2s ease, color 0.2s ease;
+}
+#ptr-indicator.ptr-ready { color: var(--teal); border-color: var(--teal); }
+#ptr-indicator.ptr-spinning svg { animation: ptr-spin 0.8s linear infinite; }
+@keyframes ptr-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #ptr-indicator.ptr-spinning svg { animation: none; } }

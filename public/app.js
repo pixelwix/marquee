@@ -100,6 +100,23 @@ function showDashboard(owner) {
   document.getElementById('admin-link-btn').classList.toggle('hidden', !isOwner);
 }
 
+// Re-runs everything showDashboard() loads, minus the one-time setup calls —
+// connectNowPlayingStream() opens its own persistent EventSource (calling it
+// again would open a second one), and startPlexUptime()/setInterval belong to
+// timers that already run on their own cadence. Used by pull-to-refresh.js.
+function refreshDashboard() {
+  return Promise.all([
+    loadNotice(),
+    loadHeroBanners(),
+    loadRecentlyWatched(),
+    loadTopOfMonth(),
+    loadRecentlyAdded(),
+    loadAiringToday(),
+    loadUpcoming(),
+    loadDownloads(),
+  ]);
+}
+
 function setHeroDate() {
   const now = new Date();
   document.getElementById('date-num').textContent = now.getDate();
