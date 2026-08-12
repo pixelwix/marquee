@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.24.4.**
+v1.26.1.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1518,5 +1518,85 @@ forgotten.
       release correctly triggering `refreshDashboard()` (Sleeper's own
       `refreshLive()` equivalent) — all checked directly against the
       deployed script.
+
+## v1.25.0 — "Search All" for Wanted/Missing
+
+- [x] Added a **Search All** button next to the Wanted/Missing subhead
+      (CH.09 Family) that triggers Radarr's/Sonarr's own automatic search
+      — the same action their native "Search All Missing" buttons trigger
+      — for every item currently on the list, instead of the existing
+      per-row Search button's interactive release-search modal (still
+      there, unchanged, for reviewing candidates on one item at a time).
+- [x] `lib/radarrClient.js`/`lib/sonarrClient.js`: `fetchMissingMovies`/
+      `fetchMissingEpisodes` now also carry through the item's own
+      Radarr/Sonarr internal id (distinct from tmdbId/tvdbId), and new
+      `searchMissingMovies`/`searchMissingEpisodes` POST Radarr's/
+      Sonarr's `/api/v3/command` (`MoviesSearch`/`EpisodeSearch`) — lets
+      Radarr/Sonarr pick releases per their own real quality-profile/
+      indexer rules instead of this app re-implementing that logic.
+- [x] New `POST /api/owner/wanted/search-all` (`routes/owner.js`)
+      re-fetches the Wanted/Missing list itself server-side rather than
+      trusting ids from the client, so it always searches what's
+      actually still missing right now. One service being unreachable
+      doesn't block the other. Logged to the audit trail like other
+      owner bulk actions (db backup, cache flush).
+- [x] Fires the search and returns immediately — doesn't wait for
+      Radarr/Sonarr to finish (same as their own native buttons); the
+      existing 60s Wanted/Missing auto-refresh picks up whatever gets
+      grabbed and imported on its own.
+- [x] Verified live against the real Radarr/Sonarr instances (bypassing
+      HTTP/auth, direct function calls): 13 missing movies + 30 missing
+      episodes found, 100% of ids resolved correctly, both
+      `MoviesSearch`/`EpisodeSearch` commands dispatched successfully.
+      Confirmed the new route is registered and gated by the same
+      auth/CSRF-origin middleware stack as every other owner POST route
+      (401/403 behavior matches `media-cache/flush`). All 144 existing
+      tests still pass.
+
+## v1.26.0 — "Dismiss All" for Alerts
+
+- [x] Added a **Dismiss All** button next to the Stack Health subhead
+      (CH.08 Alerts), same placement pattern as v1.25.0's Search All
+      button. Confirmed before running (`confirmDialog`) — unlike Search
+      All, which is purely additive, this hides real still-open problems
+      from view, so a misclick has a real cost.
+- [x] `lib/alerts.js`: new `acknowledgeAll()` — bulk version of the
+      existing single-alert `acknowledge()`, same soft-dismiss semantics
+      (sets `acknowledged_at`, never deletes the row). A dismissed alert
+      still reappears on its own through the normal `reconcile()` path
+      if the same problem escalates or gets reopened later.
+- [x] New `POST /api/alerts/dismiss-all` (`routes/alerts.js`), scoped
+      exactly like `listOpen()` reads (`status='open' AND
+      acknowledged_at IS NULL`) so it only ever touches what's actually
+      showing right now.
+- [x] No new tests — `acknowledgeAll()` is a direct DB-mutating function,
+      same (untested) category as `acknowledge()` itself; the pure
+      `planReconciliation()` this all ultimately feeds into is already
+      covered in `test/alerts.test.js`. All 144 existing tests still pass.
+
+## v1.26.1 — Fix: "Suggest fix" now tries a free local model before Claude
+
+`lib/cliproxyClient.js` (the owner-triggered "Suggest fix" button, CH.08
+Alerts) had a single provider tier — any CLIProxyAPI/Claude hiccup meant
+the button just failed. Same pattern already shipped for
+`arr-health-watchdog.mjs`'s log-triage: try a free local model
+(qwen2.5:7b-instruct on a Mac mini's Ollama, reached through CLIProxyAPI's
+OpenAI-compat passthrough) first, fall back to Claude only if that fails.
+
+- [x] New `completeWithOllama()` / `completeWithClaude()`, split out of
+      the old single `complete()` body. `complete()` tries Ollama first,
+      falls through to Claude on any failure (network error, empty
+      response). Same truncation safety net on both paths — Ollama's
+      `finish_reason === 'length'` mirrors Claude's `stop_reason ===
+      'max_tokens'` check already in place.
+- [x] New `OLLAMA_PROXY_URL`/`OLLAMA_MODEL` in `.env` (not committed).
+- [x] Verified live: a real completion via Ollama, and (with
+      `OLLAMA_PROXY_URL` forced unreachable) a real fallthrough to Claude
+      producing a correct suggestion. All 4 existing
+      `test/cliproxyClient.test.js` tests still pass unchanged — they only
+      cover `trimIncompleteTrailingStep`, not the network path.
+- [x] No WebSearch/tool-calling involved on either path (this button
+      never had any), so this is a straightforward reliability upgrade,
+      not a quality tradeoff like the Sleeper injury-advisor fallback.
 
 ## Ideas

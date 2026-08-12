@@ -12,8 +12,8 @@ const mediaCache = require('../lib/mediaCache');
 const mediaStorage = require('../lib/mediaStorage');
 const { shortestLabelRows, combinedLabelRows } = require('../lib/diskspace');
 const { annotateAndSort } = require('../lib/stuckRequests');
-const { fetchMissingMovies } = require('../lib/radarrClient');
-const { fetchMissingEpisodes } = require('../lib/sonarrClient');
+const { fetchMissingMovies, searchMissingMovies } = require('../lib/radarrClient');
+const { fetchMissingEpisodes, searchMissingEpisodes } = require('../lib/sonarrClient');
 const router = express.Router();
 
 router.get('/status', requireAuth, requireOwner, async (req, res) => {
@@ -111,6 +111,35 @@ router.get('/wanted', requireAuth, requireOwner, async (req, res) => {
     settle('sonarr wanted', fetchMissingEpisodes(), [])
   ]);
   res.json(annotateAndSort([...movies, ...episodes]));
+});
+
+// Triggers Radarr's/Sonarr's own automatic search — the same action their own
+// native "Search All Missing" buttons trigger — for every item currently on
+// the Wanted/Missing list, rather than the per-row "Search" button above
+// (which opens the interactive release-search modal for one item at a time).
+// Re-fetches the list itself server-side instead of trusting ids from the
+// client, so this always searches what's actually still missing right now,
+// not a possibly-stale client-side snapshot. One service being unreachable
+// doesn't block the other (settle), so a Sonarr hiccup still lets movies search.
+router.post('/wanted/search-all', requireAuth, requireOwner, async (req, res) => {
+  const [movies, episodes] = await Promise.all([
+    settle('radarr wanted', fetchMissingMovies(), []),
+    settle('sonarr wanted', fetchMissingEpisodes(), [])
+  ]);
+  const movieIds = movies.map(m => m.id).filter(Number.isInteger);
+  const episodeIds = episodes.map(e => e.id).filter(Number.isInteger);
+
+  const [radarrOk, sonarrOk] = await Promise.all([
+    settle('radarr search-all', searchMissingMovies(movieIds), false),
+    settle('sonarr search-all', searchMissingEpisodes(episodeIds), false)
+  ]);
+
+  auditLog.record({ kind: 'admin', action: 'POST /api/owner/wanted/search-all', actorId: req.session.user.id,
+    actorName: req.session.user.username, success: radarrOk && sonarrOk, statusCode: 200,
+    detail: { movies: movieIds.length, episodes: episodeIds.length, radarrOk, sonarrOk }, ...auditLog.requestContext(req) })
+    .catch((err) => console.error('audit log write error:', err.message));
+
+  res.json({ movies: movieIds.length, episodes: episodeIds.length, radarrOk, sonarrOk });
 });
 
 // Prefers real physical-volume data read directly off MEDIA_MOUNT_DIR (see

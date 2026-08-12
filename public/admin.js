@@ -480,6 +480,25 @@ async function loadAlerts() {
   }
 }
 
+// Soft-dismisses every currently-open alert in one call (see lib/alerts.js's
+// acknowledgeAll) — confirmed first since, unlike Search All above, this
+// hides real still-open problems from view until something re-triggers them,
+// not a purely additive action.
+document.getElementById('dismiss-all-alerts-btn').addEventListener('click', async () => {
+  if (!await confirmDialog('Dismiss all open alerts? They’ll only reappear if the same problem is detected again.')) return;
+  const btn = document.getElementById('dismiss-all-alerts-btn');
+  btn.disabled = true;
+  try {
+    await api('/api/alerts/dismiss-all', { method: 'POST' });
+    document.getElementById('alerts-body').innerHTML = '<p class="empty-state">No open issues — stack is healthy.</p>';
+  } catch (err) {
+    // Leave whatever was on screen as-is — the next 30s poll will reconcile
+    // either way, so there's nothing useful to show inline here.
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // Renders the parsed steps into the <ol>, and stashes a plain-text version
 // (numbered, one per line) on the container for the copy button to read —
 // simpler than re-deriving it from the rendered <li> text at copy time.
@@ -1139,6 +1158,39 @@ async function loadWanted() {
     body.innerHTML = '<p class="empty-state">Could not load wanted/missing.</p>';
   }
 }
+
+// Triggers Radarr's/Sonarr's own automatic search for every item currently on
+// the list — not the interactive per-row Search button below, which opens the
+// release-search modal for one item. This just queues the search server-side
+// (same as clicking "Search All Missing" in Radarr/Sonarr's own UI) and
+// doesn't wait for it to finish, so the list itself won't visibly change right
+// away — the existing 60s auto-refresh above will pick up whatever Radarr/
+// Sonarr manage to grab and import on their own.
+document.getElementById('search-all-wanted-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('search-all-wanted-btn');
+  const status = document.getElementById('search-all-wanted-status');
+  btn.disabled = true;
+  status.classList.remove('hidden');
+  status.textContent = 'Starting search…';
+  try {
+    const { movies, episodes, radarrOk, sonarrOk } = await api('/api/owner/wanted/search-all', { method: 'POST' });
+    const total = movies + episodes;
+    if (!total) {
+      status.textContent = 'Nothing missing to search for.';
+    } else {
+      const parts = [];
+      if (movies) parts.push(`${movies} movie${movies === 1 ? '' : 's'}`);
+      if (episodes) parts.push(`${episodes} episode${episodes === 1 ? '' : 's'}`);
+      status.textContent = `Searching for ${parts.join(' and ')}…`;
+      if (!radarrOk) status.textContent += ' Radarr search failed to start.';
+      if (!sonarrOk) status.textContent += ' Sonarr search failed to start.';
+    }
+  } catch (e) {
+    status.textContent = `Failed: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // Clicking the Search button on a row goes straight to the release search, as
 // before; clicking anywhere else on the row shows poster/overview/release

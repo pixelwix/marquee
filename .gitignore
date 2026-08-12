@@ -11,3 +11,6 @@ npm-debug.log*
 # the Disk Space feature)
 lib/mediaStorage.js
 test/mediaStorage.test.js
+
+# hotfix backups (scp'd before deploys, never meant to be tracked)
+*.bak-*

@@ -90,6 +90,19 @@ router.post('/:key/dismiss', requireAuth, requireOwner, async (req, res) => {
   }
 });
 
+// Bulk version of the above for the admin panel's "Dismiss All" button —
+// soft-dismiss (acknowledged, not deleted), so anything that genuinely
+// escalates or reopens later still resurfaces on its own via reconcile().
+router.post('/dismiss-all', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const dismissed = await alerts.acknowledgeAll();
+    res.json({ status: 'ok', dismissed });
+  } catch (err) {
+    console.error('alerts dismiss-all error', err.message);
+    res.status(502).json({ error: 'Could not dismiss alerts' });
+  }
+});
+
 // Read-only diagnosis, never a fix applied automatically — a plain CLIProxyAPI
 // chat completion with no `tools` param, so this has zero ability to execute
 // anything against Sonarr/Radarr/Prowlarr/etc.; it only reasons over the alert's

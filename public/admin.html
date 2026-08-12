@@ -50,13 +50,20 @@
 
     <section class="card span4" id="panel-alerts">
       <div class="card-label"><span class="chan">CH.08</span> Alerts</div>
-      <h4 class="admin-subhead">Stack Health</h4>
+      <div class="settings-section-row">
+        <h4 class="admin-subhead">Stack Health</h4>
+        <button id="dismiss-all-alerts-btn" class="pill-btn"><span class="state-dot"></span>Dismiss All</button>
+      </div>
       <div id="alerts-body"><p class="empty-state">Loading…</p></div>
     </section>
 
     <section class="card span4" id="panel-admin">
       <div class="card-label"><span class="chan">CH.09</span> Family</div>
-      <h4 class="admin-subhead">Wanted / Missing</h4>
+      <div class="settings-section-row">
+        <h4 class="admin-subhead">Wanted / Missing</h4>
+        <button id="search-all-wanted-btn" class="pill-btn"><span class="state-dot"></span>Search All</button>
+      </div>
+      <p id="search-all-wanted-status" class="settings-status hidden"></p>
       <div id="wanted-body"><p class="empty-state">Loading…</p></div>
       <h4 class="admin-subhead">Pending requests</h4>
       <div id="admin-requests-body"><p class="empty-state">Loading…</p></div>
