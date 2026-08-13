@@ -263,11 +263,16 @@ router.post('/manual-import', requireAuth, requireOwner, async (req, res) => {
   }
 });
 
+// Changed 2026-08-13: used to removeFromClient+blocklist, which deleted the actual
+// file/torrent and prevented Radarr from ever grabbing that release again. Now just
+// clears Radarr's own queue view — the file/torrent itself is left completely alone
+// (same "don't delete, don't blocklist" decision already applied to
+// arr-reject-cleanup.mjs's automated handling of "not an upgrade" rejections).
 router.delete('/queue/:id', requireAuth, requireOwner, async (req, res) => {
   if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
   try {
     await axios.delete(`${process.env.RADARR_URL}/api/v3/queue/${req.params.id}`, {
-      params: { removeFromClient: true, blocklist: true },
+      params: { removeFromClient: false, blocklist: false },
       headers: { 'X-Api-Key': process.env.RADARR_API_KEY }
     });
     res.json({ status: 'removed' });

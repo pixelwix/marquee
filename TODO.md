@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.26.1.**
+v1.27.1.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1598,5 +1598,53 @@ OpenAI-compat passthrough) first, fall back to Claude only if that fails.
 - [x] No WebSearch/tool-calling involved on either path (this button
       never had any), so this is a straightforward reliability upgrade,
       not a quality tradeoff like the Sleeper injury-advisor fallback.
+
+## v1.27.0 — qbit-disk-guard alerts: full removed-file list, expand-on-click
+
+`qbit-disk-guard.mjs`'s Marquee alert only ever said "removed N torrents,"
+never which ones. Added a "See list" toggle (CH.08 Alerts), same
+expand-in-place pattern as Suggest fix, but purely local — the full list
+already arrives with the alert, no API round-trip needed.
+
+- [x] `qbit-disk-guard.mjs`: `detail` now carries the full (untruncated)
+      removed-file list after a `###FILES###` marker line — the always
+      -visible summary stays short, the marker section is parsed out
+      client-side. No alerts-table schema change (`detail` was already a
+      free TEXT column).
+- [x] `public/admin.js`: new `splitDetailAndFiles()` parses the marker;
+      alert rows unaffected by it (no marker present) render exactly as
+      before. New "See list" pill button + collapsed `<ul>` panel, styled
+      like `.fix-suggestion` but neutral-toned (`.alert-file-list-block`
+      in `style.css`) since this is informational, not a suggested fix.
+      Re-populates on every 30s poll but only forces the panel closed if
+      the file list disappears entirely — doesn't fight an already-open
+      panel shut on every poll.
+- [x] Verified: full 144-test suite still passes; a synthetic alert
+      ingested with a real `###FILES###` payload round-tripped correctly
+      through `lib/alerts.js` storage and back out; `splitDetailAndFiles()`
+      tested directly for both the marker and no-marker cases. Not
+      verified in an actual browser click-through this session (no
+      browser tooling available) — logic/plumbing confirmed, not a
+      pixel-level check.
+
+## v1.27.1 — Fix: Import Issues "Remove" no longer deletes the file or blocklists
+
+`routes/sonarr.js` and `routes/radarr.js`'s `DELETE /queue/:id` (the "Remove"
+button on the admin Import Issues panel) used `removeFromClient: true,
+blocklist: true` — clicking it deleted the actual downloaded file/torrent
+and permanently blocked Sonarr/Radarr from ever grabbing that release
+again. Neither was intended; the button was only meant to clear a stuck
+item off the queue view.
+
+- [x] Both routes now use `removeFromClient: false, blocklist: false` —
+      Remove only clears Sonarr/Radarr's own queue, the file/torrent is
+      left completely untouched, and the release can be grabbed again
+      later if it ever becomes relevant.
+- [x] Same "don't delete, don't blocklist" decision already applied
+      earlier this session to `arr-reject-cleanup.mjs`'s automated
+      handling of "not an upgrade" queue rejections — this keeps the
+      manual button and the automated path consistent.
+- [x] All 144 existing tests still pass unchanged (no test coverage for
+      this route's specific params either before or after).
 
 ## Ideas

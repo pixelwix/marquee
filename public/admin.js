@@ -411,6 +411,12 @@ function createAlertRow(a) {
       <div class="result-title"><span class="alert-dot"></span><span class="alert-title-text"></span></div>
       <div class="pending-requester"><span class="requester-text"></span></div>
       <div class="issue-message hidden"></div>
+      <div class="alert-file-list-block hidden">
+        <div class="alert-file-list-head">
+          <span class="alert-file-list-label"></span>
+        </div>
+        <ul class="alert-file-list"></ul>
+      </div>
       <div class="fix-suggestion hidden">
         <div class="fix-suggestion-head">
           <span class="fix-suggestion-label">Suggested fix</span>
@@ -424,6 +430,7 @@ function createAlertRow(a) {
       </div>
     </div>
     <div class="pending-actions">
+      <button class="see-list-btn pill-btn hidden" type="button"><span class="btn-label">See list</span></button>
       ${canSuggestFix(a.source) ? '<button class="suggest-fix-btn pill-btn"><span class="btn-label">Suggest fix</span></button>' : ''}
       <button class="dismiss-alert-btn pill-btn"><span class="btn-label">Dismiss</span></button>
     </div>
@@ -443,6 +450,21 @@ function parseFixSteps(text) {
   return steps.length ? steps : [text.trim()];
 }
 
+// Matches qbit-disk-guard.mjs's own FILES_MARKER exactly — the part of `detail`
+// before it is the always-visible summary, the part after is one file per line for
+// the collapsed "See list" panel. Any alert without the marker just has no file list
+// (fileNames comes back empty), which covers every other alert source unchanged.
+const FILES_MARKER = '\n###FILES###\n';
+function splitDetailAndFiles(detail) {
+  if (!detail) return { summary: '', fileNames: [] };
+  const idx = detail.indexOf(FILES_MARKER);
+  if (idx === -1) return { summary: detail, fileNames: [] };
+  return {
+    summary: detail.slice(0, idx),
+    fileNames: detail.slice(idx + FILES_MARKER.length).split('\n').filter(Boolean),
+  };
+}
+
 function updateAlertRow(row, a) {
   row.dataset.key = a.key;
   const icon = appIconInfo(a.app);
@@ -458,9 +480,27 @@ function updateAlertRow(row, a) {
   row.querySelector('.alert-title-text').textContent = a.title;
   row.querySelector('.requester-text').textContent =
     `${a.app} · ${alertSourceLabel(a.source)} · ${timeAgo(a.lastSeenAt)}`;
+  const { summary, fileNames } = splitDetailAndFiles(a.detail);
   const msgEl = row.querySelector('.issue-message');
-  if (a.detail) { msgEl.textContent = a.detail; msgEl.classList.remove('hidden'); }
+  if (summary) { msgEl.textContent = summary; msgEl.classList.remove('hidden'); }
   else msgEl.classList.add('hidden');
+
+  // This panel polls every 30s (see loadAlerts) — re-populate the list content every
+  // time (it can genuinely change between polls, e.g. a still-running cleanup), but
+  // only touch open/closed state when the list disappears entirely. Forcibly
+  // re-collapsing an already-open panel on every poll would fight anyone actually
+  // reading it.
+  const seeListBtn = row.querySelector('.see-list-btn');
+  const listBlock = row.querySelector('.alert-file-list-block');
+  if (fileNames.length) {
+    row.querySelector('.alert-file-list-label').textContent = `${fileNames.length} file${fileNames.length === 1 ? '' : 's'}`;
+    row.querySelector('.alert-file-list').innerHTML = fileNames.map(f => `<li>${escapeHtml(f)}</li>`).join('');
+    seeListBtn.classList.remove('hidden');
+    seeListBtn.querySelector('.btn-label').textContent = listBlock.classList.contains('hidden') ? 'See list' : 'Hide list';
+  } else {
+    seeListBtn.classList.add('hidden');
+    listBlock.classList.add('hidden');
+  }
 }
 
 async function loadAlerts() {
@@ -564,6 +604,17 @@ document.getElementById('alerts-body').addEventListener('click', async e => {
       testBtn.disabled = false;
       label.textContent = prevLabel;
     }
+    return;
+  }
+
+  const seeListBtn = e.target.closest('.see-list-btn');
+  if (seeListBtn) {
+    // Purely a local expand/collapse toggle — the full list already arrived with the
+    // alert (see splitDetailAndFiles), no API round-trip needed unlike Suggest fix.
+    const row = seeListBtn.closest('.pending-row');
+    const listBlock = row.querySelector('.alert-file-list-block');
+    listBlock.classList.toggle('hidden');
+    seeListBtn.querySelector('.btn-label').textContent = listBlock.classList.contains('hidden') ? 'See list' : 'Hide list';
     return;
   }
 
