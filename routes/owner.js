@@ -1,5 +1,4 @@
 const express = require('express');
-const axios = require('axios');
 const requireAuth = require('./requireAuth');
 const requireOwner = require('./requireOwner');
 const settle = require('../lib/settle');
@@ -9,8 +8,7 @@ const loginLog = require('../lib/loginLog');
 const auditLog = require('../lib/auditLog');
 const dbBackup = require('../lib/dbBackup');
 const mediaCache = require('../lib/mediaCache');
-const mediaStorage = require('../lib/mediaStorage');
-const { shortestLabelRows, combinedLabelRows } = require('../lib/diskspace');
+const diskSpaceHistory = require('../lib/diskSpaceHistory');
 const { annotateAndSort } = require('../lib/stuckRequests');
 const { fetchMissingMovies, searchMissingMovies } = require('../lib/radarrClient');
 const { fetchMissingEpisodes, searchMissingEpisodes } = require('../lib/sonarrClient');
@@ -148,29 +146,15 @@ router.post('/wanted/search-all', requireAuth, requireOwner, async (req, res) =>
 // have configured, not the NAS's actual storage pools. Falls back to the
 // Radarr/Sonarr diskspace API for deployments with no NAS mount available.
 router.get('/diskspace', requireAuth, requireOwner, async (req, res) => {
-  const fsVolumes = await mediaStorage.getVolumes();
-  if (fsVolumes.length) {
-    return res.json(combinedLabelRows(fsVolumes));
-  }
+  res.json(await diskSpaceHistory.getCurrentRows());
+});
 
-  // Radarr and Sonarr both report every mount point their own container
-  // sees — confirmed live that this setup has them sharing several (/,
-  // /config, /downloads/completed all report identical byte counts from
-  // both services, since they're the same underlying host volumes).
-  const [radarr, sonarr] = await Promise.all([
-    settle('radarr diskspace', axios.get(`${process.env.RADARR_URL}/api/v3/diskspace`, {
-      headers: { 'X-Api-Key': process.env.RADARR_API_KEY }
-    }).then(r => r.data), []),
-    settle('sonarr diskspace', axios.get(`${process.env.SONARR_URL}/api/v3/diskspace`, {
-      headers: { 'X-Api-Key': process.env.SONARR_API_KEY }
-    }).then(r => r.data), [])
-  ]);
-  const volumes = [...radarr, ...sonarr].map(d => ({
-    label: d.label || d.path,
-    totalBytes: d.totalSpace,
-    freeBytes: d.freeSpace
-  }));
-  res.json(shortestLabelRows(volumes));
+// Trend line + "days until full" projection per volume, from the hourly
+// snapshots lib/diskSpaceHistory.js has been recording — see that module
+// for why this reuses the exact same current-rows logic as /diskspace
+// above instead of a second copy.
+router.get('/diskspace/history', requireAuth, requireOwner, async (req, res) => {
+  res.json(await diskSpaceHistory.getHistoryWithProjection());
 });
 
 module.exports = router;

@@ -1014,14 +1014,65 @@ function diskDonut(usedPercent, danger) {
   `;
 }
 
+// Hand-rolled polyline, same reasoning as diskDonut above — no charting
+// dependency for one small shape. Free bytes over time, oldest to newest;
+// height-normalized to its own min/max rather than a shared scale, since
+// each volume's own trend shape (not its absolute size relative to others)
+// is what's worth seeing at a glance here.
+function diskSparkline(history) {
+  if (!history || history.length < 2) return '';
+  const width = 64;
+  const height = 18;
+  const values = history.map(h => h.freeBytes);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const points = history.map((h, i) => {
+    const x = (i / (history.length - 1)) * width;
+    const y = height - ((h.freeBytes - min) / range) * height;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg class="disk-sparkline" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none"><polyline points="${points}"></polyline></svg>`;
+}
+
+// null projection (see lib/diskspace.js's projectDaysUntilFull) covers both
+// "not enough history yet" and "flat/growing, nothing worth projecting" —
+// both render as nothing rather than a misleading number.
+function diskProjectionLabel(projection) {
+  if (!projection || projection.daysUntilFull == null) return '';
+  const d = projection.daysUntilFull;
+  if (d === 0) return { text: 'full now', level: 'danger' };
+  if (d > 365) return { text: '> 1 year left', level: '' };
+  const level = d < 14 ? 'danger' : d < 30 ? 'warning' : '';
+  return { text: `~${d} day${d === 1 ? '' : 's'} left`, level };
+}
+
 async function loadDiskSpace() {
   const body = document.getElementById('diskspace-body');
+  let disks;
   try {
-    const disks = await api('/api/owner/diskspace');
-    if (!disks.length) { body.innerHTML = '<p class="empty-state">No disk info available.</p>'; return; }
-    body.innerHTML = disks.map(d => {
-      const danger = d.usedPercent >= 90;
-      return `
+    disks = await api('/api/owner/diskspace');
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not load disk space.</p>';
+    return;
+  }
+  if (!disks.length) { body.innerHTML = '<p class="empty-state">No disk info available.</p>'; return; }
+
+  // Trend data is a bonus on top of the current-state rows above, not a
+  // requirement — a failure here still leaves a fully working panel.
+  let historyByLabel = {};
+  try {
+    historyByLabel = await api('/api/owner/diskspace/history');
+  } catch (e) {
+    // no trend data this poll; rows below just render without it
+  }
+
+  body.innerHTML = disks.map(d => {
+    const danger = d.usedPercent >= 90;
+    const trend = historyByLabel[d.path];
+    const sparkline = trend ? diskSparkline(trend.history) : '';
+    const projection = trend ? diskProjectionLabel(trend.projection) : '';
+    return `
       <div class="dl-row">
         ${diskDonut(d.usedPercent, danger)}
         <div class="dl-row-body">
@@ -1030,13 +1081,15 @@ async function loadDiskSpace() {
             <span class="state-dot ${danger ? 'danger' : ''}"></span>
             ${formatBytes(d.freeBytes)} free of ${formatBytes(d.totalBytes)} · ${d.usedPercent}% used
           </div>
+          ${sparkline || projection ? `
+          <div class="now-meta disk-trend">
+            ${sparkline}
+            ${projection ? `<span class="disk-projection${projection.level ? ' ' + projection.level : ''}">${projection.text}</span>` : ''}
+          </div>` : ''}
         </div>
       </div>
     `;
-    }).join('');
-  } catch (e) {
-    body.innerHTML = '<p class="empty-state">Could not load disk space.</p>';
-  }
+  }).join('');
 }
 
 // ---------- Stack: Seeding ----------

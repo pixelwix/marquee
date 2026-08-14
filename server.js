@@ -104,6 +104,7 @@ require('./lib/issueWatchdog').start();
 require('./lib/recapReminder').start();
 require('./lib/dbBackup').start();
 require('./lib/mediaCache').start();
+require('./lib/diskSpaceHistory').start();
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/plex', require('./routes/plex'));

@@ -287,6 +287,16 @@ body {
 .disk-donut-fill { fill: none; stroke: var(--amber); stroke-width: 3.5; stroke-linecap: round; transition: stroke-dasharray 0.3s ease; }
 .disk-donut-fill.danger { stroke: var(--danger); }
 
+/* Trend line under a volume's usual free/total row — sparkline shape only
+   (own min/max scale, see admin.js's diskSparkline), color carries no
+   state on its own; the projection label next to it does that. */
+.disk-trend { margin-top: 2px; }
+.disk-sparkline { width: 64px; height: 18px; flex-shrink: 0; }
+.disk-sparkline polyline { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.disk-projection { font-family: var(--mono); }
+.disk-projection.warning { color: var(--amber); }
+.disk-projection.danger { color: var(--danger); }
+
 /* Volumes side by side instead of stacked — a plain vertical list reads odd
    for just 2-3 items that aren't really a sequence. Wraps on narrow widths
    instead of the list-divider look .dl-row uses elsewhere (Download Queue/

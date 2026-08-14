@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.27.1.**
+v1.28.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1647,4 +1647,82 @@ item off the queue view.
 - [x] All 144 existing tests still pass unchanged (no test coverage for
       this route's specific params either before or after).
 
+## v1.28.0 — Disk Space trend: sparkline + "days until full" projection
+
+The Admin Stack panel's Disk Space section only ever showed a current
+snapshot — no way to tell whether a volume was steadily filling up or just
+temporarily tight. Added hourly history + a linear-regression projection,
+surfaced right in the existing panel.
+
+- [x] `lib/diskSpaceHistory.js` (new) — hourly in-process poller, same
+      `setInterval`-scheduler shape as `lib/issueWatchdog.js`/
+      `lib/recapReminder.js`/`lib/dbBackup.js` (this app has no external
+      cron to hook into). Owns its own `diskspace-history.sqlite`, same
+      one-file-per-concern convention as alerts/notice/sessions. 90-day
+      retention, pruned on every poll — trivial row count (~2160 rows per
+      volume) at that cadence.
+- [x] `getCurrentRows()` — the real-filesystem-first, Radarr/Sonarr-fallback
+      fetch logic that used to live inline in `routes/owner.js`'s
+      `GET /diskspace` moved here, so the live route and the periodic
+      poller read current disk space through the exact same path instead
+      of two copies that could drift apart. `routes/owner.js` now just
+      calls it.
+- [x] New `GET /api/owner/diskspace/history` — history + projection per
+      volume, keyed by the same combined/shortest label the current-state
+      route already uses (that labeling is already deterministic —
+      `combinedLabelRows` sorts before joining — so it's a stable join key
+      across snapshots).
+- [x] `lib/diskspace.js`: new pure `projectDaysUntilFull(history)` —
+      ordinary least-squares slope of free bytes over time rather than
+      just first-vs-last, so one noisy reading (a big torrent finishing
+      then moving off-volume, say) doesn't single-handedly swing the
+      projection. Returns `null` — not a misleading number — for fewer
+      than 2 samples, flat/growing space, or same-instant samples.
+- [x] `public/admin.js`/`style.css`: hand-rolled sparkline (`<polyline>`,
+      own min/max scale per volume) and a "~X days left" label under each
+      volume's existing free/total row, colored amber under 30 days, red
+      under 14. History fetch failing doesn't blank the panel — the
+      current-state rows it already had still render fine without a trend
+      line.
+- [x] Real bug caught and fixed during this build, not just theoretical:
+      `getDb()`'s `CREATE TABLE` immediately followed by a dependent
+      `CREATE INDEX` raced on the very first startup against a brand-new
+      file — no ordering guarantee between separate `db.run()` calls
+      without `db.serialize()` — and crashed the whole process (the
+      index's own uncallbacked `db.run()` had nowhere for its error to go
+      but an uncaught `'error'` event). Every other lazy-`getDb()` module
+      in this app (`alerts.js`, etc.) only ever issues one schema
+      statement, so none of them were exposed to this. Fixed with
+      `db.serialize()` plus error callbacks on both statements —
+      confirmed clean on a from-scratch file after the fix.
+- [x] Verified against live data, not just the test suite: `getCurrentRows()`/
+      `recordSnapshot()`/`getHistoryWithProjection()` run directly inside
+      the container against the real NAS volumes, correct real byte counts
+      and labels (`tv2`; `comics, movies, tv, workouts`; `anime2, tv3`).
+      Not verified in an actual logged-in browser session this session (no
+      credential entry into the app's own login — same boundary as every
+      other live-UI check this project has had) — logic/plumbing/live-data
+      confirmed, not a pixel-level check.
+- [x] 151 tests passing (was 144): `projectDaysUntilFull` covered for
+      too-few-samples, straight-line shrink, flat/growing, same-instant
+      samples, order-independence/noisy-sample robustness via least
+      squares, and the negative-days floor; `pruneOld` covered against a
+      temp sqlite dir, same shape as `dbBackup.test.js`. Deliberately not
+      unit-testing `getCurrentRows()`/`recordSnapshot()` themselves — same
+      scope split as the rest of this app's tests, live Radarr/Sonarr/
+      mediaStorage integration isn't mocked, it's checked live instead
+      (see the bullet above).
+
 ## Ideas
+
+- [ ] **Personalized "Because you watched X" recommendations.** Trending/
+      Discover is global (not-owned/not-requested, same for everyone);
+      Top of the Month and My Stats already do per-user Tautulli
+      aggregation, so the per-user watch data already exists. Take a
+      user's most recent (or most-watched-this-month) title, hit TMDB's
+      recommendations/similar endpoint for it, filter through the same
+      not-owned/not-requested logic Trending/Discover already has, surface
+      as a small strip. Open questions: where it lives (its own dashboard
+      panel vs. a tab inside the existing request modal near Trending/
+      Discover) and how many source titles feed it (just the last-watched
+      item vs. a blend of the last few).
