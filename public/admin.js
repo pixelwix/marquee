@@ -20,6 +20,8 @@
   // below) — loaded lazily on first view rather than eagerly here.
   loadAlerts();
   setInterval(loadAlerts, 30000);
+  loadOrigins();
+  setInterval(loadOrigins, 60000);
   loadWanted();
   setInterval(loadWanted, 60000);
   loadPendingRequests();
@@ -500,6 +502,83 @@ function updateAlertRow(row, a) {
   } else {
     seeListBtn.classList.add('hidden');
     listBlock.classList.add('hidden');
+  }
+}
+
+// Stream Origins — CH.11. Real data: lib/streamOrigins.js geoIP-resolves
+// each new session's ip_address_public locally (no external call) and
+// stores it, year-to-date, resetting every Jan 1. nowPlaying.js's own
+// mapSession() still never carries that field to the shared family
+// dashboard feed — this owner-only panel is the one place it's read.
+// Landmasses are soft blurred blobs, not real coastline paths — hand-placed
+// [cx, cy, rx, ry] against the same 720x360 equirectangular canvas the heat
+// points are projected onto, so they read as glassy/abstract background
+// context rather than a failed attempt at cartographic accuracy.
+const ORIGINS_LAND_BLOBS = [
+  [160, 100, 110, 55], [50, 54, 30, 22], [210, 70, 45, 35], [156, 140, 28, 18],
+  [240, 210, 42, 60], [224, 260, 20, 28], [390, 80, 38, 24], [396, 54, 16, 16],
+  [400, 170, 48, 48], [410, 230, 30, 26], [540, 70, 95, 38], [490, 124, 42, 24],
+  [550, 150, 42, 20], [580, 114, 38, 22], [516, 140, 20, 22], [630, 230, 38, 22]
+];
+
+function originsProject(lat, lon) {
+  return { x: (lon + 180) * 2, y: (90 - lat) * 2 };
+}
+
+function renderOrigins(locations) {
+  const body = document.getElementById('origins-body');
+  if (!locations.length) {
+    body.innerHTML = '<p class="empty-state">No streams recorded yet this year.</p>';
+    return;
+  }
+  const sorted = [...locations].sort((a, b) => b.pct - a.pct);
+  const maxPct = sorted[0].pct;
+
+  const land = ORIGINS_LAND_BLOBS
+    .map(([cx, cy, rx, ry]) => `<ellipse class="origins-land" cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" />`)
+    .join('');
+
+  const points = sorted.map((o, i) => {
+    const { x, y } = originsProject(o.lat, o.lon);
+    const coreR = 4 + (o.pct / maxPct) * 10;
+    const glowR = coreR * 2.4;
+    return `<g class="origins-heat-point${i === 0 ? ' is-top' : ''}">
+      <circle class="origins-heat-glow" cx="${x}" cy="${y}" r="${glowR}" />
+      <circle class="origins-heat-core" cx="${x}" cy="${y}" r="${coreR}" />
+    </g>`;
+  }).join('');
+
+  const legend = sorted.map((o, i) => `
+    <div class="origins-legend-row">
+      <span class="origins-legend-rank">${i + 1}</span>
+      <div class="origins-legend-main">
+        <div class="origins-legend-top-row">
+          <span class="origins-legend-place">${escapeHtml(o.place)}</span>
+          <span class="origins-legend-pct">${o.pct}%</span>
+        </div>
+        <div class="bar"><div class="bar-fill" style="width:${(o.pct / maxPct) * 100}%"></div></div>
+      </div>
+    </div>
+  `).join('');
+
+  body.innerHTML = `
+    <div class="origins-map-wrap">
+      <svg viewBox="0 0 720 360" role="img" aria-label="World map of stream origins">
+        <filter id="origins-blur"><feGaussianBlur stdDeviation="3" /></filter>
+        <g filter="url(#origins-blur)">${land}</g>
+        <g filter="url(#origins-blur)">${points}</g>
+      </svg>
+    </div>
+    ${legend}
+  `;
+}
+
+async function loadOrigins() {
+  const body = document.getElementById('origins-body');
+  try {
+    renderOrigins(await api('/api/owner/stream-origins'));
+  } catch (e) {
+    if (!body.children.length) body.innerHTML = '<p class="empty-state">Could not load stream origins.</p>';
   }
 }
 

@@ -685,6 +685,36 @@ body {
 }
 .admin-subhead:first-of-type { margin-top: 0; }
 
+.pill-note {
+  font-family: var(--mono); font-size: 0.62rem; color: var(--muted);
+  border: 1px solid rgba(20,25,35,0.12); background: rgba(20,25,35,0.04);
+  padding: 0.15rem 0.45rem; border-radius: 5px; letter-spacing: 0.02em;
+}
+
+/* Stream Origins world map — landmasses are soft blurred blobs (not real
+   coastline paths) so they read as glassy/abstract rather than a failed
+   attempt at cartographic accuracy, matching the same frosted-blob language
+   as the heat points sitting on top of them. */
+.origins-map-wrap { width: 100%; aspect-ratio: 2 / 1; margin-bottom: 0.9rem; }
+.origins-map-wrap svg { width: 100%; height: 100%; display: block; }
+.origins-land { fill: rgba(20,25,35,0.16); }
+.origins-heat-core { fill: var(--amber); }
+.origins-heat-glow { fill: var(--amber); opacity: 0.35; }
+.origins-heat-point.is-top .origins-heat-glow { animation: origins-pulse 2.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .origins-heat-point.is-top .origins-heat-glow { animation: none; } }
+@keyframes origins-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(1.12); }
+}
+
+.origins-legend-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.4rem 0; }
+.origins-legend-row + .origins-legend-row { border-top: 1px solid rgba(20,25,35,0.06); }
+.origins-legend-rank { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); width: 1.1rem; flex-shrink: 0; }
+.origins-legend-main { flex: 1; min-width: 0; }
+.origins-legend-top-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.origins-legend-place { font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.origins-legend-pct { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); flex-shrink: 0; }
+
 .login-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem 0; }
 .login-row + .login-row { border-top: 1px solid rgba(20,25,35,0.06); }
 .login-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #E2E6EC; flex-shrink: 0; }

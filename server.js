@@ -105,6 +105,7 @@ require('./lib/recapReminder').start();
 require('./lib/dbBackup').start();
 require('./lib/mediaCache').start();
 require('./lib/diskSpaceHistory').start();
+require('./lib/streamOrigins').start();
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/plex', require('./routes/plex'));

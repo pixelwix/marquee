@@ -1804,5 +1804,39 @@ Search/My Requests/My Stats.
       not Search.
 - [x] 151 tests still pass — same as v1.29.0, no new pure logic here either.
 
+## v1.30.0 — Admin: Stream Origins world map
+
+New CH.11 card on the admin page showing where streams have originated
+from this year, worldwide — sketched first as a static mock with sample
+data to nail the visual, then wired to the real thing.
+
+- [x] `lib/streamOrigins.js` (new): hooks into `nowPlaying.js`'s existing
+      Tautulli poll — whenever a session key wasn't in the previous cache
+      (a stream that just started), geoIP-resolves its
+      `ip_address_public` via `geoip-lite`'s own bundled database. No
+      external API call per stream, no data leaves the server just to
+      plot a dot. `nowPlaying.js`'s `mapSession()` still never carries
+      that field to the shared family dashboard feed — this owner-only
+      panel is the one place in the app that reads it.
+- [x] Calendar-year window, not a rolling one: `topLocations()` only
+      counts this year's rows, and `pruneOld()` (run daily) drops
+      everything before the current Jan 1. Computed from the current
+      date rather than hardcoded, so it resets on its own every New
+      Year's with no edit needed.
+- [x] New owner-gated route, `GET /api/owner/stream-origins`, returns
+      each distinct city's share of the year as a percentage — all the
+      math happens server-side, the client just renders it.
+- [x] World map is a set of hand-placed blurred landmass blobs, not real
+      coastline data — reads as glassy/abstract rather than a shaky
+      attempt at cartographic accuracy, and matches the same soft-blob
+      language as the amber heat points sitting on top of them (biggest/
+      brightest glow = most streams). Top origin gets a subtle pulse
+      (respects `prefers-reduced-motion`).
+- [x] Ranked legend below the map reuses the existing `.bar`/`.bar-fill`
+      component rather than inventing new UI.
+- [x] 155 tests pass, 4 new (`test/streamOrigins.test.js`): private/
+      missing IPs are skipped, a public IP resolves and records,
+      aggregation + percentage math, and year-boundary pruning.
+
 ## Ideas
 
