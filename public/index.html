@@ -151,6 +151,7 @@
     </div>
 
     <div class="modal-tabs">
+      <button id="tab-because-btn" class="modal-tab pill-btn"><span class="state-dot"></span>For You</button>
       <button id="tab-search-btn" class="modal-tab pill-btn active"><span class="state-dot"></span>Search</button>
       <button id="tab-myrequests-btn" class="modal-tab pill-btn"><span class="state-dot"></span>My Requests</button>
       <button id="tab-mystats-btn" class="modal-tab pill-btn"><span class="state-dot"></span>My Stats</button>
@@ -158,8 +159,6 @@
 
     <div id="search-tab">
       <input id="search-input" type="text" placeholder="Search a movie or show…" autocomplete="off">
-      <div id="because-label" class="discover-label hidden"></div>
-      <div id="because-results" class="search-results"></div>
       <div id="discover-label" class="discover-label">Trending &amp; new releases — not yet in your library</div>
       <div id="search-results" class="search-results"></div>
     </div>
@@ -170,6 +169,11 @@
 
     <div id="mystats-tab" class="hidden">
       <div id="mystats-body"><p class="empty-state">Loading…</p></div>
+    </div>
+
+    <div id="because-tab" class="hidden">
+      <div id="because-label" class="discover-label hidden"></div>
+      <div id="because-results" class="search-results"><p class="empty-state">Loading…</p></div>
     </div>
 
     <div id="season-picker" class="season-picker hidden">

@@ -814,7 +814,6 @@ function openRequestModal() {
   searchInput.value = '';
   searchInput.focus();
   loadDiscover();
-  loadBecauseYouWatched();
 }
 // Header icon button on desktop, floating button on mobile (see CSS) — both
 // trigger the same modal.
@@ -844,6 +843,7 @@ document.getElementById('close-modal-btn').addEventListener('click', () => {
 // so adding a new tab is just one more entry here rather than more pairwise
 // on/off toggling.
 const modalTabs = [
+  { btn: document.getElementById('tab-because-btn'), pane: document.getElementById('because-tab') },
   { btn: document.getElementById('tab-search-btn'), pane: document.getElementById('search-tab') },
   { btn: document.getElementById('tab-myrequests-btn'), pane: document.getElementById('myrequests-tab') },
   { btn: document.getElementById('tab-mystats-btn'), pane: document.getElementById('mystats-tab') }
@@ -856,13 +856,22 @@ function activateTab(btn) {
   }
 }
 
+let becauseLoaded = false;
 let myRequestsLoaded = false;
 let myStatsLoaded = false;
 
-modalTabs[0].btn.addEventListener('click', () => activateTab(modalTabs[0].btn));
+modalTabs[0].btn.addEventListener('click', () => {
+  activateTab(modalTabs[0].btn);
+  if (!becauseLoaded) {
+    becauseLoaded = true;
+    loadBecauseYouWatched();
+  }
+});
 
-modalTabs[1].btn.addEventListener('click', () => {
-  activateTab(modalTabs[1].btn);
+modalTabs[1].btn.addEventListener('click', () => activateTab(modalTabs[1].btn));
+
+modalTabs[2].btn.addEventListener('click', () => {
+  activateTab(modalTabs[2].btn);
   // Lazy-loaded on first visit to the tab, then left cached for the rest of
   // this modal session — requests don't change status fast enough to need
   // refetching every time the tab is reopened within the same visit.
@@ -872,8 +881,8 @@ modalTabs[1].btn.addEventListener('click', () => {
   }
 });
 
-modalTabs[2].btn.addEventListener('click', () => {
-  activateTab(modalTabs[2].btn);
+modalTabs[3].btn.addEventListener('click', () => {
+  activateTab(modalTabs[3].btn);
   if (!myStatsLoaded) {
     myStatsLoaded = true;
     loadMyStats();
@@ -947,33 +956,27 @@ async function loadDiscover() {
   }
 }
 
-// Personalized companion to Trending above — this user's own most recent
-// watch, run through Overseerr's recommendations endpoint, same not-owned/
-// not-requested filter. Renders nothing (not an empty-state message) when
-// there's no watch history yet or nothing new to suggest — this is a bonus
-// on top of Trending, not something that needs its own "nothing here" noise
-// the way the main Trending/search results panel does.
-let becauseCache = null;
+// Its own tab (For You) rather than a strip above Trending — personalized,
+// seeded by this user's own most recent watch via Overseerr's
+// recommendations endpoint, same not-owned/not-requested filter Trending
+// uses. Lazy-loaded on first visit to the tab, same pattern as My Requests/
+// My Stats below.
 async function loadBecauseYouWatched() {
-  if (becauseCache) { renderBecauseYouWatched(becauseCache); return; }
   try {
-    becauseCache = await api('/api/overseerr/recommendations');
+    renderBecauseYouWatched(await api('/api/overseerr/recommendations'));
   } catch (e) {
-    becauseCache = { seedTitle: null, items: [] };
+    renderBecauseYouWatched({ seedTitle: null, items: [] });
   }
-  renderBecauseYouWatched(becauseCache);
 }
 function renderBecauseYouWatched(rec) {
   const label = document.getElementById('because-label');
-  const results = document.getElementById('because-results');
   if (!rec.seedTitle || !rec.items.length) {
     label.classList.add('hidden');
-    results.classList.add('hidden');
+    renderSearchResults([], 'Watch a few things and check back — this fills in once there’s some recent history to go on.', 'because-results');
     return;
   }
   label.textContent = `Because you watched ${rec.seedTitle}`;
   label.classList.remove('hidden');
-  results.classList.remove('hidden');
   renderSearchResults(rec.items, '', 'because-results');
 }
 
@@ -981,10 +984,8 @@ let searchTimer;
 document.getElementById('search-input').addEventListener('input', e => {
   clearTimeout(searchTimer);
   const q = e.target.value.trim();
-  if (!q) { loadDiscover(); loadBecauseYouWatched(); return; }
+  if (!q) { loadDiscover(); return; }
   document.getElementById('discover-label').classList.add('hidden');
-  document.getElementById('because-label').classList.add('hidden');
-  document.getElementById('because-results').classList.add('hidden');
   searchTimer = setTimeout(async () => {
     try {
       const results = await api(`/api/overseerr/search?q=${encodeURIComponent(q)}`);
@@ -1036,11 +1037,12 @@ async function handleResultsClick(e, containerId, tabId) {
     badge: r.mediaType === 'tv' ? 'SERIES' : 'MOVIE',
     meta: r.year || '',
     overview: r.overview,
-    request: r
+    request: r,
+    tabId
   });
 }
 document.getElementById('search-results').addEventListener('click', e => handleResultsClick(e, 'search-results', 'search-tab'));
-document.getElementById('because-results').addEventListener('click', e => handleResultsClick(e, 'because-results', 'search-tab'));
+document.getElementById('because-results').addEventListener('click', e => handleResultsClick(e, 'because-results', 'because-tab'));
 
 // ---------- Season picker ----------
 // Shown in place of whichever tab triggered it — returnTabId remembers which
@@ -1123,7 +1125,7 @@ const infoModal = document.getElementById('info-modal');
 let infoReportRatingKey = null;
 let infoRequestItem = null; // the search/discover result the info modal is currently showing, if any
 
-function openInfo({ poster, title, badge, meta, overview, stream, ratingKey, request }) {
+function openInfo({ poster, title, badge, meta, overview, stream, ratingKey, request, tabId }) {
   const posterEl = document.getElementById('info-poster');
   posterEl.style.visibility = ''; // undo a previous onerror hide before loading the next poster
   posterEl.src = poster || '';
@@ -1143,7 +1145,9 @@ function openInfo({ poster, title, badge, meta, overview, stream, ratingKey, req
 
   // Shown when opened from a search/discover result — click the title/poster
   // for details first, then request from here instead of committing blind.
-  infoRequestItem = request || null;
+  // tabId travels along so a TV request from here knows which tab to return
+  // to when the season picker it opens gets closed (Search, For You, ...).
+  infoRequestItem = request ? { ...request, tabId } : null;
   const requestSection = document.getElementById('info-request-section');
   requestSection.classList.toggle('hidden', !request);
   if (request) {
@@ -1168,22 +1172,24 @@ function openInfo({ poster, title, badge, meta, overview, stream, ratingKey, req
 document.getElementById('info-request-btn').addEventListener('click', async () => {
   const btn = document.getElementById('info-request-btn');
   if (btn.disabled || !infoRequestItem) return;
-  const { id, mediaType, title } = infoRequestItem;
-  // Same title can appear in more than one list at once now (Trending and
-  // Because You Watched aren't mutually exclusive) — every matching row
-  // gets updated alongside this button so none of them go stale if the
-  // user doesn't close this modal right away.
+  const { id, mediaType, title, tabId } = infoRequestItem;
+  // The same title can be sitting rendered in more than one tab's results at
+  // once (Search and For You aren't mutually exclusive) even though only
+  // one is visible right now — every matching row gets updated so none of
+  // them go stale if the user switches tabs without closing this modal.
   const inlineBtns = [...document.querySelectorAll(`#search-results .request-btn[data-id="${id}"][data-type="${mediaType}"], #because-results .request-btn[data-id="${id}"][data-type="${mediaType}"]`)];
 
   if (mediaType === 'tv') {
     infoModal.classList.add('hidden');
     // This button can be reached from the info modal directly (e.g. the hero
     // banner tag), where the request modal was never opened at all — show it
-    // now so the season picker (which lives inside it) is actually visible,
-    // and return to the default Search tab rather than crashing on a
-    // returnTabId that was never passed for this entry point.
+    // now so the season picker (which lives inside it) is actually visible.
+    // tabId (threaded through from wherever this info modal was opened)
+    // is which tab to return to when the picker closes; the default Search
+    // tab covers every entry point that never passed one at all (the hero
+    // banner tag, Now Playing, etc.).
     modal.classList.remove('hidden');
-    openSeasonPicker(id, title, inlineBtns[0] || btn, 'search-tab');
+    openSeasonPicker(id, title, inlineBtns[0] || btn, tabId || 'search-tab');
     return;
   }
 

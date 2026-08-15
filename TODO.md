@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.29.0.**
+v1.29.1.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1769,6 +1769,40 @@ by each signed-in user's own most recent watch.
       `/discover`, which has never had its own test file either — only
       `mapDiscoverItem` itself is covered, and it's reused completely
       unchanged here. 151 tests still pass.
+
+## v1.29.1 — Fix: "Because you watched" moved to its own tab
+
+Shipped in v1.29.0 as a strip above the request modal's global Trending
+list; moved to its own "For You" tab instead — ordered first, ahead of
+Search/My Requests/My Stats.
+
+- [x] New `#tab-because-btn`/`#because-tab` pane, added to the existing
+      `modalTabs` array — the whole point of that array (per its own
+      comment) is that adding a tab is one more entry, not more pairwise
+      show/hide wiring, and that held up unchanged here. Search stays the
+      tab actually shown by default when the modal opens (unchanged) even
+      though For You now sits to its left.
+- [x] Lazy-loaded on first visit to the tab, same pattern as My Requests/
+      My Stats (`becauseLoaded` flag), rather than eagerly fetched
+      alongside Trending every time the modal opens.
+- [x] `#because-results` dropped the bounded-height/own-scroll CSS override
+      from v1.29.0 — that was specifically to keep it from fighting
+      Trending for space while they shared one pane; as its own tab it
+      just gets the same full-height `flex: 1` treatment as every other
+      tab's results list.
+- [x] Now shows a real empty-state message ("Watch a few things and check
+      back...") instead of rendering nothing when there's no history yet —
+      the right call flipped once this became a tab someone can
+      deliberately click into, rather than a bonus strip that was allowed
+      to just quietly not appear above a Trending list that was still full
+      either way.
+- [x] Fixed a real bug this surfaced: the info modal's "which tab to
+      return to when the season picker closes" was hardcoded to Search for
+      any TV request opened through it. Threaded the originating tab
+      through `openInfo`'s `request`/`infoRequestItem` instead, so
+      requesting a TV show from For You now correctly returns to For You,
+      not Search.
+- [x] 151 tests still pass — same as v1.29.0, no new pure logic here either.
 
 ## Ideas
 
