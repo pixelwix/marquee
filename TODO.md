@@ -1934,5 +1934,36 @@ aggregate now, not a live snapshot.
       `(referenceId, ip, at)` shape and idempotency, one for the
       migration path, plus a watermark read/write test.
 
+## v1.31.1 — Stream Origins: real coastlines instead of abstract blobs
+
+The world map background was a set of hand-placed blurred landmass
+ellipses, deliberately not real coastline data (see the original
+comment). Replaced with the real thing.
+
+- [x] New `public/originsWorldPath.js`: an SVG path built offline from
+      Natural Earth's public-domain 110m Admin 0 Countries GeoJSON,
+      projected through the exact same equirectangular formula the heat
+      points already used (`x=(lon+180)*2, y=(90-lat)*2` on the same
+      720x360 canvas) — no change needed to the point-placement math,
+      it was already geographically correct, just plotted against an
+      abstract background before.
+- [x] Simplified (Douglas-Peucker, ~0.35 unit tolerance) from the raw
+      ~840KB GeoJSON down to ~45KB — the closed-ring case needed its own
+      fix (a plain open-polyline D-P pass degenerates on a ring, since
+      GeoJSON's first/last coordinate are the same point, collapsing the
+      whole ring to one point on the first split; fixed by splitting at
+      the farthest point first, then simplifying each half as an open
+      arc). Small enough to load as a separate script rather than
+      bloating admin.js with a 45KB string literal.
+- [x] Antarctica deliberately excluded — equirectangular projection
+      stretches it into a distorted band across the entire bottom edge,
+      and no stream will ever originate there.
+- [x] Land no longer blurred (real coastlines read better crisp); heat
+      points keep their glow/pulse unchanged.
+- [x] Verified visually with the same mock-data preview-page approach
+      used to build the feature originally — real, recognizable
+      continents, heat points now landing exactly on their true
+      locations instead of approximately inside a blob.
+
 ## Ideas
 

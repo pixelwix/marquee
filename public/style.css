@@ -691,13 +691,12 @@ body {
   padding: 0.15rem 0.45rem; border-radius: 5px; letter-spacing: 0.02em;
 }
 
-/* Stream Origins world map — landmasses are soft blurred blobs (not real
-   coastline paths) so they read as glassy/abstract rather than a failed
-   attempt at cartographic accuracy, matching the same frosted-blob language
-   as the heat points sitting on top of them. */
+/* Stream Origins world map — real coastline data (see public/
+   originsWorldPath.js), crisp/unblurred so the geography stays
+   recognizable; only the amber heat points on top get the soft glow. */
 .origins-map-wrap { width: 100%; aspect-ratio: 2 / 1; margin-bottom: 0.9rem; }
 .origins-map-wrap svg { width: 100%; height: 100%; display: block; }
-.origins-land { fill: rgba(20,25,35,0.16); }
+.origins-land { fill: rgba(20,25,35,0.22); }
 .origins-heat-core { fill: var(--amber); }
 .origins-heat-glow { fill: var(--amber); opacity: 0.35; }
 .origins-heat-point.is-top .origins-heat-glow { animation: origins-pulse 2.6s ease-in-out infinite; }

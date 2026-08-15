@@ -510,16 +510,9 @@ function updateAlertRow(row, a) {
 // stores it, year-to-date, resetting every Jan 1. nowPlaying.js's own
 // mapSession() still never carries that field to the shared family
 // dashboard feed — this owner-only panel is the one place it's read.
-// Landmasses are soft blurred blobs, not real coastline paths — hand-placed
-// [cx, cy, rx, ry] against the same 720x360 equirectangular canvas the heat
-// points are projected onto, so they read as glassy/abstract background
-// context rather than a failed attempt at cartographic accuracy.
-const ORIGINS_LAND_BLOBS = [
-  [160, 100, 110, 55], [50, 54, 30, 22], [210, 70, 45, 35], [156, 140, 28, 18],
-  [240, 210, 42, 60], [224, 260, 20, 28], [390, 80, 38, 24], [396, 54, 16, 16],
-  [400, 170, 48, 48], [410, 230, 30, 26], [540, 70, 95, 38], [490, 124, 42, 24],
-  [550, 150, 42, 20], [580, 114, 38, 22], [516, 140, 20, 22], [630, 230, 38, 22]
-];
+// Real coastline data (see originsWorldPath.js, loaded before this file) on
+// the same 720x360 equirectangular canvas the heat points are projected
+// onto — ORIGINS_WORLD_PATH is a global from that file, not a local const.
 
 function originsProject(lat, lon) {
   return { x: (lon + 180) * 2, y: (90 - lat) * 2 };
@@ -533,10 +526,6 @@ function renderOrigins(locations) {
   }
   const sorted = [...locations].sort((a, b) => b.pct - a.pct);
   const maxPct = sorted[0].pct;
-
-  const land = ORIGINS_LAND_BLOBS
-    .map(([cx, cy, rx, ry]) => `<ellipse class="origins-land" cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" />`)
-    .join('');
 
   const points = sorted.map((o, i) => {
     const { x, y } = originsProject(o.lat, o.lon);
@@ -565,7 +554,7 @@ function renderOrigins(locations) {
     <div class="origins-map-wrap">
       <svg viewBox="0 0 720 360" role="img" aria-label="World map of stream origins">
         <filter id="origins-blur"><feGaussianBlur stdDeviation="3" /></filter>
-        <g filter="url(#origins-blur)">${land}</g>
+        <path class="origins-land" d="${ORIGINS_WORLD_PATH}" />
         <g filter="url(#origins-blur)">${points}</g>
       </svg>
     </div>
