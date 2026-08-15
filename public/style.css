@@ -566,6 +566,10 @@ body {
   text-transform: uppercase; letter-spacing: 0.05em; margin: -0.35rem 0 0.5rem;
 }
 .search-results { flex: 1; overflow-y: auto; }
+/* Because You Watched sits above the main Trending list (#search-results)
+   as a bonus companion, not a second equal-weight list — bounded height, own
+   small scroll, so it can't eat into Trending's flex:1 space above. */
+#because-results { flex: 0 0 auto; max-height: 200px; overflow-y: auto; margin-bottom: 0.5rem; }
 
 .my-requests-list { flex: 1; overflow-y: auto; }
 #mystats-body { flex: 1; overflow-y: auto; }

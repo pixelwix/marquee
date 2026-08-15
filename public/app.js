@@ -814,6 +814,7 @@ function openRequestModal() {
   searchInput.value = '';
   searchInput.focus();
   loadDiscover();
+  loadBecauseYouWatched();
 }
 // Header icon button on desktop, floating button on mobile (see CSS) — both
 // trigger the same modal.
@@ -946,12 +947,44 @@ async function loadDiscover() {
   }
 }
 
+// Personalized companion to Trending above — this user's own most recent
+// watch, run through Overseerr's recommendations endpoint, same not-owned/
+// not-requested filter. Renders nothing (not an empty-state message) when
+// there's no watch history yet or nothing new to suggest — this is a bonus
+// on top of Trending, not something that needs its own "nothing here" noise
+// the way the main Trending/search results panel does.
+let becauseCache = null;
+async function loadBecauseYouWatched() {
+  if (becauseCache) { renderBecauseYouWatched(becauseCache); return; }
+  try {
+    becauseCache = await api('/api/overseerr/recommendations');
+  } catch (e) {
+    becauseCache = { seedTitle: null, items: [] };
+  }
+  renderBecauseYouWatched(becauseCache);
+}
+function renderBecauseYouWatched(rec) {
+  const label = document.getElementById('because-label');
+  const results = document.getElementById('because-results');
+  if (!rec.seedTitle || !rec.items.length) {
+    label.classList.add('hidden');
+    results.classList.add('hidden');
+    return;
+  }
+  label.textContent = `Because you watched ${rec.seedTitle}`;
+  label.classList.remove('hidden');
+  results.classList.remove('hidden');
+  renderSearchResults(rec.items, '', 'because-results');
+}
+
 let searchTimer;
 document.getElementById('search-input').addEventListener('input', e => {
   clearTimeout(searchTimer);
   const q = e.target.value.trim();
-  if (!q) { loadDiscover(); return; }
+  if (!q) { loadDiscover(); loadBecauseYouWatched(); return; }
   document.getElementById('discover-label').classList.add('hidden');
+  document.getElementById('because-label').classList.add('hidden');
+  document.getElementById('because-results').classList.add('hidden');
   searchTimer = setTimeout(async () => {
     try {
       const results = await api(`/api/overseerr/search?q=${encodeURIComponent(q)}`);
@@ -1007,6 +1040,7 @@ async function handleResultsClick(e, containerId, tabId) {
   });
 }
 document.getElementById('search-results').addEventListener('click', e => handleResultsClick(e, 'search-results', 'search-tab'));
+document.getElementById('because-results').addEventListener('click', e => handleResultsClick(e, 'because-results', 'search-tab'));
 
 // ---------- Season picker ----------
 // Shown in place of whichever tab triggered it — returnTabId remembers which
@@ -1135,10 +1169,11 @@ document.getElementById('info-request-btn').addEventListener('click', async () =
   const btn = document.getElementById('info-request-btn');
   if (btn.disabled || !infoRequestItem) return;
   const { id, mediaType, title } = infoRequestItem;
-  // The list this came from (search results/discover) has its own matching
-  // row — updated alongside this button so it doesn't go stale if the user
-  // doesn't close this modal right away.
-  const inlineBtn = document.querySelector(`#search-results .request-btn[data-id="${id}"][data-type="${mediaType}"]`);
+  // Same title can appear in more than one list at once now (Trending and
+  // Because You Watched aren't mutually exclusive) — every matching row
+  // gets updated alongside this button so none of them go stale if the
+  // user doesn't close this modal right away.
+  const inlineBtns = [...document.querySelectorAll(`#search-results .request-btn[data-id="${id}"][data-type="${mediaType}"], #because-results .request-btn[data-id="${id}"][data-type="${mediaType}"]`)];
 
   if (mediaType === 'tv') {
     infoModal.classList.add('hidden');
@@ -1148,11 +1183,11 @@ document.getElementById('info-request-btn').addEventListener('click', async () =
     // and return to the default Search tab rather than crashing on a
     // returnTabId that was never passed for this entry point.
     modal.classList.remove('hidden');
-    openSeasonPicker(id, title, inlineBtn || btn, 'search-tab');
+    openSeasonPicker(id, title, inlineBtns[0] || btn, 'search-tab');
     return;
   }
 
-  const targets = [...new Set([btn, inlineBtn].filter(Boolean))];
+  const targets = [...new Set([btn, ...inlineBtns].filter(Boolean))];
   targets.forEach(b => { b.disabled = true; b.querySelector('.btn-label').textContent = '…'; });
   try {
     await api('/api/overseerr/request', { method: 'POST', body: JSON.stringify({ id, mediaType }) });

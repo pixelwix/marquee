@@ -9,6 +9,7 @@ const tautulliMedia = require('../lib/tautulliMedia');
 const { adminClient, mapDiscoverItem, resolveMedia, fetchOpenIssues } = require('../lib/overseerrClient');
 const downloadQueueIds = require('../lib/downloadQueueIds');
 const { computeAvailability } = require('../lib/requestAvailability');
+const { extractTmdbId } = require('../lib/guid');
 const router = express.Router();
 
 // Unlike the read-only endpoints below, these have a real side effect (creates an
@@ -65,6 +66,70 @@ router.get('/discover', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('overseerr discover error', err.response?.data || err.message);
     res.status(502).json({ error: 'Could not reach Overseerr' });
+  }
+});
+
+// "Because you watched X" — personalizes the request modal's default view
+// (rendered alongside the global Trending feed above, not instead of it)
+// using this signed-in user's own most recent watch. Same personalization
+// source as My Stats/Recently Watched (Tautulli's get_history filtered by
+// user_id — Tautulli uses the Plex account id directly, no separate mapping
+// needed), resolved to a TMDB id via Tautulli's get_metadata guids (same
+// lib/guid.js extraction, same show-not-episode grouping as
+// lib/myStats.js's computeTopWatched), then Overseerr's own recommendations
+// endpoint (TMDB's recommendations, proxied — same response shape as
+// /discover above, so mapDiscoverItem/the not-owned/not-requested filter
+// both apply unchanged).
+//
+// Walks back through the last few distinct watches rather than only ever
+// trying the single most recent one: a title with no Plex-matched guid at
+// all (self-added, obscure) would otherwise silently kill this feature for
+// however long it stays most recent, and a seed that resolves fine but has
+// nothing new to recommend (everything it suggests is already owned) is
+// exactly as much a dead end as one that fails to resolve at all.
+router.get('/recommendations', requireAuth, async (req, res) => {
+  try {
+    const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
+      params: {
+        apikey: process.env.TAUTULLI_API_KEY,
+        cmd: 'get_history',
+        user_id: req.session.user.id,
+        length: 10,
+        order_column: 'date',
+        order_dir: 'desc'
+      }
+    });
+    const rows = data.response.data.data || [];
+
+    const triedKeys = new Set();
+    for (const row of rows) {
+      const ratingKey = row.grandparent_rating_key || row.rating_key;
+      if (triedKeys.has(ratingKey)) continue;
+      triedKeys.add(ratingKey);
+      const seedTitle = row.grandparent_title || row.title;
+
+      // eslint-disable-next-line no-await-in-loop
+      const meta = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
+        params: { apikey: process.env.TAUTULLI_API_KEY, cmd: 'get_metadata', rating_key: ratingKey }
+      });
+      const tmdbId = extractTmdbId(meta.data.response.data?.guids);
+      if (!tmdbId) continue;
+
+      const mediaType = meta.data.response.data?.media_type === 'show' ? 'tv' : 'movie';
+      // eslint-disable-next-line no-await-in-loop
+      const { data: recData } = await adminClient.get(`/${mediaType}/${tmdbId}/recommendations`);
+      const items = (recData.results || [])
+        .map(r => mapDiscoverItem({ ...r, mediaType }))
+        .filter(item => item.availability === 'none')
+        .slice(0, 20);
+
+      if (items.length) return res.json({ seedTitle, items });
+    }
+
+    res.json({ seedTitle: null, items: [] });
+  } catch (err) {
+    console.error('overseerr recommendations error', err.response?.data || err.message);
+    res.status(502).json({ error: 'Could not build recommendations' });
   }
 });
 

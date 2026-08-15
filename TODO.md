@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.28.0.**
+v1.29.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1713,16 +1713,62 @@ surfaced right in the existing panel.
       mediaStorage integration isn't mocked, it's checked live instead
       (see the bullet above).
 
+## v1.29.0 — "Because you watched X" personalized recommendations
+
+Trending (the request modal's default view) was global — same feed for
+every family member. Added a personalized companion strip above it, seeded
+by each signed-in user's own most recent watch.
+
+- [x] New `GET /api/overseerr/recommendations` (`routes/overseerr.js`) —
+      pulls this user's own Tautulli history (`user_id` filter, same
+      personalization source as My Stats/Recently Watched — Tautulli uses
+      the Plex account id directly, no separate mapping needed), resolves
+      the most recent distinct watch to a TMDB id via `get_metadata`'s
+      guids (`lib/guid.js`'s existing `extractTmdbId`, same show-not-
+      episode grouping as `lib/myStats.js`'s `computeTopWatched`), then
+      calls Overseerr's own `/movie|tv/{id}/recommendations` (TMDB's
+      recommendations, proxied — same response shape as `/discover`, so
+      `mapDiscoverItem` and its not-owned/not-requested filter both apply
+      completely unchanged).
+- [x] Walks back through up to the last 10 distinct watches rather than
+      only ever trying the single most recent one — a title with no
+      Plex-matched guid at all (self-added, obscure) would otherwise
+      silently kill the feature for however long it stays most recent, and
+      a seed that resolves fine but has nothing new left to recommend is
+      exactly as much a dead end as one that fails to resolve.
+- [x] Placement decision (was an open question in the original Ideas
+      entry): lives in the request modal, right above the existing global
+      Trending list — same modal, same card markup, personalized result
+      first. Not a separate dashboard panel; this is a companion to
+      Trending, not a replacement for it.
+- [x] Renders nothing (not an empty-state message) when there's no watch
+      history yet or nothing new to suggest — a bonus on top of Trending,
+      not something that needs its own "nothing here" noise the way the
+      main list does.
+- [x] `public/app.js`: fixed a real gap this surfaced — the info modal's
+      "sync the originating row's button back after requesting" logic was
+      hardcoded to `#search-results` only. With two lists able to show the
+      same title at once now, generalized it to update every matching
+      button across both containers, not just one.
+- [x] `#because-results` given its own bounded height/scroll in CSS rather
+      than inheriting `.search-results`' `flex: 1` — two `flex: 1` lists
+      stacked would have fought each other for the modal's space; this one
+      stays a compact strip, the main Trending list still gets the room.
+- [x] Verified against live data end-to-end, not just read for correctness:
+      ran the exact route logic directly inside the container against a
+      real user's real history — correctly resolved "Reacher" to its TMDB
+      id, correctly pulled 20 raw recommendations from Overseerr, correctly
+      filtered to 5 not-already-owned titles with the right shape. Not
+      verified in an actual logged-in browser session (no credential entry
+      into the app's own login, same boundary as the Disk Space trend
+      feature above) — logic/plumbing/live-data confirmed, not a
+      pixel-level check.
+- [x] No new tests — this route has no pure logic of its own beyond
+      orchestration (fetch history, resolve a TMDB id, call Overseerr,
+      filter with the already-tested `mapDiscoverItem`); same as
+      `/discover`, which has never had its own test file either — only
+      `mapDiscoverItem` itself is covered, and it's reused completely
+      unchanged here. 151 tests still pass.
+
 ## Ideas
 
-- [ ] **Personalized "Because you watched X" recommendations.** Trending/
-      Discover is global (not-owned/not-requested, same for everyone);
-      Top of the Month and My Stats already do per-user Tautulli
-      aggregation, so the per-user watch data already exists. Take a
-      user's most recent (or most-watched-this-month) title, hit TMDB's
-      recommendations/similar endpoint for it, filter through the same
-      not-owned/not-requested logic Trending/Discover already has, surface
-      as a small strip. Open questions: where it lives (its own dashboard
-      panel vs. a tab inside the existing request modal near Trending/
-      Discover) and how many source titles feed it (just the last-watched
-      item vs. a blend of the last few).
