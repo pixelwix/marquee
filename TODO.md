@@ -1838,5 +1838,26 @@ data to nail the visual, then wired to the real thing.
       missing IPs are skipped, a public IP resolves and records,
       aggregation + percentage math, and year-boundary pruning.
 
+## v1.30.1 — Fix: stream-origins startup race
+
+Deploying v1.30.0 threw a real error on first boot: `stream-origins prune
+error: SQLITE_ERROR: no such table: stream_origins`. `start()` calls
+`pruneOld()` immediately at server startup — the same shape that hit a
+genuine `CREATE TABLE`-vs-next-statement race in `diskSpaceHistory.js` on
+2026-08-14 (see its own comment). `streamOrigins.js` had copied the
+older eager top-level db-open pattern instead of that already-proven fix.
+
+- [x] Switched to the same lazy `getDb()` + `db.serialize()` shape
+      `diskSpaceHistory.js` uses — the schema statement is guaranteed to
+      finish before anything else on the same connection can run.
+- [x] Confirmed live in the actual container: `docker logs skyn3t`
+      showed the error on the v1.30.0 deploy, clean startup with no
+      errors after this fix redeployed.
+- [x] Also confirmed `geoip-lite`'s declared `engines: node >=24` isn't
+      a real problem — the container runs Node 20, and a lookup inside
+      it (`docker exec skyn3t node -e "geoip.lookup('8.8.8.8')"`)
+      resolves correctly regardless.
+- [x] 155 tests still pass.
+
 ## Ideas
 
