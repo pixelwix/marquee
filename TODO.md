@@ -1885,5 +1885,54 @@ differed from git, taking the live routing label down with it.
       manual patch) to confirm the templated version reproduces the
       same working router and survives a real sync.
 
+## v1.31.0 — Fix: Stream Origins was only showing "currently playing"
+
+v1.30.0 recorded stream origins off Tautulli's live `get_activity` feed,
+keyed by its `session_key` — turns out that's just a reused slot number
+(session 1, 2, 3...), not a real per-stream identifier, so the map only
+ever reflected whatever happened to be playing while the server was up
+(confirmed empirically: 2000 sampled rows collapsed to essentially one
+session_key). Rebuilt on Tautulli's `get_history` instead, keyed by its
+`reference_id` (verified against 2000 real rows: always distinct, always
+the same `ip_address` across every row sharing one) — a real year-to-date
+aggregate now, not a live snapshot.
+
+- [x] `lib/nowPlaying.js`'s `get_activity` hook removed entirely —
+      `streamOrigins.js` no longer has any live-tracking path, just the
+      history sync.
+- [x] `syncFromHistory()`: paginates `get_history` from the start of the
+      year, groups rows by `reference_id` (one real session can span
+      several rows — pause/resume, a mid-stream quality change), records
+      whichever aren't already stored.
+- [x] One-time schema migration on deploy: the old `session_key` column
+      (non-unique) gets dropped and recreated as `reference_id` (`UNIQUE`,
+      `INSERT OR IGNORE`) the first time the new code runs against the
+      old table — old rows are trivial next to the real backfill anyway,
+      not worth migrating forward. Covered by its own test file
+      (`streamOrigins.migration.test.js`, fresh temp DB + cache-busted
+      require, since it's a one-time-per-instance code path).
+- [x] Startup/schema-race fix generalized: `getDb()` no longer relies on
+      sqlite3's own connection-level statement ordering at all (the
+      `db.serialize()` fix from v1.30.1) — every query now awaits a real
+      `whenReady()` promise that runs the migration first, needed because
+      the migration is a genuinely conditional multi-step sequence (check
+      schema, maybe drop, then create), not a flat statement list.
+- [x] Added a watermark (`sync_state` table) so the expensive full
+      year-to-date backfill only ever happens once, ever — confirmed live
+      against this deployment's real Tautulli history: ~16k raw rows,
+      ~373 seconds. Every sync after that (the 15-minute interval, and
+      every restart/deploy) only re-scans a 2-hour trailing window
+      instead, comfortably covering the interval with room for a missed
+      run. Checked impact of the one-time run directly: container CPU
+      stayed at 2.7%, the live site kept responding in ~140ms throughout
+      — async I/O leaves the event loop free between the many awaited
+      Tautulli/sqlite calls.
+- [x] Real result on this deployment: 12 distinct cities year-to-date
+      (Minneapolis, Saint Paul, Miami, Detroit, Brooklyn, and others),
+      not the 4 that the old live-tracking version had accumulated.
+- [x] 158 tests pass, 3 new since v1.30.1: two for `record()`'s new
+      `(referenceId, ip, at)` shape and idempotency, one for the
+      migration path, plus a watermark read/write test.
+
 ## Ideas
 

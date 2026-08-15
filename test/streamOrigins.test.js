@@ -12,13 +12,16 @@ const streamOrigins = require('../lib/streamOrigins');
 // Same self-contained shape as diskSpaceHistory.test.js's withDb — a raw
 // connection to the same file the module's own lazy db opens, so rows
 // inserted here are visible to topLocations()/pruneOld() without going
-// through record()'s geoip-lite lookup for every fixture row.
+// through record()'s geoip-lite lookup for every fixture row. This app's
+// tests don't mock Tautulli's HTTP API (see diskSpaceHistory.test.js's own
+// comment on that split) — syncFromHistory() itself isn't covered here for
+// the same reason, only the DB-level logic it eventually calls into.
 function withDb(fn) {
   return new Promise((resolve, reject) => {
     const db = new sqlite3.Database(path.join(dbDir, 'stream-origins.sqlite'));
     db.run(`CREATE TABLE IF NOT EXISTS stream_origins (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_key TEXT NOT NULL,
+      reference_id TEXT NOT NULL UNIQUE,
       city TEXT,
       country TEXT,
       lat REAL,
@@ -31,11 +34,11 @@ function withDb(fn) {
   });
 }
 
-function insertRow(sessionKey, city, country, lat, lon, at) {
+function insertRow(referenceId, city, country, lat, lon, at) {
   return withDb((db, done) => {
     db.run(
-      `INSERT INTO stream_origins (session_key, city, country, lat, lon, at) VALUES (?, ?, ?, ?, ?, ?)`,
-      [sessionKey, city, country, lat, lon, at],
+      `INSERT INTO stream_origins (reference_id, city, country, lat, lon, at) VALUES (?, ?, ?, ?, ?, ?)`,
+      [referenceId, city, country, lat, lon, at],
       (err) => done(err)
     );
   });
@@ -52,24 +55,36 @@ function clearRows() {
 }
 
 test('record() skips IPs geoip-lite can\'t place (missing or unresolvable)', async () => {
-  streamOrigins.record('s1', undefined);
+  await clearRows();
+  await streamOrigins.record('r1', undefined);
   // RFC 5737 TEST-NET-1 — reserved for documentation, never a real routable
   // address, and geoip-lite returns null for it the same way it would for
   // a private LAN range (which is the real-world case this stands in for).
-  streamOrigins.record('s2', '192.0.2.1');
-  // record() writes async (fire-and-forget); give its promise chain a tick.
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await streamOrigins.record('r2', '192.0.2.1');
   assert.equal(await countRows(), 0);
 });
 
-test('record() writes a row for a resolvable public IP', async () => {
-  streamOrigins.record('s3', '8.8.8.8');
-  await new Promise((resolve) => setTimeout(resolve, 50));
+test('record() writes a row for a resolvable public IP, at an explicit timestamp', async () => {
+  await clearRows();
+  const at = Date.UTC(2026, 2, 3);
+  await streamOrigins.record('r3', '8.8.8.8', at);
+  const rows = await withDb((db, done) => {
+    db.all('SELECT reference_id, at FROM stream_origins', (err, r) => done(err, r));
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].reference_id, 'r3');
+  assert.equal(rows[0].at, at);
+});
+
+test('record() is idempotent on a repeated reference_id (INSERT OR IGNORE)', async () => {
+  await clearRows();
+  await streamOrigins.record('r4', '8.8.8.8');
+  await streamOrigins.record('r4', '8.8.8.8'); // syncFromHistory() re-scans the whole window every run
   assert.equal(await countRows(), 1);
 });
 
 test('topLocations() aggregates by city/country and computes percentage of the total', async () => {
-  await clearRows(); // isolate from the record()-driven rows the earlier tests left behind
+  await clearRows();
   const now = Date.UTC(2026, 5, 15); // mid-2026, well inside this year's window
   await insertRow('a', 'Los Angeles', 'US', 34.05, -118.24, now);
   await insertRow('b', 'Los Angeles', 'US', 34.06, -118.25, now);
@@ -93,9 +108,17 @@ test('pruneOld() removes rows from before the current calendar year and keeps th
 
   await streamOrigins.pruneOld();
   const remaining = await withDb((db, done) => {
-    db.all('SELECT session_key FROM stream_origins', (err, rows) => done(err, rows));
+    db.all('SELECT reference_id FROM stream_origins', (err, rows) => done(err, rows));
   });
-  const keys = remaining.map((r) => r.session_key);
-  assert.ok(!keys.includes('old'));
-  assert.ok(keys.includes('new'));
+  const ids = remaining.map((r) => r.reference_id);
+  assert.ok(!ids.includes('old'));
+  assert.ok(ids.includes('new'));
+});
+
+test('getWatermark() is null until setWatermark() has run, then returns the last value written', async () => {
+  assert.equal(await streamOrigins.getWatermark(), null);
+  await streamOrigins.setWatermark(12345);
+  assert.equal(await streamOrigins.getWatermark(), 12345);
+  await streamOrigins.setWatermark(67890); // overwrites, doesn't add a second row
+  assert.equal(await streamOrigins.getWatermark(), 67890);
 });
