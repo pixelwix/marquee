@@ -1859,5 +1859,31 @@ older eager top-level db-open pattern instead of that already-proven fix.
       resolves correctly regardless.
 - [x] 155 tests still pass.
 
+## v1.30.2 — Fix: deploy.sh was clobbering the real Traefik domain
+
+Real outage: the live site went down right after a v1.30.1 deploy.
+`docker-compose.yml`'s Traefik label has always carried a placeholder
+`Host(\`example.com\`)` rule in this (public) repo — the real domain was
+only ever set by hand-editing docker-host's copy directly, never
+committed. `deploy.sh` rsyncs the whole working tree except `.git`,
+`node_modules`, and `.env` — `docker-compose.yml` isn't excluded, so
+that hand-edit got silently overwritten the moment this file next
+differed from git, taking the live routing label down with it.
+
+- [x] Immediate fix: patched docker-host's live `docker-compose.yml`
+      back to the real domain and recreated the container to restore
+      service, verified the site returns 200 from outside the LAN.
+- [x] Durable fix: the label now reads
+      `` Host(`${MARQUEE_DOMAIN:-example.com}`) `` — sourced from `.env`,
+      which `deploy.sh` already excludes from sync the same way it
+      protects the rest of `.env`. Added `MARQUEE_DOMAIN` to
+      `.env.example` (documented, defaults to a placeholder) and set the
+      real value directly in docker-host's actual `.env` (not read, only
+      appended — same append-without-reading approach used for secrets
+      elsewhere in this app).
+- [x] Redeployed through the normal `deploy.sh` path (not just the
+      manual patch) to confirm the templated version reproduces the
+      same working router and survives a real sync.
+
 ## Ideas
 

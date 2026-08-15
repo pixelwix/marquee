@@ -55,7 +55,12 @@ services:
       - proxy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.marquee.rule=Host(`example.com`) || Host(`www.example.com`)"
+      # MARQUEE_DOMAIN comes from .env (excluded from deploy.sh's rsync, same as
+      # the rest of .env) — never hardcode a real domain here, this file is
+      # public. Set MARQUEE_DOMAIN in your own .env to your real domain; left
+      # unset, this harmlessly falls back to the placeholder below rather than
+      # silently routing nothing.
+      - "traefik.http.routers.marquee.rule=Host(`${MARQUEE_DOMAIN:-example.com}`) || Host(`www.${MARQUEE_DOMAIN:-example.com}`)"
       - "traefik.http.routers.marquee.entrypoints=websecure"
       - "traefik.http.routers.marquee.tls=true"
       - "traefik.http.routers.marquee.tls.certresolver=myresolver"
