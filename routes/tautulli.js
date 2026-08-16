@@ -202,6 +202,11 @@ router.get('/recently-watched', requireAuth, async (req, res) => {
 // fetched on demand (only when a Recently Watched row is actually clicked) rather
 // than upfront for the whole list.
 router.get('/metadata/:ratingKey', requireAuth, async (req, res) => {
+  // Rating keys are always numeric — same guard style used on every other
+  // numeric path param in this app (e.g. routes/overseerr.js's /tv/:id).
+  if (!/^\d+$/.test(req.params.ratingKey)) {
+    return res.status(400).json({ error: 'Invalid ratingKey' });
+  }
   try {
     const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
       params: { apikey: process.env.TAUTULLI_API_KEY, cmd: 'get_metadata', rating_key: req.params.ratingKey }
