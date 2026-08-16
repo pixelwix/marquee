@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.33.1.**
+v1.33.6.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1996,6 +1996,85 @@ None of these 4 files had any test coverage at all before this fix.
 - [x] 164/164 tests pass. Deployed and confirmed healthy live; startup log
       showed `issueWatchdog`'s `alerts.js` `reconcile()` call succeeding
       against the real container db on the very first run after redeploy.
+
+## v1.33.2 — Fix: non-constant-time webhook secret comparisons
+
+The same repo audit found 3 server-to-server webhook auth checks
+(`routes/uptimeKuma.js`, `routes/alerts.js`, `routes/overseerr.js`)
+comparing an inbound shared secret against `process.env` with plain
+`!==`, vulnerable in principle to a byte-at-a-time timing attack.
+
+- [x] All 3 swapped to the same constant-time compare pattern already used
+      by `lib/recapUnsubscribe.js`'s token check (length check first,
+      since `crypto.timingSafeEqual` throws on mismatched buffer lengths
+      rather than just leaking timing).
+- [x] 164/164 tests pass. Sanity-checked match/mismatch/different-length/
+      missing-secret cases directly in `node -e`. Deployed and confirmed
+      live — `issueWatchdog`'s real ingest call against the real
+      `ALERTS_INGEST_SECRET` succeeded on the first run post-deploy.
+
+## v1.33.3 — Fix: missing numeric guard on Tautulli metadata route
+
+`GET /api/tautulli/metadata/:ratingKey` was the one route in the app
+whose numeric path param reached an outbound request unchecked — every
+other one (e.g. `routes/overseerr.js`'s `/tv/:id`) already rejects
+non-numeric input first.
+
+- [x] Added the same `/^\d+$/` guard used everywhere else. Passed as an
+      axios params value rather than string-concatenated into a URL, so
+      this closes a consistency gap rather than an active injection path.
+- [x] 164/164 tests pass.
+
+## v1.33.4 — Document 5 env vars missing from .env.example
+
+`SESSION_DB_DIR`, `IMAGE_CACHE_DIR`, `IMAGE_CACHE_MAX_BYTES`,
+`OLLAMA_PROXY_URL`, and `OLLAMA_MODEL` were all read in code but absent
+from `.env.example` — worst practical impact was `OLLAMA_PROXY_URL`/
+`OLLAMA_MODEL` being undocumented, meaning "Suggest fix" silently
+skipped the free local LLM and went straight to paid Claude with no
+indication why.
+
+- [x] All 5 documented with the same explanatory-comment style as the
+      rest of the file.
+
+## v1.33.5 — Fix: unbounded Overseerr session cache
+
+`lib/overseerrSession.js`'s per-user session `Map` had no eviction —
+entries lived for the process's entire lifetime on a long-running
+container.
+
+- [x] Added a 24h TTL on top of the existing 401-triggered
+      `invalidate()`/retry already in `routes/overseerr.js`'s
+      `postAsUser`.
+- [x] Added test coverage (previously none) for caching, invalidation,
+      and per-user isolation, using a loopback mock Overseerr auth
+      endpoint — same pattern as `mediaCache.test.js`. 167/167 tests pass.
+
+## v1.33.6 — Add global default timeout to every outbound request
+
+axios has no timeout by default — a hung upstream (Plex, Tautulli,
+Overseerr, Sonarr, Radarr, Prowlarr, qBittorrent, SABnzbd) left a
+request pending indefinitely, across ~30+ call sites with no existing
+timeout, the audit's highest-priority performance finding alongside
+the SQLite race.
+
+- [x] Set `axios.defaults.timeout = 15000` once in `server.js`, before
+      any other module can call `axios.create()` — every plain
+      `axios.get`/`post`/etc. across the app shares the same underlying
+      axios module instance (Node's require cache), so this becomes
+      their default with zero per-file changes. Calls that already set
+      their own timeout (`lib/mediaCache.js`'s 15s, `lib/serviceHealth.js`'s
+      5s, the Sonarr/Radarr manual-import command polls' 60s) keep
+      overriding it, unchanged.
+- [x] `lib/overseerrClient.js`'s `adminClient` (the one existing
+      `axios.create()` instance) gets the same 15s set explicitly too,
+      since `axios.create()` snapshots defaults at call time — keeps it
+      correct independent of require order rather than relying on it.
+- [x] Confirmed via a `node -e` identity check that the axios module
+      singleton really is shared, and via a real hanging test server
+      that a call with no per-call timeout now aborts with
+      `ECONNABORTED` instead of hanging forever. 167/167 tests pass.
+      Deployed and confirmed healthy live.
 
 ## Ideas
 
