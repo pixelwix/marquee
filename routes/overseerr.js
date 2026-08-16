@@ -192,6 +192,12 @@ async function postAsUser(req, path, payload, retry = true) {
 
 router.post('/request', requireAuth, requestLimiter, async (req, res) => {
   const { id, mediaType, seasons } = req.body;
+  // Same seasons-shape guard as PUT /requests/:id below — omitted/empty still
+  // means "all seasons" (unchanged), only a genuinely malformed seasons value
+  // is rejected here now, before it reaches postAsUser.
+  if (seasons !== undefined && (!Array.isArray(seasons) || !seasons.every(n => Number.isInteger(n) && n > 0))) {
+    return res.status(400).json({ error: 'Invalid seasons' });
+  }
   try {
     const payload = { mediaId: id, mediaType };
     if (mediaType === 'tv') payload.seasons = (seasons && seasons.length) ? seasons : 'all';

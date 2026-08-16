@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.35.0.**
+v1.35.1.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2125,6 +2125,19 @@ request without going into Overseerr's own UI directly.
       wiring has no precedent for direct HTTP-level route tests
       anywhere else in the suite, so verified live instead, matching
       how e.g. deploy.sh's own correctness gets checked).
+
+## v1.35.1 — Fix: POST /request skipped the seasons-shape validation
+
+The audit found `POST /api/overseerr/request` accepted a `seasons` field
+with no shape check, unlike its sibling `PUT /requests/:id` (added in
+v1.35.0), which validates it's a non-empty array of positive integers.
+
+- [x] Added the same guard: omitted/empty `seasons` still means "all
+      seasons" (unchanged), only a genuinely malformed value now gets
+      rejected with 400 before reaching Overseerr, instead of forwarding
+      it and getting back whatever error Overseerr happened to return.
+- [x] 167 tests pass. Sanity-checked the validation logic directly in
+      `node -e` against undefined/empty/valid/malformed inputs.
 
 ## Ideas
 
