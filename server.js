@@ -64,10 +64,36 @@ const sessionDbDir = process.env.SESSION_DB_DIR || '/app/data';
 fs.mkdirSync(sessionDbDir, { recursive: true });
 const sessionDb = new sqlite3.Database(path.join(sessionDbDir, 'sessions.sqlite'));
 
+// Encrypts req.session.user.plexToken (the real Plex auth token) before it's
+// written to sessions.sqlite — SQLiteStore.prototype.set/get pass the JS
+// session object through directly (JSON.stringify/parse happens inside
+// those methods, see node_modules/connect-sqlite3), so wrapping them here
+// intercepts at exactly the plaintext-object boundary: encrypt right before
+// the real set() serializes to disk, decrypt right after the real get()
+// deserializes from disk. Everything in between — req.session in memory for
+// the lifetime of a request — stays plaintext, so no other file needs to
+// change. Only this one field is encrypted (field-level, not whole-session).
+const sessionEncryption = require('./lib/sessionEncryption');
+class EncryptedSessionStore extends SQLiteStore {
+  set(sid, sess, fn) {
+    const toStore = sess?.user?.plexToken
+      ? { ...sess, user: { ...sess.user, plexToken: sessionEncryption.encrypt(sess.user.plexToken) } }
+      : sess;
+    super.set(sid, toStore, fn);
+  }
+  get(sid, fn) {
+    super.get(sid, (err, sess) => {
+      if (err || !sess?.user?.plexToken) return fn(err, sess);
+      sess.user.plexToken = sessionEncryption.decrypt(sess.user.plexToken);
+      fn(null, sess);
+    });
+  }
+}
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(session({
-  store: new SQLiteStore({ db: sessionDb }),
+  store: new EncryptedSessionStore({ db: sessionDb }),
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,

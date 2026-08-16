@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.35.3.**
+v1.35.4.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2178,6 +2178,40 @@ radius was always "bad suggested text," never code execution.
       content can't spoof its own closing tag.
 - [x] 169 tests pass. Sanity-checked `wrapUntrusted()` directly in `node -e`
       against a value containing a fake closing tag.
+
+## v1.35.4 — Fix: Plex auth token stored in plaintext in sessions.sqlite
+
+The audit found `req.session.user.plexToken` (the real Plex auth token,
+set in `routes/auth.js`) was persisted to `sessions.sqlite` in plaintext
+via `connect-sqlite3`. Field-level, not whole-session, encryption — only
+`plexToken` is encrypted, everything else in the session stays as-is.
+
+- [x] New `lib/sessionEncryption.js`: AES-256-GCM, keyed from
+      `SESSION_SECRET` (already this app's own server-side secret — same
+      reuse pattern as `lib/recapUnsubscribe.js`, no second `.env` secret
+      needed). A value with no `enc:v1:` prefix (or one that fails to
+      decrypt, e.g. after a `SESSION_SECRET` rotation) passes through
+      unchanged rather than throwing.
+- [x] `server.js`'s new `EncryptedSessionStore` wraps `connect-sqlite3`'s
+      `SQLiteStore`, intercepting `get()`/`set()` at exactly the point
+      where those methods hold the plain JS session object (before the
+      real `set()`'s internal `JSON.stringify`, after the real `get()`'s
+      internal `JSON.parse` — see `node_modules/connect-sqlite3`) —
+      `req.session` in memory for the life of a request is completely
+      unaffected, only the on-disk copy changes, so no other file needed
+      to change.
+- [x] Verified end-to-end, not just unit-level: booted a real store
+      against a real sqlite file, confirmed the raw on-disk row is
+      genuinely ciphertext (no plaintext substring), and that reading it
+      back through the wrapper transparently decrypts it. Separately
+      confirmed a session row written in the OLD plaintext format (as if
+      by a session that predates this fix) still reads back correctly —
+      nobody gets force-logged-out by this deploy.
+- [x] Added test coverage (previously none) for
+      `lib/sessionEncryption.js`: round-trip, ciphertext doesn't contain
+      the plaintext, distinct IVs per call, plaintext passthrough, and
+      tampered-ciphertext passthrough instead of throwing. 174/174 tests
+      pass.
 
 ## Ideas
 
