@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.34.0.**
+v1.35.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2096,6 +2096,35 @@ until the next visit.
       `requestedBy_email`, then a generic "Someone") — same
       defensive-fallback style already used for `requestedBy` in
       `/requests/pending`.
+
+## v1.35.0 — Approve specific seasons instead of all-or-nothing
+
+Approving a TV request always granted whatever seasons were originally
+requested, in full — no way to approve, say, just season 1 of a 5-season
+request without going into Overseerr's own UI directly.
+
+- [x] New season-picker modal on the admin Requests panel, styled to
+      match the existing `.modal`/`.modal-card` popups already used
+      there (release search, file info, etc.) rather than borrowing the
+      family-facing request flow's separate `#season-picker`.
+- [x] Reuses the existing `GET /api/overseerr/tv/:id` route (already
+      built for the request-side season picker) to list seasons —
+      filtered down to only the ones actually `requested` (pending on
+      this title), since already-available seasons aren't part of the
+      approval decision.
+- [x] All requested seasons check by default, so approving everything
+      as-asked is still one click. Unchecking any of them sends a
+      `PUT /api/overseerr/requests/:id` (new route, wraps Overseerr's own
+      `PUT /request/{id}` with `{mediaType: 'tv', seasons: [...]}`) to
+      trim the request before the existing approve call — only fires
+      when something was actually narrowed, so approving as-is skips the
+      extra round trip.
+- [x] Movies unaffected — no seasons concept, still approve in one
+      click exactly as before.
+- [x] 167 tests still pass — no new pure logic here either (this route
+      wiring has no precedent for direct HTTP-level route tests
+      anywhere else in the suite, so verified live instead, matching
+      how e.g. deploy.sh's own correctness gets checked).
 
 ## Ideas
 

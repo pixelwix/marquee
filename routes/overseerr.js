@@ -258,6 +258,7 @@ router.get('/requests/pending', requireAuth, requireOwner, async (req, res) => {
         title,
         poster,
         mediaType,
+        tmdbId: r.media?.tmdbId ?? null,
         requestedBy: r.requestedBy?.displayName || r.requestedBy?.plexUsername || 'Unknown',
         requestedByAvatar: r.requestedBy?.avatar || null,
         requestedAt: r.createdAt
@@ -268,6 +269,25 @@ router.get('/requests/pending', requireAuth, requireOwner, async (req, res) => {
   } catch (err) {
     console.error('overseerr pending requests error', err.response?.data || err.message);
     res.status(502).json({ error: 'Could not reach Overseerr' });
+  }
+});
+
+// Narrows a pending TV request down to specific seasons before approval — the
+// owner may only want to grant some of what was originally requested. Movies
+// have no seasons and never call this. mediaType is required by Overseerr's
+// own PUT /request/{id} regardless of what's changing.
+router.put('/requests/:id', requireAuth, requireOwner, async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+  const { seasons } = req.body;
+  if (!Array.isArray(seasons) || !seasons.length || !seasons.every(n => Number.isInteger(n) && n > 0)) {
+    return res.status(400).json({ error: 'Invalid seasons' });
+  }
+  try {
+    await adminClient.put(`/request/${req.params.id}`, { mediaType: 'tv', seasons });
+    res.json({ status: 'updated' });
+  } catch (err) {
+    console.error('overseerr update request error', err.response?.data || err.message);
+    res.status(502).json({ error: 'Could not update request' });
   }
 });
 

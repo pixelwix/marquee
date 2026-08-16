@@ -235,6 +235,8 @@ function createPendingRequestRow(r) {
 
 function updatePendingRequestRow(row, r) {
   row.dataset.id = r.id;
+  row.dataset.mediaType = r.mediaType;
+  row.dataset.tmdbId = r.tmdbId;
   row.querySelector('.result-title').textContent = r.title || 'Unknown title';
   row.querySelector('.requester-text').textContent = `${r.requestedBy} · ${timeAgo(r.requestedAt)}`;
 }
@@ -250,10 +252,20 @@ async function loadPendingRequests() {
   }
 }
 
+// Movies approve in one click (no seasons concept). TV requests go through
+// the season picker below instead — Overseerr approves whatever seasons are
+// currently on the request, so narrowing down what's approved means PUTting
+// a trimmed seasons list first, then approving.
 document.getElementById('admin-requests-body').addEventListener('click', async e => {
   const btn = e.target.closest('.approve-btn, .decline-btn');
   if (!btn) return;
   const row = btn.closest('.pending-row');
+
+  if (btn.classList.contains('approve-btn') && row.dataset.mediaType === 'tv') {
+    openApproveSeasonModal(row);
+    return;
+  }
+
   const action = btn.classList.contains('approve-btn') ? 'approve' : 'decline';
   row.querySelectorAll('button').forEach(b => b.disabled = true);
   btn.querySelector('.btn-label').textContent = '…';
@@ -266,6 +278,83 @@ document.getElementById('admin-requests-body').addEventListener('click', async e
   } catch (e) {
     row.querySelectorAll('button').forEach(b => b.disabled = false);
     btn.querySelector('.btn-label').textContent = action === 'approve' ? 'Approve' : 'Decline';
+  }
+});
+
+// ---------- Approve-seasons modal (TV requests) ----------
+let approveSeasonContext = null; // { row, tmdbId, requestedSeasons: number[] }
+
+async function openApproveSeasonModal(row) {
+  const listEl = document.getElementById('approve-season-list');
+  const submitBtn = document.getElementById('approve-season-submit-btn');
+
+  approveSeasonContext = { row, tmdbId: row.dataset.tmdbId, requestedSeasons: [] };
+  document.getElementById('approve-season-title').textContent = row.querySelector('.result-title').textContent;
+  listEl.innerHTML = '<p class="empty-state">Loading seasons…</p>';
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Approve Selected';
+  document.getElementById('approve-season-modal').classList.remove('hidden');
+
+  try {
+    const data = await api(`/api/overseerr/tv/${approveSeasonContext.tmdbId}`);
+    // Only seasons actually on this pending request are relevant here —
+    // already-available seasons aren't part of the approval decision.
+    const requested = data.seasons.filter(s => s.requested);
+    approveSeasonContext.requestedSeasons = requested.map(s => s.seasonNumber);
+    if (!requested.length) {
+      listEl.innerHTML = '<p class="empty-state">No pending seasons found.</p>';
+      submitBtn.disabled = true;
+      return;
+    }
+    listEl.innerHTML = requested.map(s => `
+      <div class="season-row">
+        <input type="checkbox" value="${s.seasonNumber}" checked>
+        <span class="season-row-name">${escapeHtml(s.name || `Season ${s.seasonNumber}`)}</span>
+        <span class="season-row-episodes">${s.episodeCount} ep</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    listEl.innerHTML = '<p class="empty-state">Could not load seasons.</p>';
+    submitBtn.disabled = true;
+  }
+}
+
+function closeApproveSeasonModal() {
+  document.getElementById('approve-season-modal').classList.add('hidden');
+  approveSeasonContext = null;
+}
+
+document.getElementById('close-approve-season-modal-btn').addEventListener('click', closeApproveSeasonModal);
+document.getElementById('approve-season-cancel-btn').addEventListener('click', closeApproveSeasonModal);
+
+document.getElementById('approve-season-submit-btn').addEventListener('click', async () => {
+  if (!approveSeasonContext) return;
+  const checked = [...document.querySelectorAll('#approve-season-list input[type="checkbox"]:checked')].map(cb => Number(cb.value));
+  if (!checked.length) return;
+
+  const { row, requestedSeasons } = approveSeasonContext;
+  const submitBtn = document.getElementById('approve-season-submit-btn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Approving…';
+  try {
+    // Only trim the request's seasons if the owner actually unchecked
+    // something — skips a needless PUT when approving everything as-requested.
+    const narrowed = checked.length < requestedSeasons.length;
+    if (narrowed) {
+      await api(`/api/overseerr/requests/${row.dataset.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ seasons: checked })
+      });
+    }
+    await api(`/api/overseerr/requests/${row.dataset.id}/approve`, { method: 'POST' });
+    closeApproveSeasonModal();
+    row.remove();
+    if (!document.getElementById('admin-requests-body').children.length) {
+      document.getElementById('admin-requests-body').innerHTML = '<p class="empty-state">Nothing pending.</p>';
+    }
+  } catch (e) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Failed — retry';
   }
 });
 
