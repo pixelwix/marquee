@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.29.1.**
+v1.33.1.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -1964,6 +1964,38 @@ comment). Replaced with the real thing.
       used to build the feature originally — real, recognizable
       continents, heat points now landing exactly on their true
       locations instead of approximately inside a blob.
+
+## v1.33.1 — Fix SQLite cold-start race in 4 more lib files
+
+A repo audit turned up the same unguarded-`CREATE TABLE`-then-immediate-query
+race already hit live twice before (`lib/diskSpaceHistory.js`,
+`lib/streamOrigins.js`) in 4 more files: `lib/pushSubscriptions.js`,
+`lib/alerts.js`, `lib/notice.js`, `lib/loginLog.js`. On a genuinely cold
+(never-before-created) db file, the first real query could race the
+`CREATE TABLE IF NOT EXISTS` callback and hit `SQLITE_ERROR: no such table`.
+None of these 4 files had any test coverage at all before this fix.
+
+- [x] All 4 files now capture the `CREATE TABLE` callback's completion into
+      a `ready` promise and await it before every query, mirroring the
+      already-proven pattern in `lib/recapUnsubscribes.js`.
+- [x] `lib/loginLog.js` kept its existing eager (module-load-time) DB open
+      — only the `ready` gate was added on top, not converted to lazy-open
+      like the other three, to keep this a pure race fix rather than also
+      changing init timing.
+- [x] `routes/auth.js`'s fire-and-forget `loginLog.record(...)` call (no
+      `await`) still doesn't need one — `record()` is now `async`
+      internally with its own try/catch around `ready`.
+- [x] 6 new tests added (one file each for `pushSubscriptions`/`alerts`/
+      `notice`/`loginLog`, `pushSubscriptions` and `loginLog` also get a
+      basic round-trip test) — each points `SESSION_DB_DIR` at a fresh
+      `mkdtempSync` directory the module has never touched before, so the
+      first query genuinely exercises the race window instead of hitting
+      an already-warm connection. Confirmed beforehand (via grep) that no
+      existing test for the earlier-fixed files actually covered this
+      path either — this was a real, previously-unfilled gap.
+- [x] 164/164 tests pass. Deployed and confirmed healthy live; startup log
+      showed `issueWatchdog`'s `alerts.js` `reconcile()` call succeeding
+      against the real container db on the very first run after redeploy.
 
 ## Ideas
 

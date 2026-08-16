@@ -1,8 +1,22 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { planReconciliation } = require('../lib/alerts');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { planReconciliation, listOpen } = require('../lib/alerts');
 
 const NOW = 5000;
+
+// getDb() is lazy — SESSION_DB_DIR only needs to be set before the first real
+// query, not before require(). Points this test's first query at a genuinely
+// fresh directory (never-before-created alerts.sqlite) so it actually
+// exercises the CREATE TABLE / first-query race, not a warm connection some
+// earlier test already initialized.
+test('listOpen on a truly cold, never-before-opened db does not race the CREATE TABLE', async () => {
+  process.env.SESSION_DB_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'marquee-alerts-cold-'));
+  const rows = await listOpen();
+  assert.deepEqual(rows, []);
+});
 
 function alert(overrides) {
   return { key: 'sonarr:health:x:warning', app: 'sonarr', source: 'health', severity: 'warning', title: 'x', ...overrides };
