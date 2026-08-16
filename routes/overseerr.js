@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const express = require('express');
 const axios = require('axios');
 const requireAuth = require('./requireAuth');
@@ -361,7 +362,14 @@ router.post('/issues/:id/resolve', requireAuth, requireOwner, async (req, res) =
 // into the webhook agent's "Authorization Header" field is what stops anyone
 // else from spoofing availability toasts to the whole family.
 router.post('/webhook', (req, res) => {
-  if (!process.env.OVERSEERR_WEBHOOK_SECRET || req.headers.authorization !== process.env.OVERSEERR_WEBHOOK_SECRET) {
+  const secret = req.headers.authorization;
+  const expected = process.env.OVERSEERR_WEBHOOK_SECRET;
+  // Constant-time compare, same as lib/recapUnsubscribe.js's token check — a
+  // shared-secret webhook auth check is exactly the kind of thing timing
+  // attacks target, and crypto.timingSafeEqual is free/built-in here.
+  const a = Buffer.from(String(secret ?? ''));
+  const b = Buffer.from(String(expected ?? ''));
+  if (!expected || !secret || a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     return res.status(401).end();
   }
   res.status(200).end();

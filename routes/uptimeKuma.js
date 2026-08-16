@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const express = require('express');
 const alerts = require('../lib/alerts');
 const uptimeKuma = require('../lib/uptimeKuma');
@@ -21,7 +22,13 @@ router.get('/plex-uptime', requireAuth, async (req, res) => {
 // header (if configured) or a `secret` query param on the webhook URL itself.
 router.post('/webhook', (req, res) => {
   const secret = req.headers.authorization || req.query.secret;
-  if (!process.env.UPTIME_KUMA_WEBHOOK_SECRET || secret !== process.env.UPTIME_KUMA_WEBHOOK_SECRET) {
+  const expected = process.env.UPTIME_KUMA_WEBHOOK_SECRET;
+  // Constant-time compare, same as lib/recapUnsubscribe.js's token check — a
+  // shared-secret webhook auth check is exactly the kind of thing timing
+  // attacks target, and crypto.timingSafeEqual is free/built-in here.
+  const a = Buffer.from(String(secret ?? ''));
+  const b = Buffer.from(String(expected ?? ''));
+  if (!expected || !secret || a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     return res.status(401).end();
   }
   res.status(200).end();

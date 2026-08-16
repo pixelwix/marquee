@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const express = require('express');
 const requireAuth = require('./requireAuth');
 const requireOwner = require('./requireOwner');
@@ -48,7 +49,14 @@ ${STEP_FORMAT_INSTRUCTION} Cover whether it looks like a naming/quality mismatch
 // compare against the Authorization header, no session, no CSRF (see server.js's
 // CSRF_EXEMPT_PATHS).
 router.post('/ingest', async (req, res) => {
-  if (!process.env.ALERTS_INGEST_SECRET || req.headers.authorization !== process.env.ALERTS_INGEST_SECRET) {
+  const secret = req.headers.authorization;
+  const expected = process.env.ALERTS_INGEST_SECRET;
+  // Constant-time compare, same as lib/recapUnsubscribe.js's token check — a
+  // shared-secret webhook auth check is exactly the kind of thing timing
+  // attacks target, and crypto.timingSafeEqual is free/built-in here.
+  const a = Buffer.from(String(secret ?? ''));
+  const b = Buffer.from(String(expected ?? ''));
+  if (!expected || !secret || a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   const { scopes, alerts: incoming } = req.body;
