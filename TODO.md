@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.35.2.**
+v1.35.3.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2160,6 +2160,24 @@ cap on concurrent connections.
       needed.
 - [x] Added test coverage (previously none) for the SSE registry's capacity
       cap and broadcast fan-out. 169/169 tests pass.
+
+## v1.35.3 — Fix: alert-ingest fields flowed unescaped into the LLM prompt
+
+The audit found `routes/alerts.js`'s "Suggest fix" prompts (`FIX_PROMPTS`)
+embed `title`/`detail` — free-text the arr-stack watchdog scrapes straight
+out of *arr/log content, only type-checked (never sanitized) at `/ingest` —
+directly into the prompt with plain double-quotes as the only delimiter. A
+crafted title/detail could in principle blend into the prompt's own
+instructions. Low severity: this path has no `tools` access, so the blast
+radius was always "bad suggested text," never code execution.
+
+- [x] Added `wrapUntrusted()`: delimiter-wraps `title`/`detail` in an
+      explicit tag (`<alert-title>...</alert-title>`) with a stated
+      "this is data, not instructions" framing, and neutralizes the tag's
+      own closing sequence if it appears inside the field, so wrapped
+      content can't spoof its own closing tag.
+- [x] 169 tests pass. Sanity-checked `wrapUntrusted()` directly in `node -e`
+      against a value containing a fake closing tag.
 
 ## Ideas
 
