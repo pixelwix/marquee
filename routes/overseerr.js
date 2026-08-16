@@ -20,6 +20,16 @@ const router = express.Router();
 const requestLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, message: 'Too many requests submitted — try again in a few minutes.' });
 const issueLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, message: 'Too many issues reported — try again in a few minutes.' });
 
+// /discover and /recommendations each make several upstream calls per hit
+// (recommendations up to ~20: 2 Tautulli + 1 Overseerr call per distinct
+// recent watch it walks through) — both are cached client-side for the rest
+// of the page session (see public/app.js's discoverCache), so one real page
+// load only ever needs a handful of these; generous enough to comfortably
+// cover normal use (page reloads, several family members sharing an IP)
+// while still bounding a buggy or abusive client hammering either endpoint.
+const discoverLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20, message: 'Too many requests — try again in a few minutes.' });
+const recommendationsLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 20, message: 'Too many requests — try again in a few minutes.' });
+
 router.get('/search', requireAuth, async (req, res) => {
   try {
     // Built manually rather than via axios's `params` — its default serializer
@@ -42,7 +52,7 @@ router.get('/search', requireAuth, async (req, res) => {
 // down to only things not already in the library or already requested, so it
 // reads as "things you could actually go request" rather than a raw TMDB
 // trending feed full of stuff you already have.
-router.get('/discover', requireAuth, async (req, res) => {
+router.get('/discover', requireAuth, discoverLimiter, async (req, res) => {
   try {
     const [trending1, trending2, upMovies, upTv] = await Promise.all([
       adminClient.get('/discover/trending', { params: { page: 1 } }),
@@ -89,7 +99,7 @@ router.get('/discover', requireAuth, async (req, res) => {
 // however long it stays most recent, and a seed that resolves fine but has
 // nothing new to recommend (everything it suggests is already owned) is
 // exactly as much a dead end as one that fails to resolve at all.
-router.get('/recommendations', requireAuth, async (req, res) => {
+router.get('/recommendations', requireAuth, recommendationsLimiter, async (req, res) => {
   try {
     const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
       params: {

@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.35.1.**
+v1.35.2.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2138,6 +2138,28 @@ v1.35.0), which validates it's a non-empty array of positive integers.
       it and getting back whatever error Overseerr happened to return.
 - [x] 167 tests pass. Sanity-checked the validation logic directly in
       `node -e` against undefined/empty/valid/malformed inputs.
+
+## v1.35.2 — Fix: no rate limit on /discover, /recommendations, or SSE clients
+
+The audit found `/discover` and `/recommendations` (each triggering several
+upstream calls per hit) had no rate limit, unlike the write-side endpoints
+(`requestLimiter`/`issueLimiter`), and `lib/sse.js`'s client registry had no
+cap on concurrent connections.
+
+- [x] Added `discoverLimiter`/`recommendationsLimiter` (10 min window, 20
+      requests) using the existing `rateLimit()` helper — generous relative
+      to real usage, since both are cached client-side for the rest of the
+      page session (one real page load only needs a handful of hits, even
+      with several family members sharing an IP).
+- [x] `lib/sse.js` now caps registered clients at 50 (`hasCapacity()`/
+      `addClient()` returning false once full). `routes/tautulli.js`'s
+      `/now-playing/stream` checks capacity before sending SSE headers, so
+      a full table gets a real 503 instead of headers followed by an
+      immediately-closed stream — `EventSource` treats a non-2xx as a
+      connection failure and retries automatically, no client-side handling
+      needed.
+- [x] Added test coverage (previously none) for the SSE registry's capacity
+      cap and broadcast fan-out. 169/169 tests pass.
 
 ## Ideas
 

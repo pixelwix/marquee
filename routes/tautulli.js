@@ -36,6 +36,13 @@ router.get('/now-playing', requireAuth, (req, res) => {
 // removed) or "update" (progress/state change on an existing session) events as
 // they happen — no polling on the client.
 router.get('/now-playing/stream', requireAuth, (req, res) => {
+  // Checked before sending SSE headers, so a full connection table gets a
+  // real error response — EventSource treats a non-2xx as a connection
+  // failure and retries automatically with its own backoff, same as any
+  // other transient failure (no client-side handling needed for this).
+  if (!nowPlaying.wouldAcceptClient()) {
+    return res.status(503).json({ error: 'Too many active connections' });
+  }
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
   res.flushHeaders();
   nowPlaying.addClient(res);
