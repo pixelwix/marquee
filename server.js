@@ -1,4 +1,14 @@
 require('dotenv').config();
+// Global default timeout for every outbound axios call in the app (Plex,
+// Tautulli, Overseerr, Sonarr, Radarr, Prowlarr, qBittorrent, SABnzbd, ...) —
+// axios has no timeout by default, so a hung upstream previously left a
+// request pending indefinitely. Must run before any other module gets a
+// chance to call axios.create() (see lib/overseerrClient.js's adminClient),
+// since axios.create() snapshots axios.defaults at call time. Any call site
+// that already sets its own `timeout` (lib/mediaCache.js, lib/serviceHealth.js,
+// the Sonarr/Radarr manual-import command polls) keeps overriding this, same
+// as before.
+require('axios').defaults.timeout = 15000;
 const express = require('express');
 const session = require('express-session');
 const sqlite3 = require('sqlite3');
