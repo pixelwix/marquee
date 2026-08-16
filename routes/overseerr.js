@@ -6,6 +6,7 @@ const requireOwner = require('./requireOwner');
 const overseerrSession = require('../lib/overseerrSession');
 const rateLimit = require('../lib/rateLimit');
 const sse = require('../lib/sse');
+const pushNotify = require('../lib/pushNotify');
 const tautulliMedia = require('../lib/tautulliMedia');
 const { adminClient, mapDiscoverItem, resolveMedia, fetchOpenIssues } = require('../lib/overseerrClient');
 const downloadQueueIds = require('../lib/downloadQueueIds');
@@ -386,6 +387,19 @@ router.post('/webhook', (req, res) => {
   const { notification_type, subject, image } = req.body;
   if (notification_type === 'MEDIA_AVAILABLE') {
     sse.broadcast('media-available', { title: subject, poster: image });
+  } else if (notification_type === 'MEDIA_PENDING') {
+    // Fires once per new request that needs approval (auto-approved requests
+    // never hit this type) — the owner otherwise had no way to know a request
+    // was waiting short of opening the admin page and checking.
+    const requestedBy = req.body.request?.requestedBy_username
+      || req.body.request?.requestedBy_email
+      || 'Someone';
+    pushNotify.notifyOwners({
+      title: 'New request needs approval',
+      body: `${requestedBy} requested ${subject}`,
+      icon: image,
+      url: '/admin'
+    }).catch(err => console.error('overseerr webhook push notify error', err.message));
   }
 });
 

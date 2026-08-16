@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.33.6.**
+v1.34.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2075,6 +2075,27 @@ the SQLite race.
       that a call with no per-call timeout now aborts with
       `ECONNABORTED` instead of hanging forever. 167/167 tests pass.
       Deployed and confirmed healthy live.
+
+## v1.34.0 — Push notification when a request needs approval
+
+The Overseerr webhook handler only ever acted on `MEDIA_AVAILABLE` — a new
+request landing in the pending queue produced no signal at all short of
+opening `/admin` and checking, so approvals sat unnoticed for however long
+until the next visit.
+
+- [x] Handle Overseerr's `MEDIA_PENDING` webhook notification (fired once
+      per new request that actually needs approval — auto-approved
+      requests never send this type) alongside the existing
+      `MEDIA_AVAILABLE` branch.
+- [x] Reuses `lib/pushNotify.js`'s existing `notifyOwners()` — same
+      pipeline as the Alerts panel and the monthly recap, no new push
+      infrastructure. Title/body naming the requester and the title,
+      linking to `/admin`.
+- [x] Requester name read from the webhook payload's
+      `request.requestedBy_username` (falling back to
+      `requestedBy_email`, then a generic "Someone") — same
+      defensive-fallback style already used for `requestedBy` in
+      `/requests/pending`.
 
 ## Ideas
 
