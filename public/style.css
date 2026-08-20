@@ -180,6 +180,13 @@ body {
    amber request FAB. */
 .fab-left { right: auto; left: 1.75rem; }
 .fab-icon-teal { background: linear-gradient(135deg,#7EE0C9,var(--teal)); color: #0b1f1a; }
+/* Report FAB's flag recolors to reflect the signed-in user's own report history
+   (set by loadReportFlagStatus() in app.js): red while none of your reports have
+   been fixed yet, amber once some (but not all) are resolved. teal above already
+   doubles as both the neutral "no reports yet" default and "all resolved" — same
+   color either way, so no separate class needed for that state. */
+.fab-icon-danger { background: linear-gradient(135deg,#FFB4A8,var(--danger)); color: #3a0e0e; }
+.fab-icon-warning { background: linear-gradient(135deg,#FFD98A,var(--amber)); color: #3a2506; }
 .fab-text { display: flex; flex-direction: column; }
 .fab-title { font-family: var(--display); font-size: 0.82rem; font-weight: 600; line-height: 1.2; }
 .fab-subtitle { font-size: 0.66rem; opacity: 0.75; line-height: 1.2; }
@@ -541,7 +548,7 @@ body {
    triggered it) sit in the same flex-column .modal-card, so each needs to be
    a flex column itself (min-height:0 so overflow-y:auto below actually kicks
    in instead of the card just growing past its max-height). */
-#search-tab, #myrequests-tab, #mystats-tab, #because-tab, #season-picker, #report-search-view, #report-browse-view, #report-form-view {
+#search-tab, #myrequests-tab, #mystats-tab, #because-tab, #season-picker, #report-search-view, #report-browse-view, #report-form-view, #newreport-tab, #myreports-tab {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
 }
 
@@ -575,6 +582,11 @@ body {
 .my-request-status.available { color: var(--teal); }
 .my-request-status.downloading { color: var(--amber); }
 .my-request-status.declined { color: var(--danger); }
+/* Issue-report statuses reuse this same row/dot styling — resolved=fixed (green),
+   in_progress=an admin has replied but not resolved yet (amber), open=untouched (red). */
+.my-request-status.resolved { color: var(--teal); }
+.my-request-status.in_progress { color: var(--amber); }
+.my-request-status.open { color: var(--danger); }
 .my-request-status .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block; }
 .result-item { display: flex; gap: 0.85rem; padding: 0.65rem 0; align-items: center; cursor: pointer; }
 .result-item + .result-item { border-top: 1px solid rgba(20,25,35,0.08); }
@@ -742,10 +754,12 @@ body {
    simply overflowing off the right edge of the screen instead of dropping
    to their own line. .result-info's flex:1 already claims the row's full
    remaining width on its own line, so enabling wrap here is what actually
-   pushes .pending-actions onto a second line instead of off-screen. */
+   pushes .pending-actions onto a second line instead of off-screen. Open
+   Issues rows get the same treatment now that Auto Fix made it a three-button
+   row (Search/Auto Fix/Resolve) — same overflow risk as Alerts' two. */
 @media (max-width: 900px) {
-  #alerts-body .pending-row { flex-wrap: wrap; }
-  #alerts-body .pending-actions { width: 100%; padding-top: 0.6rem; padding-left: calc(42px + 0.85rem); }
+  #alerts-body .pending-row, #admin-issues-body .pending-row { flex-wrap: wrap; }
+  #alerts-body .pending-actions, #admin-issues-body .pending-actions { width: 100%; padding-top: 0.6rem; padding-left: calc(42px + 0.85rem); }
 }
 
 /* "Request" — shown on the info modal when opened from a search/discover

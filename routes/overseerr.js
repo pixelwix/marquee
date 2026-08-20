@@ -8,7 +8,8 @@ const rateLimit = require('../lib/rateLimit');
 const sse = require('../lib/sse');
 const pushNotify = require('../lib/pushNotify');
 const tautulliMedia = require('../lib/tautulliMedia');
-const { adminClient, mapDiscoverItem, resolveMedia, fetchOpenIssues } = require('../lib/overseerrClient');
+const autoFixIssue = require('../lib/autoFixIssue');
+const { adminClient, mapDiscoverItem, resolveMedia, fetchOpenIssues, ISSUE_TYPE_LABELS } = require('../lib/overseerrClient');
 const downloadQueueIds = require('../lib/downloadQueueIds');
 const { computeAvailability } = require('../lib/requestAvailability');
 const { extractTmdbId } = require('../lib/guid');
@@ -354,7 +355,7 @@ router.post('/issue', requireAuth, issueLimiter, async (req, res) => {
     if (!mediaId) {
       return res.status(502).json({ error: 'This title isn’t tracked in Overseerr yet' });
     }
-    await postAsUser(req, '/issue', {
+    const { data: created } = await postAsUser(req, '/issue', {
       issueType: type,
       message: String(message || '').trim().slice(0, 500) || 'No additional details provided.',
       mediaId,
@@ -362,9 +363,70 @@ router.post('/issue', requireAuth, issueLimiter, async (req, res) => {
       problemEpisode: resolved.episode
     });
     res.json({ status: 'reported' });
+
+    // Fires after the response — a slow/failed auto-fix attempt should never
+    // hold up the "Thanks — reported" confirmation the reporter is waiting
+    // on. Only for the playback-related categories a bad *file* would
+    // actually explain; 'other' is open-ended free text that isn't
+    // necessarily a "go get a new file" problem.
+    if (type !== ISSUE_TYPES.other) {
+      autoFixIssue.attempt({
+        issueId: created.id,
+        mediaType: resolved.mediaType,
+        tmdbId: resolved.tmdbId,
+        tvdbId: media.mediaInfo?.tvdbId,
+        season: resolved.season,
+        episode: resolved.episode,
+        title: media.title || media.name
+      }).catch(err => console.error('auto-fix issue trigger error', err.message));
+    }
   } catch (err) {
     console.error('overseerr issue error', err.response?.data || err.message);
     res.status(502).json({ error: err.response?.data?.message || 'Could not submit issue report' });
+  }
+});
+
+// A reporter's own history — previously there was no way for a family member to
+// tell whether something they flagged ever got looked at, short of asking the
+// owner directly. Overseerr's issue list has no per-user filter param (confirmed
+// live: passing requestedBy is silently ignored), so this fetches a generous
+// page and filters to the caller's own createdBy.id in-process, same pattern as
+// fetchOpenIssues but scoped to one person instead of admin-wide.
+router.get('/issues/mine', requireAuth, async (req, res) => {
+  try {
+    const session = await overseerrSession.getSession(req.session.user.id, req.session.user.plexToken);
+    const { data } = await adminClient.get('/issue', {
+      params: { take: 100, sort: 'added', filter: 'all' }
+    });
+    const mine = data.results.filter(r => r.createdBy?.id === session.overseerrUserId);
+
+    const results = await Promise.all(mine.map(async r => {
+      const { title, poster } = await resolveMedia(r.media?.mediaType, r.media?.tmdbId);
+      // Overseerr issues only have two real statuses (open=1 / resolved=2) — no
+      // "in progress" state exists in its data model. We infer one: the initial
+      // report always creates exactly one comment (see POST /issue below), so a
+      // second comment can only have come from an admin replying in Overseerr's
+      // own UI — a real signal someone's looked at it, short of marking it done.
+      const hasReply = (r.comments?.length || 0) > 1;
+      const status = r.status === 2 ? 'resolved' : hasReply ? 'in_progress' : 'open';
+      return {
+        id: r.id,
+        title,
+        poster,
+        issueType: ISSUE_TYPE_LABELS[r.issueType] || 'Other',
+        season: r.problemSeason,
+        episode: r.problemEpisode,
+        status,
+        reportedAt: r.createdAt,
+        updatedAt: r.updatedAt
+      };
+    }));
+
+    results.sort((a, b) => new Date(b.reportedAt) - new Date(a.reportedAt));
+    res.json(results);
+  } catch (err) {
+    console.error('overseerr issues mine error', err.response?.data || err.message);
+    res.status(502).json({ error: 'Could not reach Overseerr' });
   }
 });
 

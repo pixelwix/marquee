@@ -373,6 +373,7 @@ function createAdminIssueRow(r) {
     </div>
     <div class="pending-actions">
       <button class="search-release-btn pill-btn"><span class="state-dot"></span><span class="btn-label">Search</span></button>
+      <button class="autofix-btn pill-btn"><span class="state-dot"></span><span class="btn-label">Auto Fix</span></button>
       <button class="approve-btn pill-btn"><span class="state-dot"></span><span class="btn-label">Resolve</span></button>
     </div>
   `;
@@ -385,6 +386,14 @@ function createAdminIssueRow(r) {
 // text (setting a data-* attribute doesn't touch the <img>, so this stays
 // flicker-free the same way the text-only fields do).
 function updateAdminIssueRow(row, r) {
+  // loadAdminIssues() re-polls every 30s and reconciles by id — while an Auto
+  // Fix is in flight this same row has had its innerHTML replaced by
+  // renderTrackRow() (live grab/import progress, see trackAutoFix below), so
+  // the fields this function writes to no longer exist in it. Without this
+  // guard the poll would throw on the null .result-title lookup below, get
+  // caught by loadAdminIssues()'s try/catch, and wipe the *entire* issues
+  // list (body.innerHTML = ...) every 30s for as long as any auto-fix ran.
+  if (row.dataset.autofixing === 'true') return;
   row.dataset.id = r.id;
   row.dataset.title = r.title || 'Unknown title';
   row.dataset.mediaType = r.mediaType || '';
@@ -417,6 +426,12 @@ document.getElementById('admin-issues-body').addEventListener('click', async e =
   const searchBtn = e.target.closest('.search-release-btn');
   if (searchBtn) {
     openReleaseModal(searchBtn.closest('.pending-row').dataset);
+    return;
+  }
+
+  const autofixBtn = e.target.closest('.autofix-btn');
+  if (autofixBtn) {
+    runAutoFix(autofixBtn.closest('.pending-row'));
     return;
   }
 
@@ -991,6 +1006,97 @@ function trackGrab(row, ctx, isMovie, releaseTitle) {
 document.getElementById('close-release-modal-btn').addEventListener('click', () => {
   document.getElementById('release-modal').classList.add('hidden');
 });
+
+// ---------- Auto Fix (issue row -> best in-profile release, no picker) ----------
+// Same search Radarr/Sonarr already runs for the manual release picker above,
+// just auto-grabbing the top result instead of waiting for a click. "Keeps
+// within the profile parameters" is Radarr/Sonarr's own job, not reimplemented
+// here — every release comes back already flagged `rejected`/`rejections` by
+// whatever's actually configured on that movie/series (quality cutoff, custom
+// formats, minimum age, ...), and mapReleases (lib/releaseSearch.js) already
+// sorts eligible releases first, by seeders. Picking the first non-rejected
+// one is exactly "the best release that still clears the configured profile."
+async function runAutoFix(row) {
+  const ctx = row.dataset;
+  const isMovie = ctx.mediaType === 'movie';
+  row.dataset.autofixing = 'true';
+  row.querySelectorAll('button').forEach(b => b.disabled = true);
+  const label = row.querySelector('.autofix-btn .btn-label');
+  label.textContent = 'Searching…';
+
+  const searchUrl = isMovie
+    ? `/api/radarr/releases?tmdbId=${ctx.tmdbId}`
+    : `/api/sonarr/releases?tvdbId=${ctx.tvdbId}&season=${ctx.season}&episode=${ctx.episode}`;
+  const grabUrl = isMovie ? '/api/radarr/releases/grab' : '/api/sonarr/releases/grab';
+
+  try {
+    const releases = await api(searchUrl);
+    const best = releases.find(r => !r.rejected);
+    if (!best) {
+      label.textContent = 'No eligible release';
+      setTimeout(() => {
+        row.dataset.autofixing = 'false';
+        row.querySelectorAll('button').forEach(b => b.disabled = false);
+        label.textContent = 'Auto Fix';
+      }, 4000);
+      return;
+    }
+    label.textContent = 'Grabbing…';
+    await api(grabUrl, { method: 'POST', body: JSON.stringify({ guid: best.guid, indexerId: best.indexerId }) });
+    trackAutoFix(row, ctx, isMovie, best.title);
+  } catch (err) {
+    row.dataset.autofixing = 'false';
+    row.querySelectorAll('button').forEach(b => b.disabled = false);
+    label.textContent = 'Failed — retry';
+  }
+}
+
+// Reuses the release-modal's own renderTrackRow/updateTrackRow so an
+// auto-fixed row shows the identical downloading -> importing -> done/failed
+// progression a manual grab does — just in place in the issues list instead
+// of inside the release-search modal. On a real confirmed replacement, also
+// resolves the underlying report — the whole point of Auto Fix is not
+// needing a second manual "Resolve" click once a replacement file actually
+// landed. A failed import leaves the row as-is (with its "Fix it →"
+// manual-import escape hatch from updateTrackRow) rather than auto-resolving
+// something that didn't actually get fixed.
+function trackAutoFix(row, ctx, isMovie, releaseTitle) {
+  renderTrackRow(row, releaseTitle);
+  const startedAt = Date.now();
+  const statusUrl = isMovie
+    ? `/api/radarr/grab-status?tmdbId=${ctx.tmdbId}&since=${startedAt}`
+    : `/api/sonarr/grab-status?tvdbId=${ctx.tvdbId}&season=${ctx.season}&episode=${ctx.episode}&since=${startedAt}`;
+
+  const poll = async () => {
+    if (!document.body.contains(row)) return; // list re-rendered / row gone since
+    try {
+      const status = await api(statusUrl);
+      updateTrackRow(row, status, ctx, isMovie);
+      if (status.stage === 'done') {
+        try {
+          await api(`/api/overseerr/issues/${ctx.id}/resolve`, { method: 'POST' });
+        } catch (e) {
+          // File genuinely replaced — leave the "Done" row showing rather than
+          // erroring; the owner can still hit Resolve by hand if this repeats.
+          return;
+        }
+        row.remove();
+        const body = document.getElementById('admin-issues-body');
+        if (!body.children.length) body.innerHTML = '<p class="empty-state">Nothing open.</p>';
+        return;
+      }
+      if (status.stage === 'failed') return; // terminal — updateTrackRow already showed the Fix-it path
+    } catch (e) {
+      // Transient network hiccup — just try again next tick.
+    }
+    if (Date.now() - startedAt > GRAB_TRACK_TIMEOUT_MS) {
+      row.querySelector('.track-meta').textContent = 'Taking a while — check Import Issues later.';
+      return;
+    }
+    setTimeout(poll, GRAB_TRACK_INTERVAL_MS);
+  };
+  poll();
+}
 
 // ---------- Stack: Search Library ----------
 // Owner-only free-text search across Radarr/Sonarr's own tracked library (not

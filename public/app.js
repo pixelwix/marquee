@@ -95,6 +95,7 @@ function showDashboard(owner) {
   loadUpcoming();
   loadDownloads();
   setInterval(loadDownloads, 5000);
+  loadReportFlagStatus();
   // Everything owner-only (sign-ins, pending requests, issues, system status,
   // stack management) lives on its own page now instead of crowding this one.
   document.getElementById('admin-link-btn').classList.toggle('hidden', !isOwner);
@@ -1268,8 +1269,82 @@ let reportBrowseStack = [];
 let reportSelectedRatingKey = null;
 let reportFormSelectedType = null;
 
+// ---------- Report modal tabs (New Report / My Reports) ----------
+// Same { btn, pane } pair pattern as the request modal's tabs above.
+const reportModalTabs = [
+  { btn: document.getElementById('tab-newreport-btn'), pane: document.getElementById('newreport-tab') },
+  { btn: document.getElementById('tab-myreports-btn'), pane: document.getElementById('myreports-tab') }
+];
+function activateReportTab(btn) {
+  for (const t of reportModalTabs) {
+    const isActive = t.btn === btn;
+    t.btn.classList.toggle('active', isActive);
+    t.pane.classList.toggle('hidden', !isActive);
+  }
+}
+let myReportsLoaded = false;
+reportModalTabs[0].btn.addEventListener('click', () => activateReportTab(reportModalTabs[0].btn));
+reportModalTabs[1].btn.addEventListener('click', () => {
+  activateReportTab(reportModalTabs[1].btn);
+  // Same once-per-page-session caching as loadMyRequests() — a report's status
+  // doesn't change fast enough to need refetching every time this tab reopens.
+  if (!myReportsLoaded) {
+    myReportsLoaded = true;
+    loadMyReports();
+  }
+});
+
+async function loadMyReports() {
+  const listEl = document.getElementById('my-reports-list');
+  try {
+    const results = await api('/api/overseerr/issues/mine');
+    if (!results.length) {
+      listEl.innerHTML = '<p class="empty-state">No reports yet.</p>';
+      return;
+    }
+    const statusText = { open: 'Open', in_progress: 'In progress', resolved: 'Fixed' };
+    listEl.innerHTML = results.map(r => `
+      <div class="my-request-row">
+        <img class="result-poster" src="${r.poster || ''}" loading="lazy" onerror="this.style.visibility='hidden'">
+        <div class="result-info">
+          <div class="result-title">${escapeHtml(r.title || 'Unknown title')}${r.episode ? ` · S${r.season}E${r.episode}` : ''}</div>
+          <div class="my-request-status ${r.status}">
+            <span class="status-dot"></span>${statusText[r.status] || r.status} · ${escapeHtml(r.issueType)}
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    listEl.innerHTML = '<p class="empty-state">Could not load reports.</p>';
+  }
+}
+
+// ---------- Report FAB flag color ----------
+// The Report FAB's flag icon (⚑) doubles as an at-a-glance status of your own
+// report history, without having to open the modal at all — red while nothing
+// you've reported has been fixed yet, amber once some (but not all) of it has,
+// and back to its default teal once everything's resolved (or you've never
+// reported anything). Runs once on dashboard load; report status doesn't
+// change fast enough within one visit to need re-checking on an interval.
+async function loadReportFlagStatus() {
+  const icon = document.querySelector('#fab-report-btn .fab-icon');
+  if (!icon) return;
+  try {
+    const results = await api('/api/overseerr/issues/mine');
+    icon.classList.remove('fab-icon-danger', 'fab-icon-warning');
+    if (!results.length) return;
+    const resolvedCount = results.filter(r => r.status === 'resolved').length;
+    if (resolvedCount === results.length) return; // all fixed — stays teal
+    icon.classList.add(resolvedCount === 0 ? 'fab-icon-danger' : 'fab-icon-warning');
+  } catch (e) {
+    // Overseerr not configured/reachable — leave the icon at its default teal,
+    // same graceful-degrade as loadHeroBanners() above.
+  }
+}
+
 function openReportModal() {
   reportModal.classList.remove('hidden');
+  activateReportTab(reportModalTabs[0].btn);
   reportBrowseStack = [];
   document.getElementById('report-search-input').value = '';
   document.getElementById('report-search-results').innerHTML = '';

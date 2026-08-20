@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.35.4.**
+v1.38.1.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2212,6 +2212,181 @@ via `connect-sqlite3`. Field-level, not whole-session, encryption — only
       the plaintext, distinct IVs per call, plaintext passthrough, and
       tampered-ciphertext passthrough instead of throwing. 174/174 tests
       pass.
+
+## v1.36.0 — Issue-report status tracking ("My Reports")
+
+Previously a family member could submit a "Report an issue" (doesn't
+play, wrong audio, subtitles, other) and got nothing back afterward — no
+way to ever find out whether it got looked at or fixed, short of asking
+the owner directly.
+
+- [x] New `GET /api/overseerr/issues/mine`: a reporter's own issue
+      history. Overseerr's `/issue` list endpoint has no per-user filter
+      param (confirmed live — passing `requestedBy` is silently ignored),
+      so this fetches a generous page (`take: 100`) and filters to the
+      caller's own `createdBy.id` in-process, same shape as the existing
+      admin-wide `/issues/open`/`fetchOpenIssues`.
+- [x] Three-state status instead of Overseerr's binary open/resolved:
+      Overseerr's data model only has those two, so `in_progress` is
+      inferred — the initial report always creates exactly one comment,
+      so a second comment can only be an admin reply left directly in
+      Overseerr, a real "someone's looked at this" signal short of
+      marking it resolved.
+- [x] New "My Reports" tab in the Report-an-issue modal (same
+      tab-bar pattern as the Request modal's My Requests/My Stats),
+      each row showing a color-coded status dot — red (open), amber (in
+      progress), green (resolved) — reusing the same
+      `.my-request-status`/`.status-dot` styling already used for
+      request availability.
+- [x] Deployed and verified against live Overseerr data: the `open` and
+      `resolved` status paths both confirmed correct against real issues
+      (rawStatus 1/2 map correctly). The `in_progress` path is logically
+      exercised the same way but currently unverified against a real
+      example — no issue in the live instance has more than one comment
+      yet (no admin has ever replied without also resolving), so it'll
+      first prove itself the next time that happens.
+
+## v1.36.1 — Fix: report flag itself wasn't color-coded
+
+v1.36.0 built the per-report status list ("My Reports") but missed the
+other half of the original ask — the Report FAB's own flag icon (⚑) is
+the thing that should be color-coded, visible at a glance without opening
+the modal at all, not just the rows inside it.
+
+- [x] New `.fab-icon-danger`/`.fab-icon-warning` CSS, alongside the
+      existing `.fab-icon-teal` (which now also doubles as "all resolved"
+      — same color either way, so no separate green class needed).
+- [x] `loadReportFlagStatus()` — runs once on dashboard load, fetches
+      `/api/overseerr/issues/mine` (already built in v1.36.0), and
+      recolors the flag by proportion: red if none of your reports are
+      resolved yet, amber if some but not all are, teal/default if
+      everything's fixed or you've never reported anything.
+- [x] Deployed, container healthy. Underlying `/issues/mine` data (open vs.
+      resolved) was already verified against real Overseerr data in
+      v1.36.0; this just adds a proportion calculation over that same
+      already-correct data. Visual confirmation of the actual on-screen
+      color pending — couldn't sign in as the account owner to check
+      (Plex OAuth is their own login, not something to drive on their
+      behalf) — flagged for them to glance at directly.
+
+## v1.36.2 — Fix: My Reports tab didn't scroll
+
+The report modal's tab-pane sizing rule (`.modal-card`'s children each need
+`flex:1; min-height:0; display:flex; flex-direction:column` so an inner
+list's `overflow-y:auto` has an actual bounded height to scroll within —
+see the comment above that selector) explicitly lists every tab pane by
+id. v1.36.0's two new panes (`#newreport-tab`, the wrapper now around the
+search/browse/form views, and `#myreports-tab`) were never added to that
+list — so `#my-reports-list` just grew to fit all content instead of
+scrolling, and the New Report tab's inner views silently lost their
+intended flex sizing too (their `flex:1` did nothing once their new
+direct parent, `#newreport-tab`, wasn't itself a flex container).
+
+- [x] Added `#newreport-tab, #myreports-tab` to that selector list.
+- [x] Deployed. 174/174 tests pass. Couldn't visually confirm against a
+      real signed-in session (Plex OAuth is the account owner's own
+      login) — this fix is a direct parity match to the identical,
+      already-working rule the Request modal's tabs use, not a guess.
+
+## v1.37.0 — Auto Fix: one-click replacement for a reported issue
+
+The Open Issues admin panel already had a manual "Search" flow (interactive
+Radarr/Sonarr release search + pick-and-grab), built for exactly this —
+this adds a one-click "Auto Fix" next to it that skips the picker: finds
+the best release, grabs it, tracks it through to import, and resolves the
+report automatically once a replacement file actually lands.
+
+- [x] Pure frontend feature — no backend changes. Composes three already-
+      built, already-owner-gated endpoints: `GET /api/{radarr,sonarr}/
+      releases` (search), `POST .../releases/grab`, `GET .../grab-status`
+      (poll), plus the existing `POST /api/overseerr/issues/:id/resolve`.
+- [x] "Keeps within the profile parameters" is Radarr/Sonarr's own job, not
+      reimplemented: every release already comes back flagged `rejected`/
+      `rejections` against whatever's actually configured on that specific
+      movie/series (quality cutoff, custom formats, minimum age, ...) —
+      Auto Fix just picks the first non-rejected one instead of leaving it
+      for a human to eyeball in the picker. Verified live against a real
+      open issue (One Piece S19E73): 123 raw releases, 18 cleared the
+      configured profile, top pick was a sane real release — confirmed via
+      a read-only search, no actual grab fired during testing.
+- [x] Reuses the release-modal's own `renderTrackRow`/`updateTrackRow` so
+      the issue row shows the identical downloading → importing → done/
+      failed progression a manual grab gets, just in place in the issues
+      list instead of inside a modal. A failed import leaves the row as-is
+      with its existing "Fix it →" manual-import escape hatch rather than
+      auto-resolving something that didn't actually get fixed.
+- [x] Real bug caught before shipping: `loadAdminIssues()` polls every 30s
+      and would have called `updateAdminIssueRow()` on an in-progress
+      Auto Fix row — whose innerHTML `renderTrackRow` had already replaced
+      — throwing on a null `.result-title` lookup, getting caught by that
+      poll's own try/catch, and wiping the *entire* issues list every 30s
+      for as long as any auto-fix ran. Fixed with a `row.dataset.
+      autofixing` guard `updateAdminIssueRow` checks first.
+- [x] Same 3-button (Search/Auto Fix/Resolve) mobile overflow risk Alerts
+      rows already had with 2 — extended the existing `@media (max-width:
+      900px)` wrap fix to `#admin-issues-body` too.
+- [x] 174/174 tests pass (no new backend surface to cover). Deployed.
+
+## v1.38.0 — Auto Fix runs automatically on report, not just on click
+
+v1.37.0's Auto Fix required an owner to open the admin panel and click a
+button. This makes the same search → grab → track → resolve flow fire
+automatically the moment a playback-related issue comes in — nobody has to
+notice the report and act on it. The owner only hears about it when
+something needs a human: no eligible release, an import failure needing a
+force-import, or a stuck grab.
+
+- [x] New `lib/autoFixIssue.js` — server-side orchestrator with no browser
+      involved, unlike v1.37.0's client-driven flow. Composes new functions
+      added to `lib/radarrClient.js`/`lib/sonarrClient.js`
+      (`autoFixMovie`/`autoFixEpisode`, `checkMovieGrabStatus`/
+      `checkEpisodeGrabStatus`) that mirror `routes/{radarr,sonarr}.js`'s
+      existing `/releases`, `/releases/grab`, `/grab-status` routes exactly,
+      just callable directly instead of over HTTP (no session/owner auth
+      context to satisfy in a background job).
+- [x] Wired into `POST /api/overseerr/issue`, after the report is already
+      confirmed to the reporter — fired-and-forgotten, so a slow or failed
+      auto-fix attempt never holds up the "Thanks — reported" response.
+- [x] Scoped to the three issue types a bad *file* would actually explain
+      (doesn't play / wrong audio / subtitles) — `other` is open-ended free
+      text that isn't necessarily "go get a new file," so it's left for
+      manual triage same as before.
+- [x] Dedup guard (in-memory `Set` keyed by media+season/episode): if two
+      family members report the same broken episode within moments of each
+      other — plausible, since that's often literally how these reports
+      happen, several people watching together — only the first triggers a
+      search/grab, not one per report.
+- [x] On success: resolves the Overseerr issue automatically, closing the
+      loop with zero manual steps. On anything else (nothing clears the
+      quality profile, not tracked, import failure, 5-minute timeout): a
+      push notification to the owner ("Auto-fix needs your help") instead of
+      silently doing nothing or falsely marking it resolved.
+- [x] New `test/autoFixIssue.test.js` (4 tests, loopback mock Overseerr/
+      Radarr servers, same pattern as `test/overseerrSession.test.js`):
+      confirmed-replacement resolves the issue, a rejected release is never
+      the one picked, concurrent duplicate reports only search once, an
+      all-rejected release list never grabs or resolves anything. 178/178
+      tests pass.
+
+## v1.38.1 — Fix: Suggest-fix's primary tier no longer depends on a Mac mini
+
+`lib/cliproxyClient.js`'s Suggest-fix completions tried a local Ollama
+model on the Mac mini first, falling back to Claude. Swapped the primary
+tier to a Gemini Flash model via Antigravity instead — same CLIProxyAPI
+instance/key, same fallback-to-Claude behavior, just routed through the
+already-running proxy instead of a separate host. Same change made to
+`arr-health-watchdog.mjs`'s log-triage and Sleeper's injury-advisory
+fallback tier (`ollamaAdvisor.mjs` renamed `antigravityAdvisor.mjs`),
+committed separately in their own repos.
+
+- [x] `completeWithOllama` → `completeWithAntigravity`, now calling
+      ${CLIPROXY_URL}/v1/chat/completions with `ANTIGRAVITY_MODEL`
+      (default `gemini-3.1-flash-lite`) instead of the separate
+      `OLLAMA_PROXY_URL`/`OLLAMA_MODEL` — Antigravity shares the same OAuth
+      quota as Claude/Codex through CLIProxyAPI, so no new credential or
+      host to manage.
+- [x] `.env`/`.env.example` updated to match; verified live with a direct
+      `complete()` call before restarting the container.
 
 ## Ideas
 

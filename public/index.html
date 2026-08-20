@@ -193,35 +193,46 @@
       <button id="close-report-modal-btn" class="pill-btn pill-btn-icon">&#10005;</button>
     </div>
 
-    <div id="report-search-view">
-      <input id="report-search-input" type="text" placeholder="Search a movie or show…" autocomplete="off">
-      <div id="report-search-results" class="search-results"></div>
+    <div class="modal-tabs">
+      <button id="tab-newreport-btn" class="modal-tab pill-btn active"><span class="state-dot"></span>New Report</button>
+      <button id="tab-myreports-btn" class="modal-tab pill-btn"><span class="state-dot"></span>My Reports</button>
     </div>
 
-    <div id="report-browse-view" class="hidden">
-      <button id="report-browse-back" class="pill-btn"><span class="state-dot paused"></span>&#8592; Back to search</button>
-      <h4 id="report-browse-title"></h4>
-      <div id="report-browse-list" class="season-list"></div>
-    </div>
+    <div id="newreport-tab">
+      <div id="report-search-view">
+        <input id="report-search-input" type="text" placeholder="Search a movie or show…" autocomplete="off">
+        <div id="report-search-results" class="search-results"></div>
+      </div>
 
-    <div id="report-form-view" class="hidden">
-      <button id="report-form-back" class="pill-btn"><span class="state-dot paused"></span>&#8592; Back</button>
-      <div class="result-item">
-        <img id="report-form-poster" class="result-poster" src="" loading="lazy" onerror="this.style.visibility='hidden'">
-        <div class="result-info">
-          <div id="report-form-title" class="result-title"></div>
-          <div id="report-form-subtitle" class="result-year"></div>
+      <div id="report-browse-view" class="hidden">
+        <button id="report-browse-back" class="pill-btn"><span class="state-dot paused"></span>&#8592; Back to search</button>
+        <h4 id="report-browse-title"></h4>
+        <div id="report-browse-list" class="season-list"></div>
+      </div>
+
+      <div id="report-form-view" class="hidden">
+        <button id="report-form-back" class="pill-btn"><span class="state-dot paused"></span>&#8592; Back</button>
+        <div class="result-item">
+          <img id="report-form-poster" class="result-poster" src="" loading="lazy" onerror="this.style.visibility='hidden'">
+          <div class="result-info">
+            <div id="report-form-title" class="result-title"></div>
+            <div id="report-form-subtitle" class="result-year"></div>
+          </div>
         </div>
+        <div class="report-type-grid">
+          <button class="report-type-btn pill-btn" data-type="doesnt_play"><span class="state-dot"></span>Doesn't play</button>
+          <button class="report-type-btn pill-btn" data-type="wrong_audio"><span class="state-dot"></span>Wrong audio</button>
+          <button class="report-type-btn pill-btn" data-type="subtitles"><span class="state-dot"></span>Subtitles</button>
+          <button class="report-type-btn pill-btn" data-type="other"><span class="state-dot"></span>Other</button>
+        </div>
+        <textarea id="report-form-message" placeholder="Any details? (optional)" rows="3"></textarea>
+        <button id="report-form-submit" class="btn-primary" disabled>Send report</button>
+        <p id="report-form-status" class="report-status"></p>
       </div>
-      <div class="report-type-grid">
-        <button class="report-type-btn pill-btn" data-type="doesnt_play"><span class="state-dot"></span>Doesn't play</button>
-        <button class="report-type-btn pill-btn" data-type="wrong_audio"><span class="state-dot"></span>Wrong audio</button>
-        <button class="report-type-btn pill-btn" data-type="subtitles"><span class="state-dot"></span>Subtitles</button>
-        <button class="report-type-btn pill-btn" data-type="other"><span class="state-dot"></span>Other</button>
-      </div>
-      <textarea id="report-form-message" placeholder="Any details? (optional)" rows="3"></textarea>
-      <button id="report-form-submit" class="btn-primary" disabled>Send report</button>
-      <p id="report-form-status" class="report-status"></p>
+    </div>
+
+    <div id="myreports-tab" class="hidden">
+      <div id="my-reports-list" class="my-requests-list"><p class="empty-state">Loading…</p></div>
     </div>
   </div>
 </div>
