@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.38.1.**
+v1.38.2.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2387,6 +2387,32 @@ committed separately in their own repos.
       host to manage.
 - [x] `.env`/`.env.example` updated to match; verified live with a direct
       `complete()` call before restarting the container.
+
+## v1.38.2 — Fix: CI has been failing on every push since Auto Fix shipped
+
+Noticed via the GitHub Actions run list (67 runs, every single one red back
+through Aug 14) — the whole suite was reported as passing at deploy time
+because docker-host and the Mac clone both have the real
+`lib/mediaStorage.js` on disk, but that file is deliberately `.gitignore`d
+(real NAS mount details, never pushed — see the mediaStorage-not-pushed
+memory), so a fresh GitHub Actions clone doesn't have it. `lib/diskSpaceHistory.js`
+did a bare top-level `require('./mediaStorage')`, which is `MODULE_NOT_FOUND`
+on that clone — crashing the whole test file (`test/diskSpaceHistory.test.js`)
+before a single assertion runs.
+
+- [x] Wrapped the require in try/catch, falling back to
+      `{ getVolumes: async () => [] }` — the exact same shape
+      `mediaStorage.getVolumes()` itself already returns when
+      `MEDIA_MOUNT_DIR` isn't set, so this isn't a new behavior, just
+      surfacing the module's existing "not configured" path when the file
+      itself is absent instead of crashing.
+- [x] `lib/serviceHealth.js` also requires `./mediaStorage` at the top
+      level, but has no test file exercising it, so it never runs in CI —
+      left as-is; it only ever executes on a real deploy, where the real
+      file is always present.
+- [x] Verified: 178/178 tests pass locally (up from 177, since the
+      previously-crashing file's own tests now run); confirmed on GitHub
+      Actions after push.
 
 ## Ideas
 
