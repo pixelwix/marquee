@@ -5,6 +5,7 @@ const requireOwner = require('./requireOwner');
 const alerts = require('../lib/alerts');
 const cliproxyClient = require('../lib/cliproxyClient');
 const downloadClientTest = require('../lib/downloadClientTest');
+const qbittorrent = require('../lib/qbittorrent');
 const rateLimit = require('../lib/rateLimit');
 const router = express.Router();
 
@@ -180,6 +181,39 @@ router.post('/:key/actions/test-download-client', requireAuth, requireOwner, sug
   } catch (err) {
     console.error('alerts test-download-client error', err.message);
     res.status(502).json({ error: 'Could not run the connection test right now' });
+  }
+});
+
+// The second narrow exception to "read-only, human decides", alongside
+// test-download-client above — but this one mutates, so it's scoped tightly: it only
+// ever removes torrents by hash from the alert's OWN server-stored action_data (set
+// by qbit-error-torrents.mjs on docker-host when it reports missing-files torrents —
+// never for 'unregistered' ones, which still need a person to judge), never anything
+// a direct/forged call to this endpoint could supply itself.
+router.post('/:key/actions/qbit-remove-torrents', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const alert = await alerts.getByKey(req.params.key);
+    if (!alert) return res.status(404).json({ error: 'Alert not found' });
+    const hashes = alert.actionData?.type === 'qbit-remove-torrents' ? alert.actionData.hashes : null;
+    if (!Array.isArray(hashes) || !hashes.length) {
+      return res.status(400).json({ error: 'No auto-fix action available for this alert' });
+    }
+    const failed = [];
+    for (const hash of hashes) {
+      try {
+        await qbittorrent.deleteTorrent(hash, true);
+      } catch (err) {
+        failed.push(hash);
+      }
+    }
+    // Only acknowledge (hide it) once every hash it named is actually gone — a
+    // partial failure should stay visible, and the next watcher run will re-report
+    // whatever's still really there rather than this route guessing at it.
+    if (!failed.length) await alerts.acknowledge(req.params.key);
+    res.json({ status: 'ok', removed: hashes.length - failed.length, failed: failed.length });
+  } catch (err) {
+    console.error('alerts qbit-remove-torrents error', err.message);
+    res.status(502).json({ error: 'Could not remove the torrent(s) right now' });
   }
 });
 

@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.38.2.**
+v1.39.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2413,6 +2413,56 @@ before a single assertion runs.
 - [x] Verified: 178/178 tests pass locally (up from 177, since the
       previously-crashing file's own tests now run); confirmed on GitHub
       Actions after push.
+
+## v1.39.0 — Alerts panel: one-click Auto-fix for dead qBittorrent torrents
+
+Companion to a new docker-host script, `qbit-error-torrents.mjs` (not part
+of this repo — lives in `/mnt/docker/scripts/`), which watches qBittorrent
+for "missing files" (source data provably gone) and "unregistered" (tracker
+rejecting it) torrents every 30 minutes and reports through the existing
+`/api/alerts/ingest` pipeline. This adds a button so the missing-files half
+of that doesn't need a manual qBittorrent-UI trip to clean up.
+
+- [x] `lib/alerts.js`: new `action_data TEXT` column (idempotent `ALTER
+      TABLE`, so existing installs migrate on next boot without a manual
+      step), threaded through insert/reopen/touch/`listOpen`/`getByKey` as
+      a JSON blob. Same shape idea as `wiki_url` — an optional extra field
+      an alert can carry, not a schema change every alert type needs to use.
+- [x] `routes/alerts.js`: new `POST /:key/actions/qbit-remove-torrents`,
+      the second narrow exception (alongside `test-download-client`) to
+      "read-only, human decides" — but this one mutates, so it re-derives
+      the hash list from the alert's own server-stored `action_data` only,
+      never from anything the client sends. Deletes via the existing
+      `lib/qbittorrent.js` `deleteTorrent(hash, true)` (already had a real
+      username/password session-cookie client — no new qBittorrent auth
+      code needed here). Only acknowledges the alert if every hash actually
+      deleted; a partial failure stays open for the next watcher run to
+      re-report accurately.
+- [x] Deliberately scoped to missing-files only, not unregistered —
+      `qbit-error-torrents.mjs` only attaches `action_data` when it found
+      missing-files torrents. A missing-files torrent's data is provably
+      gone, so removing the dead entry is safe; an unregistered one still
+      has its data and might be a temporary tracker hiccup, so that always
+      stays a manual judgment call, never a button.
+- [x] `public/admin.js`: button shown directly on the alert row (not
+      gated behind Suggest fix — there's nothing to reason about, the
+      watcher already knows exactly what's dead), label live-updated each
+      30s poll with the current hash count (`Remove N dead torrents`),
+      goes through the same `confirmDialog` every other destructive action
+      in this panel uses before firing.
+- [x] Verified live against the reported case: two torrents genuinely
+      missing their source files (one deleted by SABnzbd's normal cleanup
+      after Sonarr upgraded to a better release, one never finished
+      unpacking) — confirmed via Sonarr history that both episodes were
+      already safely imported from later upgrades before removal, so this
+      wasn't a data-loss cleanup. Both removed successfully through the new
+      endpoint; a third "unregistered" torrent in the same run correctly
+      got no button.
+- [x] 178/178 tests pass (no test coverage added for the new route itself —
+      matches `test-download-client`'s precedent, which also has none;
+      `lib/alerts.js`'s existing `planReconciliation` tests already cover
+      the reconciliation logic the new column flows through unchanged).
+      Deployed.
 
 ## Ideas
 

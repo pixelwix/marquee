@@ -478,7 +478,16 @@ function alertSourceLabel(source) {
     import: 'Import stuck',
     attention: 'Download stuck',
     wanted: 'Wanted/missing',
+    'error-torrents': 'Torrent needs attention',
   }[source] || source;
+}
+
+// The one alert-level action offered directly (not behind Suggest fix — there's
+// nothing to reason about, qbit-error-torrents.mjs on docker-host already knows
+// exactly which torrents are dead). See routes/alerts.js's qbit-remove-torrents
+// route for why this is safe to expose as a single button.
+function autofixAction(a) {
+  return a.actionData?.type === 'qbit-remove-torrents' && a.actionData.hashes?.length ? a.actionData : null;
 }
 
 // Suggest-fix is only offered for alert sources with enough specific context to
@@ -503,6 +512,7 @@ const APP_ICONS = {
   prowlarr: { label: 'PR', cls: 'prowlarr' },
   overseerr: { label: 'OV', cls: 'overseerr' },
   downloads: { label: 'DL', cls: 'downloads' },
+  qbittorrent: { label: 'QB', cls: 'downloads' },
 };
 function appIconInfo(app) {
   return APP_ICONS[app] || { label: (app || '?').slice(0, 2).toUpperCase(), cls: 'default' };
@@ -538,6 +548,7 @@ function createAlertRow(a) {
     <div class="pending-actions">
       <button class="see-list-btn pill-btn hidden" type="button"><span class="btn-label">See list</span></button>
       ${canSuggestFix(a.source) ? '<button class="suggest-fix-btn pill-btn"><span class="btn-label">Suggest fix</span></button>' : ''}
+      <button class="autofix-btn pill-btn hidden" type="button"><span class="btn-label"></span></button>
       <button class="dismiss-alert-btn pill-btn"><span class="btn-label">Dismiss</span></button>
     </div>
   `;
@@ -590,6 +601,18 @@ function updateAlertRow(row, a) {
   const msgEl = row.querySelector('.issue-message');
   if (summary) { msgEl.textContent = summary; msgEl.classList.remove('hidden'); }
   else msgEl.classList.add('hidden');
+
+  // Re-checked every poll, not just at row creation — the hash list this button
+  // acts on can genuinely change between polls (e.g. one torrent's problem
+  // resolved on its own while another appeared), and it needs to disappear
+  // entirely once nothing autofix-able is left.
+  const autofix = autofixAction(a);
+  const autofixBtn = row.querySelector('.autofix-btn');
+  autofixBtn.classList.toggle('hidden', !autofix);
+  if (autofix) {
+    const n = autofix.hashes.length;
+    autofixBtn.querySelector('.btn-label').textContent = `Remove ${n} dead torrent${n === 1 ? '' : 's'}`;
+  }
 
   // This panel polls every 30s (see loadAlerts) — re-populate the list content every
   // time (it can genuinely change between polls, e.g. a still-running cleanup), but
@@ -775,6 +798,32 @@ document.getElementById('alerts-body').addEventListener('click', async e => {
     } finally {
       testBtn.disabled = false;
       label.textContent = prevLabel;
+    }
+    return;
+  }
+
+  const autofixBtn = e.target.closest('.autofix-btn');
+  if (autofixBtn) {
+    const row = autofixBtn.closest('.pending-row');
+    const label = autofixBtn.querySelector('.btn-label');
+    const prevLabel = label.textContent;
+    if (!await confirmDialog(`${prevLabel}? Their downloaded files (already unreachable — that's why they're flagged) are removed along with them.`)) return;
+    autofixBtn.disabled = true;
+    label.textContent = 'Removing…';
+    try {
+      const result = await api(`/api/alerts/${encodeURIComponent(row.dataset.key)}/actions/qbit-remove-torrents`, { method: 'POST' });
+      if (result.failed) {
+        label.textContent = `${result.removed} removed, ${result.failed} failed`;
+        autofixBtn.disabled = false;
+      } else {
+        row.remove();
+        if (!document.getElementById('alerts-body').children.length) {
+          document.getElementById('alerts-body').innerHTML = '<p class="empty-state">No open issues — stack is healthy.</p>';
+        }
+      }
+    } catch (err) {
+      label.textContent = prevLabel;
+      autofixBtn.disabled = false;
     }
     return;
   }
