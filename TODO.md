@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.39.0.**
+v1.40.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2463,6 +2463,61 @@ of that doesn't need a manual qBittorrent-UI trip to clean up.
       `lib/alerts.js`'s existing `planReconciliation` tests already cover
       the reconciliation logic the new column flows through unchanged).
       Deployed.
+
+## v1.40.0 — Notice Board mirrors onto the Plex Home screen via Kometa
+
+Posting or clearing the Notice Board message (`lib/notice.js`) now also
+writes a small collection YAML into Kometa's own config directory, so
+Kometa's next scheduled run (10:00/12:00/20:00/22:00 local — see
+`/mnt/docker/kometa`) turns it into a real, pinned collection on the Plex
+Home screen. Reaches anyone who opens Plex, not just people who visit
+Marquee. Not instant — bound by Kometa's schedule, up to ~2h lag.
+
+- [x] `lib/notice.js`: `set()`/`clear()` now also call
+      `writeKometaAnnouncement()`/`clearKometaAnnouncement()`. `clear()`
+      deliberately **resets** the file to a valid empty `collections: {}`
+      rather than deleting it — Kometa's `config.yml` always references
+      this path as a `collection_files` entry, so a missing file (not just
+      an empty one) would break its next scheduled run. Caught live during
+      testing: the first version deleted the file outright, fixed before
+      shipping.
+- [x] New pure `buildKometaYaml(message, domain)` — same "inject the
+      impure bit as a default param" shape as `computeStatus`'s `now`.
+      Appends "Visit `MARQUEE_DOMAIN` for more info." automatically, since
+      the Plex tile can't carry a real clickable link — never hardcoded
+      (this repo is public; `MARQUEE_DOMAIN` already exists for exactly
+      this reason, see docker-compose.yml). Escapes quotes/backslashes in
+      the free-text message so the generated YAML always stays valid.
+- [x] Whole thing is opt-in and off by default: same "fixed internal mount
+      path + env var gate" shape as `MEDIA_MOUNT_DIR`/`lib/mediaStorage.js`
+      — `docker-compose.yml` gained an optional `KOMETA_CONFIG_DIR`
+      read-write bind mount (`${KOMETA_CONFIG_DIR:-./data}` fallback, same
+      as the other optional mounts — harmlessly re-mounts `./data` and the
+      feature just no-ops when unset). Registered in
+      `lib/serviceRegistry.js` so it shows up in the admin Settings panel
+      like every other optional integration.
+- [x] Kometa side: one `config/marquee-announcement.yml` line added to
+      `libraries.Movies.collection_files` in Kometa's own `config.yml`,
+      plus the initial empty placeholder file so Kometa's very first run
+      after this ships doesn't hit a missing include before any notice has
+      ever been posted. The collection anchors to whatever's most recently
+      added (`plex_search: any: added.gte: 30`, `limit: 1`) rather than any
+      fixed/curated item, since the notice text is free-form and usually
+      unrelated to any specific title.
+- [x] 4 new tests for `buildKometaYaml` (domain appended, no-domain case,
+      quote/backslash escaping, fixed collection identity) — matches this
+      file's existing pattern of only unit-testing the pure, extracted
+      piece, same as `mediaStorage.js`'s `statsToVolume` test; the
+      fs-touching write/clear side effects aren't unit-tested, same
+      precedent, verified live instead. 182/182 tests pass.
+- [x] Verified live end-to-end, twice: posted a real notice through
+      `notice.set()` inside the running container (with `dotenv` loaded,
+      matching how `server.js` actually starts — an earlier `docker exec`
+      check without it gave a false negative, since `KOMETA_CONFIG_DIR`
+      only exists in the process that loaded `.env`) — confirmed the YAML
+      wrote correctly with the domain line appended and parses as valid
+      YAML. Cleared it — confirmed the DB row is gone and the file is
+      reset to the empty placeholder, not missing. Deployed.
 
 ## Ideas
 
