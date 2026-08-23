@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.41.1.**
+v1.41.2.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2613,6 +2613,38 @@ a community OpenAPI spec, a Plex API tutorial site) all 404'd.
       `normalizeShare()` pure function instead of the retired XML
       parser; 2 new tests for the `acceptUrl` CTA). Deployed and
       verified live through the real running app, not just locally.
+
+## v1.41.2 — Fixed the shares list crash, caught by testing the actual tab
+
+Asked to test the Invite to Plex admin tab after v1.41.1 shipped — found
+it broken: "Could not load current shares." `GET /api/invite/shares`
+itself returned 200 with correct data, so the bug wasn't in the API at
+all — it was silent, client-side, and the failure message gave no hint
+why (`loadInviteShares()`'s catch block never logs the real error).
+
+- [x] Root cause: `normalizeShare()`'s `id` field is the raw number the
+      v2 JSON API returns (e.g. `43670236`) — the retired XML endpoint
+      always gave a string (an XML attribute). `public/shared.js`'s
+      `escapeHtml()` calls `.replace()` unconditionally and throws on a
+      number (`str.replace is not a function`), so every row in the
+      shares list crashed the whole render. Found by calling the page's
+      own `shareRowHtml()` directly in the browser console against the
+      real API response — a plain reload wouldn't have shown it since
+      the failure is swallowed silently by the UI.
+- [x] Fix: `normalizeShare()` now returns `id: String(shared.id)`.
+- [x] The test that should have caught this (`plexShare.test.js`) didn't
+      — it asserted `share.id` equal to a *numeric* literal, so it
+      passed either way even though the file uses strict `assert`
+      (`require('node:assert/strict')`, where `.equal` really is
+      `.strictEqual` — a difference worth remembering next time a test
+      here looks like it should be catching a type bug but isn't).
+      Added a dedicated `typeof share.id === 'string'` test.
+- [x] Verified live in the actual admin UI (Claude in Chrome), not just
+      via `curl`/the test suite: the shares list now renders all 71
+      real shares correctly, including pixelwix's pending invite with
+      all 4 libraries; the Edit panel opens with the right libraries
+      pre-checked; "Send Test Email" still delivers.
+- [x] 205/205 tests pass. Deployed.
 
 ## Ideas
 

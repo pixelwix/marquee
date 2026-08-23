@@ -26,10 +26,22 @@ test('normalizeShare uses the resolved account (username/email/id) when one exis
     sharedServer({ invitedId: 358470 }),
     { id: 358470, username: 'pixelwix', email: 'pixelwix@gmail.com' },
   );
-  assert.equal(share.id, 43670236);
+  assert.equal(share.id, '43670236');
   assert.equal(share.username, 'pixelwix');
   assert.equal(share.email, 'pixelwix@gmail.com');
   assert.equal(share.userId, 358470);
+});
+
+// A real bug caught live: the API returns `id` as a number, but the frontend's
+// escapeHtml() (public/shared.js) requires a string and throws on anything else
+// (`str.replace is not a function`) — that broke the entire shares list in the
+// admin UI (GET /api/invite/shares returned 200 with good data, but rendering it
+// crashed silently). assert.equal alone won't catch this — 43670236 == "43670236"
+// is true under loose equality — so this checks the type explicitly.
+test('normalizeShare returns id as a string, not the raw API number — escapeHtml() requires a string', () => {
+  const share = normalizeShare(sharedServer({ id: 43670236 }));
+  assert.equal(typeof share.id, 'string');
+  assert.equal(share.id, '43670236');
 });
 
 test('normalizeShare falls back to invitedEmail with no username/id when the recipient has no Plex account yet', () => {
