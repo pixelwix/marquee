@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.41.0.**
+v1.41.1.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2576,6 +2576,43 @@ edit it, or revoke it entirely).
       `renderWelcomeEmail`'s escaping/content, matching this codebase's
       existing convention of unit-testing the pure pieces and verifying
       network-touching code live instead). Deployed.
+
+## v1.41.1 — Fixed the real Plex invite/update/revoke API shape
+
+v1.41.0 shipped the write side of Plex sharing deliberately unverified
+(see above). Doing the first real invite exposed that the guess was
+wrong — and not in a small way: three live attempts against the shape
+every third-party doc describes (`python-plexapi`'s real source,
+a community OpenAPI spec, a Plex API tutorial site) all 404'd.
+
+- [x] Root cause, found by capturing Plex's own web app performing a real
+      invite in the browser (Claude in Chrome) rather than guessing
+      further: the working host is `clients.plex.tv`, not `plex.tv` —
+      and auth + device identity (`X-Plex-Token`,
+      `X-Plex-Client-Identifier`, etc.) must be **query params**, not
+      headers. Every failed attempt had used `plex.tv` with header auth.
+- [x] `lib/plexShare.js` rewritten around the confirmed-real
+      `https://clients.plex.tv/api/v2/shared_servers` resource for
+      invite (`POST`), update (`PUT /:id`), and revoke (`DELETE /:id`),
+      and reads now use the same v2 JSON API (`/owned/accepted` +
+      `/invites/owned/pending`) instead of the legacy XML endpoint —
+      cleaner data (real emails included) and one less dependency
+      (`xml2js` no longer needed for shares). `getLibraries()`
+      (local server) is unrelated and untouched.
+- [x] Real first invite completed for real, live: `pixelwix@gmail.com`,
+      all 4 libraries, sent via Plex's own UI (captured for the request
+      shape) and confirmed via `getSharedUsers()` afterward showing the
+      correct recipient, all 4 libraries, `allLibraries: true`.
+- [x] Welcome email now carries the real Plex accept link
+      (`inviteToken` from the invite response → `acceptUrl` →
+      "Accept Invite" primary CTA) so it's a complete, useful email on
+      its own — Plex's own separate invite email can't be suppressed
+      (no such option in the real request shape), but the recipient no
+      longer needs it.
+- [x] 204/204 tests pass (`plexShare.test.js` rewritten around the new
+      `normalizeShare()` pure function instead of the retired XML
+      parser; 2 new tests for the `acceptUrl` CTA). Deployed and
+      verified live through the real running app, not just locally.
 
 ## Ideas
 

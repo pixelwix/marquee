@@ -1,60 +1,69 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseSharedServersXml } = require('../lib/plexShare');
+const { normalizeShare } = require('../lib/plexShare');
 
-// Real shape confirmed live against plex.tv/api/servers/{machineId}/shared_servers
-// (see lib/plexShare.js's header comment) — this is xml2js's parsed output for that
-// exact XML, not a guessed shape.
-function fixture(overrides = {}) {
+// Real shapes confirmed live against clients.plex.tv/api/v2/shared_servers (see
+// lib/plexShare.js's header comment) — captured from Plex's own web app performing
+// a real invite, not guessed.
+function sharedServer(overrides = {}) {
   return {
-    MediaContainer: {
-      SharedServer: [
-        {
-          $: {
-            id: '36778557', username: 'aaburdash', email: 'aaburdash@gmail.com',
-            userID: '2056944', owned: '1', allLibraries: '1',
-            invitedAt: '1733093309', acceptedAt: '1733093309', ...overrides,
-          },
-          Section: [
-            { $: { id: '131025742', key: '6', title: 'Anime', type: 'show', shared: '1' } },
-            { $: { id: '131025743', key: '1', title: 'Movies', type: 'movie', shared: '1' } },
-          ],
-        },
-      ],
-    },
+    id: 43670236,
+    invitedId: null,
+    invitedEmail: null,
+    owned: true,
+    allLibraries: true,
+    acceptedAt: null,
+    libraries: [
+      { id: 131025742, key: 6, title: 'Anime', type: 'show' },
+      { id: 131025743, key: 1, title: 'Movies', type: 'movie' },
+    ],
+    ...overrides,
   };
 }
 
-test('parseSharedServersXml extracts the fields the invite feature needs', () => {
-  const [share] = parseSharedServersXml(fixture());
-  assert.equal(share.id, '36778557');
-  assert.equal(share.username, 'aaburdash');
-  assert.equal(share.email, 'aaburdash@gmail.com');
-  assert.equal(share.owned, true);
-  assert.equal(share.allLibraries, true);
+test('normalizeShare uses the resolved account (username/email/id) when one exists', () => {
+  const share = normalizeShare(
+    sharedServer({ invitedId: 358470 }),
+    { id: 358470, username: 'pixelwix', email: 'pixelwix@gmail.com' },
+  );
+  assert.equal(share.id, 43670236);
+  assert.equal(share.username, 'pixelwix');
+  assert.equal(share.email, 'pixelwix@gmail.com');
+  assert.equal(share.userId, 358470);
+});
+
+test('normalizeShare falls back to invitedEmail with no username/id when the recipient has no Plex account yet', () => {
+  const share = normalizeShare(sharedServer({ invitedEmail: 'newperson@example.com' }), undefined);
+  assert.equal(share.username, null);
+  assert.equal(share.email, 'newperson@example.com');
+  assert.equal(share.userId, null);
+});
+
+test('owned and allLibraries coerce to real booleans', () => {
+  const share = normalizeShare(sharedServer({ owned: false, allLibraries: false }));
+  assert.equal(share.owned, false);
+  assert.equal(share.allLibraries, false);
+});
+
+test('libraries map to {id, title, type} using the numeric key as id', () => {
+  const share = normalizeShare(sharedServer());
   assert.deepEqual(share.libraries, [
     { id: '6', title: 'Anime', type: 'show' },
     { id: '1', title: 'Movies', type: 'movie' },
   ]);
 });
 
-test('owned="0" and allLibraries="0" parse as real booleans, not truthy strings', () => {
-  const [share] = parseSharedServersXml(fixture({ owned: '0', allLibraries: '0' }));
-  assert.equal(share.owned, false);
-  assert.equal(share.allLibraries, false);
-});
-
-test('invitedAt/acceptedAt convert from unix seconds to JS milliseconds', () => {
-  const [share] = parseSharedServersXml(fixture());
-  assert.equal(share.invitedAt, 1733093309000);
-  assert.equal(share.acceptedAt, 1733093309000);
+test('acceptedAt converts from an ISO string to a JS timestamp', () => {
+  const share = normalizeShare(sharedServer({ acceptedAt: '2024-12-01T23:02:45Z' }));
+  assert.equal(share.acceptedAt, Date.parse('2024-12-01T23:02:45Z'));
 });
 
 test('a pending (not yet accepted) share has no acceptedAt', () => {
-  const [share] = parseSharedServersXml(fixture({ acceptedAt: undefined }));
+  const share = normalizeShare(sharedServer({ acceptedAt: null }));
   assert.equal(share.acceptedAt, null);
 });
 
-test('no shares at all returns an empty array, not a throw', () => {
-  assert.deepEqual(parseSharedServersXml({ MediaContainer: {} }), []);
+test('no libraries at all normalizes to an empty array, not a throw', () => {
+  const share = normalizeShare(sharedServer({ libraries: undefined }));
+  assert.deepEqual(share.libraries, []);
 });

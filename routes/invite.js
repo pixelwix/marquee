@@ -61,13 +61,19 @@ router.post('/', requireAuth, requireOwner, async (req, res) => {
   }
   try {
     const { ids, libraries } = await validatedLibraryIds(librarySectionIds);
-    await plexShare.inviteUser({ email, librarySectionIds: ids });
+    const invited = await plexShare.inviteUser({ email, librarySectionIds: ids });
 
-    // Plex sends its own invite email/notification separately — this is the
-    // Marquee-branded welcome on top of that, not a replacement for it.
+    // Plex sends its own invite email/notification separately, but it has no way to
+    // suppress that — this is the Marquee-branded welcome on top of it, made to be
+    // the complete, useful one by embedding the same real accept link Plex's own
+    // email would (from inviteUser()'s response, same field getSharedUsers() would
+    // eventually surface as `inviteToken` too) so the recipient doesn't need Plex's.
     let welcomeEmailSent = false;
     try {
       const stats = await fetchInviteStats();
+      const acceptUrl = invited?.inviteToken
+        ? `https://clients.plex.tv/servers/shared_servers/accept?invite_token=${encodeURIComponent(invited.inviteToken)}`
+        : undefined;
       const html = renderWelcomeEmail({
         recipientName: email.split('@')[0],
         inviterName: req.session.user.username,
@@ -75,6 +81,7 @@ router.post('/', requireAuth, requireOwner, async (req, res) => {
         requestUrl: publicUrl,
         libraries,
         stats,
+        acceptUrl,
       });
       await sendEmail({ to: email, subject: `Welcome to ${siteName}`, html });
       welcomeEmailSent = true;

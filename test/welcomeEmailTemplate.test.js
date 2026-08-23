@@ -57,3 +57,14 @@ test('the site-check callout links to the real requestUrl, not a hardcoded domai
   assert.match(html, /href="https:\/\/example\.com"/);
   assert.match(html, />example\.com</);
 });
+
+test('with an acceptUrl, the primary CTA is Accept Invite linking to the real accept link', () => {
+  const html = renderWelcomeEmail(baseData({ acceptUrl: 'https://clients.plex.tv/servers/shared_servers/accept?invite_token=abc123' }));
+  assert.match(html, /cta-primary" href="https:\/\/clients\.plex\.tv\/servers\/shared_servers\/accept\?invite_token=abc123">Accept Invite/);
+});
+
+test('with no acceptUrl, the primary CTA falls back to Open Plex — no broken/empty accept link', () => {
+  const html = renderWelcomeEmail(baseData());
+  assert.doesNotMatch(html, /Accept Invite/);
+  assert.match(html, /cta-primary" href="https:\/\/app\.plex\.tv">Open Plex/);
+});
