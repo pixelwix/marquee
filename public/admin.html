@@ -204,6 +204,7 @@
       <button id="tab-settings-signins-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Recent Sign-ins</button>
       <button id="tab-settings-notice-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Notice Board</button>
       <button id="tab-settings-newsletter-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Newsletter</button>
+      <button id="tab-settings-invite-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Invite to Plex</button>
       <button id="tab-settings-audit-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Audit Log</button>
     </div>
 
@@ -302,6 +303,32 @@
       <p id="newsletter-send-status" class="settings-status hidden"></p>
       <h4 class="admin-subhead">Recent Send History</h4>
       <div id="newsletter-history-body"><p class="empty-state">Loading…</p></div>
+    </div>
+
+    <div id="settings-invite-tab" class="settings-body hidden">
+      <div class="settings-section-row">
+        <h4 class="admin-subhead">Invite Someone</h4>
+        <button id="invite-test-email-btn" class="pill-btn"><span class="state-dot"></span>Send Test Email</button>
+      </div>
+      <p class="settings-field-block-desc">Grants Plex access to exactly the libraries checked below, and sends a welcome email alongside Plex's own invite notification. "Send Test Email" previews the welcome email without granting any access.</p>
+      <p id="invite-test-email-status" class="settings-status hidden"></p>
+
+      <div class="settings-field-block">
+        <label class="settings-field-block-label">Email address</label>
+        <input id="invite-email-input" class="settings-input-full" type="email" placeholder="friend@example.com" autocomplete="off">
+      </div>
+      <div class="settings-field-block">
+        <label class="settings-field-block-label">Library access</label>
+        <div id="invite-libraries-body"><p class="empty-state">Loading…</p></div>
+      </div>
+      <div class="settings-edit-actions">
+        <button id="invite-send-btn" class="btn-primary" disabled>Send Invite</button>
+      </div>
+      <p id="invite-send-status" class="settings-status hidden"></p>
+
+      <h4 class="admin-subhead">Current Shares</h4>
+      <p class="settings-field-block-desc">Everyone who currently has access, and to which libraries. Editing changes access immediately.</p>
+      <div id="invite-shares-body"><p class="empty-state">Loading…</p></div>
     </div>
 
     <div id="settings-audit-tab" class="settings-body hidden">

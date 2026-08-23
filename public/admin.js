@@ -1828,6 +1828,7 @@ const settingsTabs = [
   { btn: document.getElementById('tab-settings-signins-btn'), pane: document.getElementById('settings-signins-tab') },
   { btn: document.getElementById('tab-settings-notice-btn'), pane: document.getElementById('settings-notice-tab') },
   { btn: document.getElementById('tab-settings-newsletter-btn'), pane: document.getElementById('settings-newsletter-tab') },
+  { btn: document.getElementById('tab-settings-invite-btn'), pane: document.getElementById('settings-invite-tab') },
   { btn: document.getElementById('tab-settings-audit-btn'), pane: document.getElementById('settings-audit-tab') }
 ];
 function activateSettingsTab(btn) {
@@ -1841,6 +1842,7 @@ let ownerStatusLoaded = false;
 let adminLoginsLoaded = false;
 let noticeSettingsLoaded = false;
 let newsletterCandidatesLoaded = false;
+let inviteTabLoaded = false;
 let auditLogLoaded = false;
 
 settingsTabs[0].btn.addEventListener('click', () => activateSettingsTab(settingsTabs[0].btn));
@@ -1862,6 +1864,10 @@ settingsTabs[4].btn.addEventListener('click', () => {
 });
 settingsTabs[5].btn.addEventListener('click', () => {
   activateSettingsTab(settingsTabs[5].btn);
+  if (!inviteTabLoaded) { inviteTabLoaded = true; loadInviteLibraries(); loadInviteShares(); }
+});
+settingsTabs[6].btn.addEventListener('click', () => {
+  activateSettingsTab(settingsTabs[6].btn);
   if (!auditLogLoaded) { auditLogLoaded = true; loadAuditLog(); }
 });
 
@@ -2234,6 +2240,161 @@ async function loadNewsletterHistory() {
     body.innerHTML = '<p class="empty-state">Could not load send history.</p>';
   }
 }
+
+// ---------- Invite to Plex ----------
+let inviteLibrariesCache = [];
+
+function libraryCheckboxesHtml(name, checkedIds = []) {
+  const checkedSet = new Set(checkedIds.map(String));
+  return inviteLibrariesCache.map(lib => `
+    <label class="invite-library-option">
+      <input type="checkbox" name="${name}" value="${escapeHtml(lib.id)}" ${checkedSet.has(String(lib.id)) ? 'checked' : ''}>
+      ${escapeHtml(lib.title)}
+    </label>`).join('');
+}
+
+async function loadInviteLibraries() {
+  const body = document.getElementById('invite-libraries-body');
+  try {
+    inviteLibrariesCache = await api('/api/invite/libraries');
+    body.innerHTML = inviteLibrariesCache.length
+      ? `<div class="invite-library-list">${libraryCheckboxesHtml('invite-library')}</div>`
+      : '<p class="empty-state">No libraries found.</p>';
+    updateInviteSendButton();
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not load libraries from Plex.</p>';
+  }
+}
+
+function updateInviteSendButton() {
+  const email = document.getElementById('invite-email-input').value.trim();
+  const checked = document.querySelectorAll('input[name="invite-library"]:checked').length;
+  document.getElementById('invite-send-btn').disabled = !email || checked === 0;
+}
+document.getElementById('invite-email-input').addEventListener('input', updateInviteSendButton);
+document.getElementById('invite-libraries-body').addEventListener('change', e => {
+  if (e.target.name === 'invite-library') updateInviteSendButton();
+});
+
+document.getElementById('invite-send-btn').addEventListener('click', async () => {
+  const email = document.getElementById('invite-email-input').value.trim();
+  const librarySectionIds = [...document.querySelectorAll('input[name="invite-library"]:checked')].map(cb => cb.value);
+  if (!email || !librarySectionIds.length) return;
+  const libraryNames = inviteLibrariesCache.filter(l => librarySectionIds.includes(l.id)).map(l => l.title).join(', ');
+  const ok = await confirmDialog(`Invite ${email} with access to ${libraryNames}? This grants real Plex access and sends real email right now.`);
+  if (!ok) return;
+
+  const btn = document.getElementById('invite-send-btn');
+  const status = document.getElementById('invite-send-status');
+  btn.disabled = true;
+  status.classList.remove('hidden');
+  status.textContent = 'Sending invite…';
+  try {
+    const result = await api('/api/invite', { method: 'POST', body: JSON.stringify({ email, librarySectionIds }) });
+    status.textContent = `Invited ${result.email}.${result.welcomeEmailSent ? ' Welcome email sent.' : ' (Welcome email failed to send, but access was granted — check Settings → Newsletter config.)'}`;
+    document.getElementById('invite-email-input').value = '';
+    document.querySelectorAll('input[name="invite-library"]:checked').forEach(cb => { cb.checked = false; });
+    await loadInviteShares();
+  } catch (e) {
+    status.textContent = `Invite failed: ${e.message}`;
+  } finally {
+    updateInviteSendButton();
+  }
+});
+
+document.getElementById('invite-test-email-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('invite-test-email-btn');
+  const status = document.getElementById('invite-test-email-status');
+  btn.disabled = true;
+  status.classList.remove('hidden');
+  status.textContent = 'Sending…';
+  try {
+    const result = await api('/api/invite/test-email', { method: 'POST', body: JSON.stringify({}) });
+    status.textContent = `Sent to ${result.to}. Check that inbox to confirm it actually arrived.`;
+  } catch (e) {
+    status.textContent = `Failed: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function shareRowHtml(share) {
+  const libraryTags = share.allLibraries
+    ? '<span class="invite-library-tag">All libraries</span>'
+    : share.libraries.map(l => `<span class="invite-library-tag">${escapeHtml(l.title)}</span>`).join('');
+  return `
+    <div class="invite-share-row" data-share-id="${escapeHtml(share.id)}">
+      <div class="invite-share-main">
+        <div class="now-title">${escapeHtml(share.username || share.email)}</div>
+        <div class="now-meta">${escapeHtml(share.email || '')}${share.acceptedAt ? ` · accepted ${timeAgo(share.acceptedAt)}` : ' · invite pending'}</div>
+        <div class="invite-library-tags">${libraryTags}</div>
+      </div>
+      <div class="invite-share-actions">
+        <button type="button" class="pill-btn invite-edit-btn">Edit</button>
+        <button type="button" class="pill-btn invite-revoke-btn">Revoke</button>
+      </div>
+      <div class="invite-share-edit hidden">
+        <div class="invite-library-list">${libraryCheckboxesHtml(`invite-edit-${share.id}`, share.libraries.map(l => l.id))}</div>
+        <div class="settings-edit-actions">
+          <button type="button" class="pill-btn invite-edit-cancel-btn">Cancel</button>
+          <button type="button" class="btn-primary invite-edit-save-btn">Save Changes</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function loadInviteShares() {
+  const body = document.getElementById('invite-shares-body');
+  try {
+    const shares = await api('/api/invite/shares');
+    body.innerHTML = shares.length
+      ? shares.map(shareRowHtml).join('')
+      : '<p class="empty-state">No one else has access yet.</p>';
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not load current shares.</p>';
+  }
+}
+
+document.getElementById('invite-shares-body').addEventListener('click', async e => {
+  const row = e.target.closest('.invite-share-row');
+  if (!row) return;
+  const shareId = row.dataset.shareId;
+
+  if (e.target.classList.contains('invite-edit-btn')) {
+    row.querySelector('.invite-share-edit').classList.remove('hidden');
+    return;
+  }
+  if (e.target.classList.contains('invite-edit-cancel-btn')) {
+    row.querySelector('.invite-share-edit').classList.add('hidden');
+    return;
+  }
+  if (e.target.classList.contains('invite-edit-save-btn')) {
+    const librarySectionIds = [...row.querySelectorAll(`input[name="invite-edit-${shareId}"]:checked`)].map(cb => cb.value);
+    if (!librarySectionIds.length) return;
+    e.target.disabled = true;
+    try {
+      await api(`/api/invite/${encodeURIComponent(shareId)}`, { method: 'PATCH', body: JSON.stringify({ librarySectionIds }) });
+      await loadInviteShares();
+    } catch (err) {
+      alert(`Could not update access: ${err.message}`);
+      e.target.disabled = false;
+    }
+    return;
+  }
+  if (e.target.classList.contains('invite-revoke-btn')) {
+    const name = row.querySelector('.now-title').textContent;
+    const ok = await confirmDialog(`Revoke ${name}'s access entirely? They'll immediately lose access to the server.`);
+    if (!ok) return;
+    e.target.disabled = true;
+    try {
+      await api(`/api/invite/${encodeURIComponent(shareId)}`, { method: 'DELETE' });
+      await loadInviteShares();
+    } catch (err) {
+      alert(`Could not revoke access: ${err.message}`);
+      e.target.disabled = false;
+    }
+  }
+});
 
 async function loadAuditLog() {
   const body = document.getElementById('audit-log-body');

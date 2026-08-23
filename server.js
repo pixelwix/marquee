@@ -158,6 +158,7 @@ app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/uptime-kuma', require('./routes/uptimeKuma'));
 app.use('/api/push', require('./routes/push'));
 app.use('/api/recap', require('./routes/recap'));
+app.use('/api/invite', require('./routes/invite'));
 // Deliberately mounted outside /api — sw.js's fetch handler only skips
 // caching requests under /api/, so keeping this bare lets the existing
 // service worker start caching these client-side too, for free.

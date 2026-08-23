@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.40.0.**
+v1.41.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -2518,6 +2518,64 @@ Marquee. Not instant — bound by Kometa's schedule, up to ~2h lag.
       wrote correctly with the domain line appended and parses as valid
       YAML. Cleared it — confirmed the DB row is gone and the file is
       reset to the empty placeholder, not missing. Deployed.
+
+## v1.41.0 — Invite to Plex: per-library sharing + a real welcome email
+
+New owner-only Settings tab. Invite someone by email with access to exactly
+the libraries you check — not all-or-nothing — and manage everyone already
+shared on the server from the same screen (see current access per person,
+edit it, or revoke it entirely).
+
+- [x] `lib/plexShare.js` — the two Plex APIs involved: the local server
+      (`/library/sections`, same host `routes/plex.js` already calls) for
+      library metadata, and plex.tv's cloud API
+      (`/api/servers/{machineId}/shared_servers`) for the actual sharing
+      relationship — same endpoint `routes/auth.js`'s `isAllowedOnServer`
+      already reads from for the login check, parsed further here into
+      per-share library detail via `xml2js` (confirmed live this endpoint
+      only ever returns XML, ignoring `Accept: application/json`).
+- [x] `lib/inviteStats.js` — real library counts and a real "added this
+      week" number for the welcome email, via the same Tautulli API
+      `lib/monthlyRecap.js` already uses. Sums by `section_type`
+      (movie/show) rather than hardcoding library names, since this app
+      has three show-type libraries (TV Shows, Anime, Workouts).
+- [x] `lib/welcomeEmailTemplate.js` — visually identical to
+      `monthlyRecapTemplate.js` on purpose (same fonts/palette/structure),
+      with a setup checklist (Direct Play, disable Plex's bundled free
+      channels — both explained with *why*, not just *what*) and one
+      compact callout pointing to the site's request/report-issue/stats
+      features, rather than three separate links to the same place.
+- [x] `routes/invite.js` — `GET /libraries`, `GET /shares`,
+      `POST /` (invite), `PATCH /:shareId` (edit access),
+      `DELETE /:shareId` (revoke), `POST /test-email`. Owner-only
+      throughout. Library IDs are re-validated server-side against a
+      fresh `/library/sections` call on every mutating request — never
+      trusted as-given from the client, same rule every other mutating
+      admin action in this app already follows.
+- [x] Real bug caught and fixed *before* shipping, not after: first cut
+      filtered the shares list on a `owned` field, assuming it marked the
+      account owner's own entry. Live testing against the real 66-share
+      list proved that assumption wrong — the owner never appears in this
+      list at all (it's purely "who you've shared with"), and `owned` is
+      `true` on every single entry regardless of recipient (it describes
+      the server being shared, not the recipient). Filter removed; every
+      entry the API returns is a real guest.
+- [x] Sending the actual invite/edit/revoke calls to Plex's sharing API
+      was deliberately **not** live-tested during development — the exact
+      request shape is the well-established convention third-party Plex
+      tools use for this endpoint, but confirming it needs an intentional
+      real invite, not a throwaway test address. First real use should be
+      a genuine invite, not a guess.
+- [x] What *was* live-verified end to end, safely: `getLibraries()` (4 real
+      libraries), `getSharedUsers()` (66 real shares, correctly parsed),
+      and the full welcome-email pipeline — real stats, real render, a
+      real send through `lib/mailer.js` to confirm the whole thing
+      actually works, not just that it builds.
+- [x] 200/200 tests pass (18 new — `parseSharedServersXml`'s real-shape
+      parsing, `summarizeLibraries`/`countAddedWithin`'s stat math, and
+      `renderWelcomeEmail`'s escaping/content, matching this codebase's
+      existing convention of unit-testing the pure pieces and verifying
+      network-touching code live instead). Deployed.
 
 ## Ideas
 
