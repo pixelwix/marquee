@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.42.0.**
+v1.42.1.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -507,5 +507,9 @@ gets versioned as it ships, not reconstructed later.
 - [x] New `lib/privacy.js`, adapted from a community fork to this app's real data shapes, not ported as-is
 - [x] **Fix**: live SSE Now Playing updates had no per-client filtering at all — `lib/sse.js` now supports per-client sanitization
 - [x] **Fix**: caught before shipping — `thumb` is the media poster here, not a user avatar; the fork's approach would've blanked posters for no reason
+
+## v1.42.1 — Fix: Kometa always showed "Unconfigured" in Settings regardless of real state
+
+- [x] **Fix**: Kometa had a Settings card but no entry in `serviceHealth.js`'s check map at all — always fell back to "Unconfigured" even with `KOMETA_CONFIG_DIR` genuinely set. Added `checkKometa`, verifying the real mounted config path is writable.
 
 ## Ideas
