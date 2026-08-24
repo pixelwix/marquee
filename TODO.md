@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.43.1.**
+v1.43.2.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -524,5 +524,9 @@ gets versioned as it ships, not reconstructed later.
 - [x] **Fix**: the invite request body itself was also wrong (missing `skipFriendship`, `allowSubtitleAdmin`, `filterPhotos`; `allowSync` defaulted false) — never actually verified against a real request body before, only the host/auth style. Fixed by intercepting fetch/XHR in the browser to capture Plex's own real request.
 - [x] **Fix**: `updateShareLibraries()` was never live-tested at all — real method is `POST` to `shared_servers/{id}`, not `PUT` (405s), and must round-trip the share's *current* settings or it silently resets them.
 - [x] All three write operations (invite/update/revoke) now confirmed working via this app's own code against the real live API, not just via the browser.
+
+## v1.43.2 — Mask emails in the Invite to Plex shares list
+
+- [x] Current Shares now shows a masked email (e.g. `c***0@hotmail.com`) instead of the full address — less exposed on a shared screen or screenshot
 
 ## Ideas

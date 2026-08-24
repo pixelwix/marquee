@@ -2324,6 +2324,22 @@ document.getElementById('invite-test-email-btn').addEventListener('click', async
   }
 });
 
+// Masks the local part of an email for the shares list (e.g. "c***0@hotmail.com") —
+// this is the owner's own admin view, not a family-facing privacy setting (see
+// lib/privacy.js for that), just less to expose on a shared screen/screenshot.
+// Same first+last-char pattern as lib/privacy.js's maskUsername, applied here since
+// that one's server-side and this list is rendered client-side from already-fetched
+// share data.
+function maskEmail(email) {
+  if (!email) return '';
+  const at = email.indexOf('@');
+  if (at <= 0) return email;
+  const local = email.slice(0, at);
+  const domain = email.slice(at);
+  const masked = local.length <= 2 ? local[0] + '***' : local[0] + '***' + local[local.length - 1];
+  return masked + domain;
+}
+
 function shareRowHtml(share) {
   const libraryTags = share.allLibraries
     ? '<span class="invite-library-tag">All libraries</span>'
@@ -2331,8 +2347,8 @@ function shareRowHtml(share) {
   return `
     <div class="invite-share-row" data-share-id="${escapeHtml(share.id)}">
       <div class="invite-share-main">
-        <div class="now-title">${escapeHtml(share.username || share.email)}</div>
-        <div class="now-meta">${escapeHtml(share.email || '')}${share.acceptedAt ? ` · accepted ${timeAgo(share.acceptedAt)}` : ' · invite pending'}</div>
+        <div class="now-title">${escapeHtml(share.username || maskEmail(share.email))}</div>
+        <div class="now-meta">${escapeHtml(maskEmail(share.email))}${share.acceptedAt ? ` · accepted ${timeAgo(share.acceptedAt)}` : ' · invite pending'}</div>
         <div class="invite-library-tags">${libraryTags}</div>
       </div>
       <div class="invite-share-actions">
