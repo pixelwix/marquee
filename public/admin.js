@@ -2630,3 +2630,34 @@ function urlBase64ToUint8Array(base64String) {
   const rawData = atob(base64);
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
+
+// ---------- Theme picker ----------
+// MARQUEE_THEMES/getTheme/setTheme live in shared.js (loaded by both pages);
+// this is just the DOM wiring for this page's #theme-btn/#theme-modal.
+const themeModal = document.getElementById('theme-modal');
+function renderThemeGrid() {
+  const active = getTheme();
+  document.getElementById('theme-grid').innerHTML = MARQUEE_THEMES.map(t => `
+    <button class="theme-card${t.id === active ? ' active' : ''}" data-theme-id="${escapeHtml(t.id)}">
+      <div class="theme-card-name">${escapeHtml(t.name)}</div>
+      <div class="theme-card-desc">${escapeHtml(t.desc)}</div>
+      <div class="theme-swatches">
+        <span class="theme-swatch" style="background:${escapeHtml(t.primary)}"></span>
+        <span class="theme-swatch" style="background:${escapeHtml(t.card)}"></span>
+        <span class="theme-swatch" style="background:${escapeHtml(t.accent)}"></span>
+      </div>
+      <div class="theme-card-check">&#10003; Active</div>
+    </button>
+  `).join('');
+}
+document.getElementById('theme-btn').addEventListener('click', () => {
+  renderThemeGrid();
+  themeModal.classList.remove('hidden');
+});
+document.getElementById('close-theme-btn').addEventListener('click', () => themeModal.classList.add('hidden'));
+document.getElementById('theme-grid').addEventListener('click', e => {
+  const card = e.target.closest('.theme-card');
+  if (!card) return;
+  setTheme(card.dataset.themeId);
+  renderThemeGrid();
+});

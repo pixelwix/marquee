@@ -9,6 +9,12 @@
 <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
 <script>window.VAPID_PUBLIC_KEY = "{{VAPID_PUBLIC_KEY}}";</script>
+<script>
+(function() {
+  var t = localStorage.getItem('marquee-theme') || 'marquee-light';
+  document.documentElement.setAttribute('data-theme', t);
+})();
+</script>
 </head>
 <body>
 <div class="bg-fixed"></div>
@@ -36,6 +42,7 @@
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
           </svg>
         </button>
+        <button id="theme-btn" class="icon-btn" aria-label="Theme" title="Theme">🎨</button>
         <button id="admin-logout-btn" class="icon-btn" aria-label="Sign out">&#8594;</button>
       </div>
     </div>
@@ -406,6 +413,17 @@
       <button id="settings-edit-cancel-btn" class="pill-btn">Cancel</button>
       <button id="settings-edit-save-btn" class="btn-primary" disabled>Save Changes</button>
     </div>
+  </div>
+</div>
+
+<!-- THEME PICKER (see MARQUEE_THEMES/getTheme/setTheme in shared.js, wired up in admin.js) -->
+<div id="theme-modal" class="modal hidden">
+  <div class="modal-card theme-modal-card">
+    <div class="modal-head">
+      <h3>Theme</h3>
+      <button id="close-theme-btn" class="pill-btn pill-btn-icon">&#10005;</button>
+    </div>
+    <div id="theme-grid" class="theme-grid"></div>
   </div>
 </div>
 

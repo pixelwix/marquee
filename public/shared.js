@@ -125,3 +125,24 @@ document.querySelectorAll('.modal').forEach(modal => {
     modal.querySelector('.pill-btn-icon')?.click();
   });
 });
+
+// ---------- Theme picker ----------
+// 5 preset color themes, switchable from a header icon button on both pages
+// (see #theme-btn/#theme-modal in index.html/admin.html, wired up in
+// app.js/admin.js), persisted per-browser via localStorage so it sticks
+// across visits without needing a server round-trip.
+const MARQUEE_THEMES = [
+  { id: 'marquee-light', name: 'Marquee Glass', desc: 'Soft translucent glass & ambient light', primary: '#2F6FED', card: 'rgba(255,255,255,0.7)', accent: '#0F8F76' },
+  { id: 'midnight-cyber', name: 'Midnight Cyber', desc: 'Neon cyan & magenta dark mode', primary: '#00F0FF', card: 'rgba(18,22,34,0.75)', accent: '#FF007A' },
+  { id: 'oled-black', name: 'OLED Pure Black', desc: 'High-contrast pitch black & crisp amber', primary: '#FFC658', card: '#000000', accent: '#E08A1E' },
+  { id: 'nordic-slate', name: 'Nordic Slate', desc: 'Cool slate blue & icy teal', primary: '#88C0D0', card: 'rgba(46,52,64,0.85)', accent: '#81A1C1' },
+  { id: 'sunset-amber', name: 'Sunset Amber', desc: 'Warm dark copper & gold', primary: '#E0A21E', card: 'rgba(26,20,18,0.85)', accent: '#D97706' }
+];
+function getTheme() { return localStorage.getItem('marquee-theme') || 'marquee-light'; }
+function setTheme(themeId) {
+  const valid = MARQUEE_THEMES.some(t => t.id === themeId);
+  const target = valid ? themeId : 'marquee-light';
+  document.documentElement.setAttribute('data-theme', target);
+  localStorage.setItem('marquee-theme', target);
+  return target;
+}

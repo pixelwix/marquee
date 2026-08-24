@@ -1,4 +1,4 @@
-:root {
+:root, [data-theme="marquee-light"] {
   --bg: #F3F4F6;
   --card: rgba(255,255,255,0.55);
   --card-border: rgba(255,255,255,0.6);
@@ -13,6 +13,132 @@
   --display: 'Space Grotesk', sans-serif;
   --body: 'Inter', sans-serif;
   --mono: 'JetBrains Mono', monospace;
+  --bg-gradient:
+    radial-gradient(circle at 8% 12%, rgba(47,111,237,0.16), transparent 42%),
+    radial-gradient(circle at 92% 8%, rgba(15,143,118,0.16), transparent 40%),
+    radial-gradient(circle at 25% 90%, rgba(224,138,30,0.14), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(120,90,230,0.12), transparent 42%),
+    #F3F4F6;
+  --card-shadow: 0 16px 36px -22px rgba(20,25,35,0.28), inset 0 1px 0 rgba(255,255,255,0.5);
+  --input-bg: rgba(255,255,255,0.7);
+  --input-border: rgba(20,25,35,0.1);
+  --modal-bg: rgba(20,25,35,0.35);
+  --modal-card: rgba(255,255,255,0.75);
+}
+
+/* Midnight Cyber — neon cyan & magenta dark mode */
+[data-theme="midnight-cyber"] {
+  --bg: #05070C;
+  --card: rgba(18,22,34,0.75);
+  --card-border: rgba(0,240,255,0.22);
+  --text: #E9FBFF;
+  --muted: #7E93A8;
+  --amber: #FFC658;
+  --teal: #00F0FF;
+  --danger: #FF3B6B;
+  --gold: #FFD866;
+  --silver: #9FD8E8;
+  --bronze: #FF7A45;
+  --display: 'Space Grotesk', sans-serif;
+  --body: 'Inter', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --bg-gradient:
+    radial-gradient(circle at 8% 12%, rgba(0,240,255,0.16), transparent 42%),
+    radial-gradient(circle at 92% 8%, rgba(255,0,122,0.14), transparent 40%),
+    radial-gradient(circle at 25% 90%, rgba(0,240,255,0.1), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(255,0,122,0.1), transparent 42%),
+    #05070C;
+  --card-shadow: 0 20px 44px -22px rgba(0,0,0,0.6), inset 0 1px 0 rgba(0,240,255,0.12);
+  --input-bg: rgba(10,14,22,0.6);
+  --input-border: rgba(0,240,255,0.25);
+  --modal-bg: rgba(2,4,8,0.6);
+  --modal-card: rgba(14,18,28,0.88);
+}
+
+/* OLED Pure Black — high-contrast pitch black & crisp amber */
+[data-theme="oled-black"] {
+  --bg: #000000;
+  --card: #000000;
+  --card-border: rgba(255,198,88,0.22);
+  --text: #FFFFFF;
+  --muted: #9A9A9A;
+  --amber: #FFC658;
+  --teal: #5EEAD4;
+  --danger: #FF5C5C;
+  --gold: #FFD37A;
+  --silver: #C9C9C9;
+  --bronze: #E08A1E;
+  --display: 'Space Grotesk', sans-serif;
+  --body: 'Inter', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --bg-gradient:
+    radial-gradient(circle at 10% 10%, rgba(255,198,88,0.1), transparent 40%),
+    radial-gradient(circle at 90% 15%, rgba(224,138,30,0.08), transparent 45%),
+    radial-gradient(circle at 30% 95%, rgba(255,198,88,0.06), transparent 40%),
+    #000000;
+  --card-shadow: 0 24px 48px -24px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,198,88,0.08);
+  --input-bg: #0A0A0A;
+  --input-border: rgba(255,198,88,0.25);
+  --modal-bg: rgba(0,0,0,0.75);
+  --modal-card: #050505;
+}
+
+/* Nordic Slate — cool slate blue & icy teal */
+[data-theme="nordic-slate"] {
+  --bg: #242933;
+  --card: rgba(46,52,64,0.85);
+  --card-border: rgba(136,192,208,0.25);
+  --text: #ECEFF4;
+  --muted: #9AA6B8;
+  --amber: #EBCB8B;
+  --teal: #88C0D0;
+  --danger: #BF616A;
+  --gold: #EBCB8B;
+  --silver: #D8DEE9;
+  --bronze: #D08770;
+  --display: 'Space Grotesk', sans-serif;
+  --body: 'Inter', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --bg-gradient:
+    radial-gradient(circle at 10% 15%, rgba(136,192,208,0.14), transparent 42%),
+    radial-gradient(circle at 90% 10%, rgba(129,161,193,0.14), transparent 40%),
+    radial-gradient(circle at 25% 90%, rgba(94,129,172,0.12), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(163,190,140,0.08), transparent 42%),
+    #242933;
+  --card-shadow: 0 20px 44px -24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(136,192,208,0.12);
+  --input-bg: rgba(59,66,82,0.65);
+  --input-border: rgba(136,192,208,0.28);
+  --modal-bg: rgba(24,28,35,0.6);
+  --modal-card: rgba(46,52,64,0.92);
+}
+
+/* Sunset Amber — warm dark copper & gold */
+[data-theme="sunset-amber"] {
+  --bg: #1A1210;
+  --card: rgba(26,20,18,0.85);
+  --card-border: rgba(224,162,30,0.25);
+  --text: #FBEEDD;
+  --muted: #B69C89;
+  --amber: #E0A21E;
+  --teal: #4FBF9F;
+  --danger: #E4572E;
+  --gold: #F2C14E;
+  --silver: #C9B79C;
+  --bronze: #D97706;
+  --display: 'Space Grotesk', sans-serif;
+  --body: 'Inter', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --bg-gradient:
+    radial-gradient(circle at 10% 10%, rgba(224,162,30,0.16), transparent 42%),
+    radial-gradient(circle at 90% 15%, rgba(217,119,6,0.14), transparent 42%),
+    radial-gradient(circle at 30% 90%, rgba(228,87,46,0.1), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(79,191,159,0.08), transparent 40%),
+    #1A1210;
+  --card-shadow: 0 22px 46px -24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(224,162,30,0.12);
+  --input-bg: rgba(38,28,24,0.7);
+  --input-border: rgba(224,162,30,0.3);
+  --modal-bg: rgba(14,10,8,0.65);
+  --modal-card: rgba(30,22,19,0.92);
 }
 
 * { box-sizing: border-box; }
@@ -20,9 +146,11 @@
 body {
   margin: 0;
   color: var(--text);
+  background: var(--bg);
   font-family: var(--body);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 /* Same gradients that used to live on body via background-attachment:fixed
@@ -31,15 +159,13 @@ body {
    forcing the slower repaint path that background-attachment:fixed falls
    back to in several desktop browsers. That was the main cause of desktop
    scroll stutter — the 14+ backdrop-filter cards on the bento grid were
-   just the visible symptom, not the root cause. */
+   just the visible symptom, not the root cause. Background itself now comes
+   from --bg-gradient so each theme (see [data-theme="..."] blocks above) can
+   swap the whole gradient, not just the base color. */
 .bg-fixed {
   position: fixed; inset: 0; z-index: -1;
-  background:
-    radial-gradient(circle at 8% 12%, rgba(47,111,237,0.16), transparent 42%),
-    radial-gradient(circle at 92% 8%, rgba(15,143,118,0.16), transparent 40%),
-    radial-gradient(circle at 25% 90%, rgba(224,138,30,0.14), transparent 45%),
-    radial-gradient(circle at 85% 85%, rgba(120,90,230,0.12), transparent 42%),
-    var(--bg);
+  background: var(--bg-gradient);
+  transition: background 0.3s ease;
 }
 
 .hidden { display: none !important; }
@@ -54,11 +180,11 @@ body {
   padding: 3rem 2.25rem;
   border-radius: 20px;
   text-align: center;
-  background: rgba(255,255,255,0.55);
-  border: 1px solid rgba(255,255,255,0.65);
+  background: var(--card);
+  border: 1px solid var(--card-border);
   backdrop-filter: blur(22px) saturate(1.4);
   -webkit-backdrop-filter: blur(22px) saturate(1.4);
-  box-shadow: 0 30px 60px -30px rgba(20,25,35,0.35), inset 0 1px 0 rgba(255,255,255,0.6);
+  box-shadow: var(--card-shadow);
 }
 .tagline { color: var(--muted); margin: 0.35rem 0 2rem; font-size: 0.92rem; min-height: 1.3em; transition: opacity 0.3s ease; }
 .tagline.fading { opacity: 0; }
@@ -235,7 +361,7 @@ body {
 .card {
   background: var(--card); border: 1px solid var(--card-border); border-radius: 18px; padding: 1.15rem;
   backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  box-shadow: 0 16px 36px -22px rgba(20,25,35,0.28), inset 0 1px 0 rgba(255,255,255,0.5);
+  box-shadow: var(--card-shadow);
   display: flex; flex-direction: column;
   /* The bento grid puts 14+ of these on screen at once on desktop (fewer
      visible per screen on mobile's single-column stack), each independently
@@ -518,7 +644,7 @@ body {
 
 /* ---------- Modals ---------- */
 .modal {
-  position: fixed; inset: 0; background: rgba(20,25,35,0.35); backdrop-filter: blur(4px);
+  position: fixed; inset: 0; background: var(--modal-bg); backdrop-filter: blur(4px);
   display: flex; align-items: flex-start; justify-content: center; padding-top: 8vh; z-index: 20;
 }
 .modal-card {
@@ -528,7 +654,7 @@ body {
      force it past the width cap above instead of wrapping/shrinking, which is
      what pushed the report modal off the right edge on mobile. */
   min-width: 0;
-  background: rgba(255,255,255,0.75); border: 1px solid rgba(255,255,255,0.7);
+  background: var(--modal-card); border: 1px solid var(--card-border);
   border-radius: 16px; padding: 1.4rem; max-height: 78vh; display: flex; flex-direction: column;
   backdrop-filter: blur(24px) saturate(1.5); -webkit-backdrop-filter: blur(24px) saturate(1.5);
   box-shadow: 0 40px 80px -30px rgba(20,25,35,0.45);
@@ -564,8 +690,8 @@ body {
 .browse-row-index { font-size: 0.75rem; color: var(--muted); font-family: var(--mono); }
 
 #search-input, #report-search-input, #library-search-input {
-  width: 100%; padding: 0.75rem 0.95rem; background: rgba(255,255,255,0.7);
-  border: 1px solid rgba(20,25,35,0.1); border-radius: 9px; color: var(--text);
+  width: 100%; padding: 0.75rem 0.95rem; background: var(--input-bg);
+  border: 1px solid var(--input-border); border-radius: 9px; color: var(--text);
   font-family: var(--body); font-size: 0.9rem; margin-bottom: 0.85rem;
 }
 #search-input:focus, #report-search-input:focus { outline: none; border-color: var(--teal); }
@@ -776,8 +902,8 @@ body {
 .report-type-btn.selected .state-dot { background: var(--teal); }
 .report-type-btn.selected { color: var(--teal); border-color: rgba(15,143,118,0.35); background: rgba(15,143,118,0.08); }
 #report-message {
-  width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.7);
-  border: 1px solid rgba(20,25,35,0.1); border-radius: 9px; color: var(--text);
+  width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; background: var(--input-bg);
+  border: 1px solid var(--input-border); border-radius: 9px; color: var(--text);
   font-family: var(--body); font-size: 0.85rem; resize: vertical; margin-bottom: 0.6rem;
 }
 #report-message:focus { outline: none; border-color: var(--teal); }
@@ -876,8 +1002,8 @@ body {
    overflowing their column and getting clipped by the modal's own edge. */
 @media (max-width: 480px) { .service-grid { grid-template-columns: 1fr; } }
 .service-card {
-  min-width: 0; border: 1px solid rgba(20,25,35,0.08); border-radius: 12px;
-  padding: 0.85rem; background: rgba(255,255,255,0.5);
+  min-width: 0; border: 1px solid var(--card-border); border-radius: 12px;
+  padding: 0.85rem; background: var(--card);
 }
 .service-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem; }
 /* Same shrink priority as the foot row below — the name truncates before
@@ -914,8 +1040,8 @@ body {
 .notice-preset-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
 .notice-preset-row-fun { opacity: 0.75; }
 .settings-input-full {
-  width: 100%; padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.7);
-  border: 1px solid rgba(20,25,35,0.1); border-radius: 8px; color: var(--text);
+  width: 100%; padding: 0.6rem 0.75rem; background: var(--input-bg);
+  border: 1px solid var(--input-border); border-radius: 8px; color: var(--text);
   font-family: var(--mono); font-size: 0.85rem;
 }
 .settings-input-full:focus { outline: none; border-color: var(--teal); }
@@ -1002,3 +1128,32 @@ body {
 #ptr-indicator.ptr-spinning svg { animation: ptr-spin 0.8s linear infinite; }
 @keyframes ptr-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { #ptr-indicator.ptr-spinning svg { animation: none; } }
+
+/* ---------- Theme picker ---------- */
+/* #theme-modal reuses .modal/.modal-card/.modal-head/.pill-btn-icon like every
+   other modal in the app — only the grid below is new. */
+.theme-modal-card { width: min(560px, 92vw); }
+.theme-grid {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;
+}
+@media (max-width: 480px) { .theme-grid { grid-template-columns: 1fr; } }
+.theme-card {
+  text-align: left; cursor: pointer; border-radius: 14px; padding: 0.9rem;
+  background: var(--input-bg); border: 1px solid var(--input-border);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.theme-card:hover { transform: translateY(-2px); }
+.theme-card.active { border-color: var(--teal); box-shadow: 0 0 0 1px var(--teal); }
+.theme-card-name { font-family: var(--display); font-weight: 600; font-size: 0.92rem; color: var(--text); }
+.theme-card-desc { font-size: 0.74rem; color: var(--muted); margin-top: 0.2rem; line-height: 1.35; min-height: 2.6em; }
+.theme-swatches { display: flex; gap: 0.4rem; margin-top: 0.75rem; }
+.theme-swatch {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  border: 1px solid rgba(120,120,120,0.25); box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.theme-card-check {
+  font-family: var(--mono); font-size: 0.66rem; color: var(--teal);
+  margin-top: 0.6rem; visibility: hidden; display: flex; align-items: center; gap: 0.3rem;
+}
+.theme-card.active .theme-card-check { visibility: visible; }

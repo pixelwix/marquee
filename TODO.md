@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.42.1.**
+v1.43.0.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -511,5 +511,11 @@ gets versioned as it ships, not reconstructed later.
 ## v1.42.1 — Fix: Kometa always showed "Unconfigured" in Settings regardless of real state
 
 - [x] **Fix**: Kometa had a Settings card but no entry in `serviceHealth.js`'s check map at all — always fell back to "Unconfigured" even with `KOMETA_CONFIG_DIR` genuinely set. Added `checkKometa`, verifying the real mounted config path is writable.
+
+## v1.43.0 — Theme picker: 5 presets, sitewide, persisted per browser
+
+- [x] New theme button (both pages) opens a picker — 5 presets (Marquee Glass, Midnight Cyber, OLED Pure Black, Nordic Slate, Sunset Amber), persisted via localStorage, applied instantly with no flash on reload
+- [x] Adapted from the same community fork as v1.42.0, not ported as-is — real per-element CSS audit of ~26 hardcoded backgrounds (converted real surfaces like modals/inputs/cards to theme variables; deliberately left photo-overlay chrome like the hero icon buttons hardcoded, since inverting those would look wrong sitting on arbitrary poster art)
+- [x] Verified live across all 5 themes, both pages, and inside the Settings modal
 
 ## Ideas
