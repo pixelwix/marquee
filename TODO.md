@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.43.0.**
+v1.43.1.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -517,5 +517,12 @@ gets versioned as it ships, not reconstructed later.
 - [x] New theme button (both pages) opens a picker — 5 presets (Marquee Glass, Midnight Cyber, OLED Pure Black, Nordic Slate, Sunset Amber), persisted via localStorage, applied instantly with no flash on reload
 - [x] Adapted from the same community fork as v1.42.0, not ported as-is — real per-element CSS audit of ~26 hardcoded backgrounds (converted real surfaces like modals/inputs/cards to theme variables; deliberately left photo-overlay chrome like the hero icon buttons hardcoded, since inverting those would look wrong sitting on arbitrary poster art)
 - [x] Verified live across all 5 themes, both pages, and inside the Settings modal
+
+## v1.43.1 — Fix: Invite to Plex was 404ing on every real invite
+
+- [x] **Fix**: root cause was `librarySectionIds` needing the cloud API's own numeric library id (e.g. `131025743`), not the local server's small section `key` (e.g. `1`) every read in this file already used — a structurally valid but semantically wrong request, silently rejected as "not found." New `getLibraryKeyToCloudId()`/`toCloudLibraryIds()` translate before every write.
+- [x] **Fix**: the invite request body itself was also wrong (missing `skipFriendship`, `allowSubtitleAdmin`, `filterPhotos`; `allowSync` defaulted false) — never actually verified against a real request body before, only the host/auth style. Fixed by intercepting fetch/XHR in the browser to capture Plex's own real request.
+- [x] **Fix**: `updateShareLibraries()` was never live-tested at all — real method is `POST` to `shared_servers/{id}`, not `PUT` (405s), and must round-trip the share's *current* settings or it silently resets them.
+- [x] All three write operations (invite/update/revoke) now confirmed working via this app's own code against the real live API, not just via the browser.
 
 ## Ideas
