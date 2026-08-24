@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.41.2.**
+v1.42.0.**
 
 `v1.1.0` through `v1.4.1` below are a one-time retroactive reconstruction —
 package.json had said `1.1.0` since the batch that first added a version
@@ -495,5 +495,13 @@ gets versioned as it ships, not reconstructed later.
 
 - [x] **Fix**: the shares list silently crashed client-side — `normalizeShare()` now returns `id` as a string, not a raw number
 - [x] Added a regression test that actually catches the type, not just the value
+
+## v1.42.0 — Privacy & Visibility: control what family members see of each other
+
+- [x] New owner-only Settings tab — controls what non-owner family members see of each other in Now Playing and Top of the Month (username, media title/artwork, device/stream detail, leaderboard), with 3 one-click presets (Strict / Family / Full Open). Owner always sees everything; everyone always sees their own stream/stats in full regardless.
+- [x] Adapted from a community fork (raddadengineer/marquee) rather than ported as-is — their version assumed a flatter session shape and a different auth convention; rebuilt against this app's real field shapes (`lib/nowPlaying.js`'s nested `stream` object, `req.session.user`)
+- [x] New `lib/privacy.js` — pure sanitization functions, unit tested (17 cases)
+- [x] Real architectural fix along the way: the live SSE "Now Playing" push stream broadcast the identical raw payload to every connected viewer with no per-client filtering — `lib/sse.js` now tracks each client's own session and supports an optional per-client transform, so live updates get the same privacy treatment as the initial page load, not just the first fetch
+- [x] Real bug caught before shipping: the fork's model treated `thumb` as a user avatar to strip for identity privacy — in this app's actual data, `thumb` is the media poster (no avatar image exists in Now Playing at all), so that would have blanked out poster art for no privacy benefit. Fixed before wiring it in.
 
 ## Ideas

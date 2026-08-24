@@ -1829,7 +1829,8 @@ const settingsTabs = [
   { btn: document.getElementById('tab-settings-notice-btn'), pane: document.getElementById('settings-notice-tab') },
   { btn: document.getElementById('tab-settings-newsletter-btn'), pane: document.getElementById('settings-newsletter-tab') },
   { btn: document.getElementById('tab-settings-invite-btn'), pane: document.getElementById('settings-invite-tab') },
-  { btn: document.getElementById('tab-settings-audit-btn'), pane: document.getElementById('settings-audit-tab') }
+  { btn: document.getElementById('tab-settings-audit-btn'), pane: document.getElementById('settings-audit-tab') },
+  { btn: document.getElementById('tab-settings-privacy-btn'), pane: document.getElementById('settings-privacy-tab') }
 ];
 function activateSettingsTab(btn) {
   for (const t of settingsTabs) {
@@ -1844,6 +1845,7 @@ let noticeSettingsLoaded = false;
 let newsletterCandidatesLoaded = false;
 let inviteTabLoaded = false;
 let auditLogLoaded = false;
+let privacySettingsLoaded = false;
 
 settingsTabs[0].btn.addEventListener('click', () => activateSettingsTab(settingsTabs[0].btn));
 settingsTabs[1].btn.addEventListener('click', () => {
@@ -1869,6 +1871,10 @@ settingsTabs[5].btn.addEventListener('click', () => {
 settingsTabs[6].btn.addEventListener('click', () => {
   activateSettingsTab(settingsTabs[6].btn);
   if (!auditLogLoaded) { auditLogLoaded = true; loadAuditLog(); }
+});
+settingsTabs[7].btn.addEventListener('click', () => {
+  activateSettingsTab(settingsTabs[7].btn);
+  if (!privacySettingsLoaded) { privacySettingsLoaded = true; loadPrivacySettings(); }
 });
 
 async function openSettings() {
@@ -2414,6 +2420,93 @@ async function loadAuditLog() {
 }
 
 document.getElementById('refresh-audit-btn').addEventListener('click', loadAuditLog);
+
+// ---------- Settings: Privacy & Visibility ----------
+// Controls what non-owner family members see of each other in Now Playing
+// and Top of the Month (see lib/privacy.js) — never affects what the owner
+// sees, and never affects what someone sees of their own stream/stats.
+const PRIVACY_FIELDS = {
+  streamUserIdentity: 'privacy-identity-input',
+  streamMediaContent: 'privacy-media-input',
+  streamTechnical: 'privacy-technical-input',
+  statsLeaderboard: 'privacy-stats-input'
+};
+const PRIVACY_ENV_KEYS = {
+  streamUserIdentity: 'PRIVACY_STREAM_USER_IDENTITY',
+  streamMediaContent: 'PRIVACY_STREAM_MEDIA_CONTENT',
+  streamTechnical: 'PRIVACY_STREAM_TECHNICAL',
+  statsLeaderboard: 'PRIVACY_STATS'
+};
+
+async function loadPrivacySettings() {
+  try {
+    const privacy = await api('/api/settings/privacy');
+    for (const [field, elId] of Object.entries(PRIVACY_FIELDS)) {
+      const value = privacy[PRIVACY_ENV_KEYS[field]];
+      if (value) document.getElementById(elId).value = value;
+    }
+  } catch (e) {
+    document.getElementById('privacy-save-status').className = 'settings-status error';
+    document.getElementById('privacy-save-status').textContent = 'Could not load privacy settings.';
+    document.getElementById('privacy-save-status').classList.remove('hidden');
+  }
+}
+
+function applyPrivacyPreset(values) {
+  for (const [field, elId] of Object.entries(PRIVACY_FIELDS)) {
+    document.getElementById(elId).value = values[field];
+  }
+}
+
+document.getElementById('privacy-preset-strict').addEventListener('click', () => applyPrivacyPreset({
+  streamUserIdentity: 'hide_identity', streamMediaContent: 'category_only',
+  streamTechnical: 'hide_all_technical', statsLeaderboard: 'disable_leaderboard'
+}));
+document.getElementById('privacy-preset-family').addEventListener('click', () => applyPrivacyPreset({
+  streamUserIdentity: 'generic_labels', streamMediaContent: 'show_name_only',
+  streamTechnical: 'hide_device_info', statsLeaderboard: 'anonymous_leaderboard'
+}));
+document.getElementById('privacy-preset-open').addEventListener('click', () => applyPrivacyPreset({
+  streamUserIdentity: 'full', streamMediaContent: 'full_details',
+  streamTechnical: 'full_technical', statsLeaderboard: 'full_leaderboard'
+}));
+
+document.getElementById('privacy-save-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('privacy-save-btn');
+  const status = document.getElementById('privacy-save-status');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  status.className = 'settings-status';
+  status.textContent = '';
+  status.classList.remove('hidden');
+
+  const changes = {};
+  for (const [field, elId] of Object.entries(PRIVACY_FIELDS)) {
+    changes[PRIVACY_ENV_KEYS[field]] = document.getElementById(elId).value;
+  }
+
+  try {
+    await api('/api/settings', { method: 'POST', body: JSON.stringify({ changes }) });
+    status.className = 'settings-status ok';
+    status.textContent = 'Saved — restarting…';
+    btn.textContent = 'Restarting…';
+    await new Promise(r => setTimeout(r, 2000));
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
+        if (res.status) { location.reload(); return; }
+      } catch (e) { /* still restarting — keep polling */ }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    status.textContent = 'Taking longer than expected — try reloading the page manually.';
+  } catch (e) {
+    status.className = 'settings-status error';
+    status.textContent = e.message || 'Could not save privacy settings.';
+    btn.disabled = false;
+    btn.textContent = 'Save Privacy Settings';
+  }
+});
 
 document.getElementById('notice-save-btn').addEventListener('click', async () => {
   const message = document.getElementById('notice-message-input').value.trim();

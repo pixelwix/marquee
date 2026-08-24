@@ -314,6 +314,7 @@ function renderNowPlaying({ sessions, totalBandwidthKbps }) {
       }
       row.dataset.idx = idx;
       row.querySelector('.now-title').textContent = s.title;
+      row.querySelector('.thumb').classList.toggle('privacy-blur', !!s.blurArtwork);
       row.querySelector('.state-dot').className = dotClass(s.state === 'paused');
       row.querySelector('.now-meta-text').textContent = `${s.user || ''} · ${s.quality || ''}`;
       row.querySelector('.state-word').textContent = s.state;

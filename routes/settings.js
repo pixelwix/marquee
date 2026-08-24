@@ -21,6 +21,15 @@ const READONLY_KEYS = new Set(['PORT', 'HOST_PORT', 'CONTAINER_NAME']);
 // specific integration.
 const SERVICE_KEYS = new Set(SERVICES.flatMap(s => s.fields.map(f => f.key)));
 
+// Privacy & Visibility settings — their own tab (see lib/privacy.js), not
+// tied to an integration and not part of the generic Deployment popup either.
+const PRIVACY_KEYS = new Set([
+  'PRIVACY_STREAM_USER_IDENTITY',
+  'PRIVACY_STREAM_MEDIA_CONTENT',
+  'PRIVACY_STREAM_TECHNICAL',
+  'PRIVACY_STATS'
+]);
+
 function toClientField(f) {
   const secret = isSecretKey(f.key);
   return {
@@ -76,8 +85,16 @@ router.get('/deployment', requireAuth, requireOwner, (req, res) => {
   if (!fs.existsSync(ENV_PATH)) {
     return res.status(404).json({ error: '.env not found — this deployment may not have it mounted into the container' });
   }
-  const fields = parseFields(fs.readFileSync(ENV_PATH, 'utf8')).filter(f => !SERVICE_KEYS.has(f.key));
+  const fields = parseFields(fs.readFileSync(ENV_PATH, 'utf8')).filter(f => !SERVICE_KEYS.has(f.key) && !PRIVACY_KEYS.has(f.key));
   res.json(fields.map(f => toClientField({ key: f.key, label: f.key, description: f.description, value: f.value })));
+});
+
+// Current Privacy & Visibility config, for the dedicated Settings tab.
+router.get('/privacy', requireAuth, requireOwner, (req, res) => {
+  const values = currentValues() || new Map();
+  const privacy = {};
+  for (const key of PRIVACY_KEYS) privacy[key] = values.get(key) || '';
+  res.json(privacy);
 });
 
 router.post('/', requireAuth, requireOwner, (req, res) => {
@@ -97,7 +114,7 @@ router.post('/', requireAuth, requireOwner, (req, res) => {
   // a .env that only ever had USERNAME/PASSWORD). Either way this is still
   // a fixed, developer-controlled set, never arbitrary client-supplied keys.
   const knownKeys = new Set(parseFields(text).map(f => f.key));
-  const allowedKeys = new Set([...knownKeys, ...SERVICE_KEYS]);
+  const allowedKeys = new Set([...knownKeys, ...SERVICE_KEYS, ...PRIVACY_KEYS]);
 
   const updates = {};
   for (const [key, value] of Object.entries(changes)) {

@@ -4,6 +4,7 @@ const requireAuth = require('./requireAuth');
 const nowPlaying = require('../lib/nowPlaying');
 const { imageUrl } = require('../lib/plexImage');
 const { computeStreak, computeTopWatched, computeRank, parseActivitySeries } = require('../lib/myStats');
+const { sanitizeSession, sanitizeLeaderboard, getPrivacyConfigFromEnv } = require('../lib/privacy');
 const router = express.Router();
 
 // Helper: lists every Plex library Tautulli knows about, with its section_id.
@@ -29,7 +30,10 @@ router.get('/libraries', requireAuth, async (req, res) => {
 // hitting Tautulli directly — it's kept fresh by Plex's own push notifications,
 // so this is both instant and just as current.
 router.get('/now-playing', requireAuth, (req, res) => {
-  res.json(nowPlaying.getSnapshot());
+  const snapshot = nowPlaying.getSnapshot();
+  const config = getPrivacyConfigFromEnv();
+  const sessions = snapshot.sessions.map((s) => sanitizeSession(s, req.session.user, config));
+  res.json({ ...snapshot, sessions });
 });
 
 // Live updates: an initial "full" event on connect, then "full" (session added/
@@ -45,7 +49,7 @@ router.get('/now-playing/stream', requireAuth, (req, res) => {
   }
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
   res.flushHeaders();
-  nowPlaying.addClient(res);
+  nowPlaying.addClient(res, req.session.user);
   req.on('close', () => nowPlaying.removeClient(res));
 });
 
@@ -258,14 +262,15 @@ router.get('/top-of-month', requireAuth, async (req, res) => {
     ).slice(0, 3);
     const topMovies = rowsFor('top_movies').slice(0, 3);
     const topUsers = rowsFor('top_users').slice(0, 3);
+    const privacyConfig = getPrivacyConfigFromEnv();
 
     res.json({
-      user: topUsers.map(u => ({
+      user: sanitizeLeaderboard(topUsers.map(u => ({
         name: u.friendly_name || u.user,
         plays: u.total_plays,
         // Already a public plex.tv avatar URL — no proxying needed.
         avatar: u.user_thumb || null
-      })),
+      })), req.session.user, privacyConfig),
       movie: topMovies.map(m => ({ title: m.title, plays: m.total_plays, thumb: imageUrl(m.thumb) })),
       tv: topTv.map(t => ({ title: t.title, plays: t.total_plays, thumb: imageUrl(t.thumb) })),
       anime: topAnime.map(t => ({ title: t.title, plays: t.total_plays, thumb: imageUrl(t.thumb) }))
