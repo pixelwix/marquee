@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.43.2.**
+v1.44.0.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -528,5 +528,13 @@ gets versioned as it ships, not reconstructed later.
 ## v1.43.2 — Mask emails in the Invite to Plex shares list
 
 - [x] Current Shares now shows a masked email (e.g. `c***0@hotmail.com`) instead of the full address — less exposed on a shared screen or screenshot
+
+## v1.44.0 — Stream Origins: time-range toggle, counts, hover detail, medal ranks
+
+- [x] New 30D/90D/YTD toggle (was hardcoded to year-to-date)
+- [x] Legend now shows raw stream counts alongside percentage, not just percentage
+- [x] Hover a map point or legend row for a detail tooltip; the two cross-highlight each other
+- [x] Top 3 locations get gold/silver/bronze medal styling (color + 🥇🥈🥉), reusing the same convention as Top of the Month
+- [x] `pruneOld()` changed from resetting every Jan 1 to a rolling ~13-month retention, so 90D stays accurate year-round instead of truncating in Jan-Mar
 
 ## Ideas

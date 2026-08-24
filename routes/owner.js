@@ -33,9 +33,12 @@ router.get('/logins', requireAuth, requireOwner, async (req, res) => {
   }
 });
 
+const STREAM_ORIGINS_RANGES = new Set(['30d', '90d', 'ytd']);
+
 router.get('/stream-origins', requireAuth, requireOwner, async (req, res) => {
+  const range = STREAM_ORIGINS_RANGES.has(req.query.range) ? req.query.range : 'ytd';
   try {
-    res.json(await streamOrigins.topLocations());
+    res.json(await streamOrigins.topLocations({ range }));
   } catch (err) {
     console.error('stream origins read error', err.message);
     res.status(500).json({ error: 'Could not read stream origins' });

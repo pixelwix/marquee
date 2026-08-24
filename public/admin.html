@@ -82,7 +82,11 @@
       <div class="card-label"><span class="chan">CH.11</span> Origins</div>
       <div class="settings-section-row">
         <h4 class="admin-subhead">Stream Origins</h4>
-        <span class="pill-note">Year to date</span>
+        <div class="origins-range-toggle" role="group" aria-label="Time range">
+          <button type="button" class="origins-range-btn" data-range="30d">30D</button>
+          <button type="button" class="origins-range-btn" data-range="90d">90D</button>
+          <button type="button" class="origins-range-btn active" data-range="ytd">YTD</button>
+        </div>
       </div>
       <div id="origins-body"><p class="empty-state">Loading…</p></div>
     </section>

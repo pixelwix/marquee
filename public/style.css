@@ -833,24 +833,51 @@ body {
 /* Stream Origins world map — real coastline data (see public/
    originsWorldPath.js), crisp/unblurred so the geography stays
    recognizable; only the amber heat points on top get the soft glow. */
-.origins-map-wrap { width: 100%; aspect-ratio: 2 / 1; margin-bottom: 0.9rem; }
+.origins-map-wrap { width: 100%; aspect-ratio: 2 / 1; margin-bottom: 0.9rem; position: relative; }
 .origins-map-wrap svg { width: 100%; height: 100%; display: block; }
 .origins-land { fill: rgba(20,25,35,0.22); }
-.origins-heat-core { fill: var(--amber); }
-.origins-heat-glow { fill: var(--amber); opacity: 0.35; }
+.origins-heat-core { transition: r 0.15s ease, opacity 0.15s ease; }
+.origins-heat-glow { opacity: 0.35; transition: opacity 0.15s ease, transform 0.15s ease; }
+.origins-heat-hitbox { fill: transparent; pointer-events: all; cursor: pointer; }
 .origins-heat-point.is-top .origins-heat-glow { animation: origins-pulse 2.6s ease-in-out infinite; }
+.origins-heat-point.is-active .origins-heat-glow { opacity: 0.75; }
+.origins-heat-point.is-active .origins-heat-core { transform-box: fill-box; transform-origin: center; transform: scale(1.25); }
 @media (prefers-reduced-motion: reduce) { .origins-heat-point.is-top .origins-heat-glow { animation: none; } }
 @keyframes origins-pulse {
   0%, 100% { opacity: 0.35; transform: scale(1); }
   50% { opacity: 0.55; transform: scale(1.12); }
 }
 
-.origins-legend-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.4rem 0; }
+.origins-tooltip {
+  position: absolute; transform: translate(-50%, calc(-100% - 8px));
+  background: var(--modal-card, #1B1F27); border: 1px solid var(--card-border);
+  border-radius: 8px; padding: 0.4rem 0.6rem; pointer-events: none; z-index: 5;
+  box-shadow: 0 8px 20px -8px rgba(0,0,0,0.4); white-space: nowrap;
+}
+.origins-tooltip.hidden { display: none; }
+.origins-tooltip-place { font-size: 0.78rem; font-weight: 600; color: var(--text); }
+.origins-tooltip-detail { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-top: 0.1rem; }
+
+.origins-range-toggle { display: flex; gap: 0.3rem; }
+.origins-range-btn {
+  font-family: var(--mono); font-size: 0.66rem; font-weight: 600; letter-spacing: 0.03em;
+  color: var(--muted); background: transparent; border: 1px solid var(--card-border);
+  border-radius: 999px; padding: 0.2rem 0.55rem; cursor: pointer; transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.origins-range-btn:hover { color: var(--text); }
+.origins-range-btn.active { color: #12151A; background: var(--amber); border-color: var(--amber); }
+
+.origins-legend-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.4rem 0.3rem; border-radius: 8px; transition: background 0.15s ease; cursor: pointer; }
 .origins-legend-row + .origins-legend-row { border-top: 1px solid rgba(20,25,35,0.06); }
-.origins-legend-rank { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); width: 1.1rem; flex-shrink: 0; }
+.origins-legend-row.is-active { background: rgba(224,138,30,0.1); }
+.origins-legend-rank { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); width: 1.1rem; flex-shrink: 0; text-align: center; }
+.origins-legend-medal { font-size: 0.9rem; width: 1.1rem; flex-shrink: 0; text-align: center; }
 .origins-legend-main { flex: 1; min-width: 0; }
 .origins-legend-top-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
 .origins-legend-place { font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.origins-legend-place.gold { color: var(--gold); }
+.origins-legend-place.silver { color: var(--silver); }
+.origins-legend-place.bronze { color: var(--bronze); }
 .origins-legend-pct { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); flex-shrink: 0; }
 
 .login-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem 0; }

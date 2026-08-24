@@ -99,20 +99,61 @@ test('topLocations() aggregates by city/country and computes percentage of the t
   assert.equal(top[1].pct, 25);
 });
 
-test('pruneOld() removes rows from before the current calendar year and keeps this year\'s', async () => {
+test('pruneOld() removes rows older than the ~13-month retention window, keeps newer ones', async () => {
+  // A rolling window, not a calendar-year cutoff — a 90-day range toggle needs raw
+  // rows to reach back 90 days even in, say, February, when Jan 1 is much closer
+  // than that. See lib/streamOrigins.js's RETENTION_MS comment.
   await clearRows();
-  const lastYear = Date.UTC(2025, 11, 31);
-  const thisYear = Date.UTC(new Date().getFullYear(), 3, 1);
-  await insertRow('old', 'Berlin', 'DE', 52.52, 13.40, lastYear);
-  await insertRow('new', 'Berlin', 'DE', 52.52, 13.40, thisYear);
+  const now = Date.UTC(2026, 5, 15);
+  const tooOld = now - 401 * 24 * 60 * 60 * 1000;
+  const withinWindow = now - 200 * 24 * 60 * 60 * 1000; // well past Jan 1, still retained
+  await insertRow('old', 'Berlin', 'DE', 52.52, 13.40, tooOld);
+  await insertRow('new', 'Berlin', 'DE', 52.52, 13.40, withinWindow);
 
-  await streamOrigins.pruneOld();
+  await streamOrigins.pruneOld(now);
   const remaining = await withDb((db, done) => {
     db.all('SELECT reference_id FROM stream_origins', (err, rows) => done(err, rows));
   });
   const ids = remaining.map((r) => r.reference_id);
   assert.ok(!ids.includes('old'));
   assert.ok(ids.includes('new'));
+});
+
+test('topLocations() with range "30d" excludes a row from 60 days ago', async () => {
+  await clearRows();
+  const now = Date.now();
+  const within30d = now - 5 * 24 * 60 * 60 * 1000;
+  const outside30d = now - 60 * 24 * 60 * 60 * 1000;
+  await insertRow('recent', 'Los Angeles', 'US', 34.05, -118.24, within30d);
+  await insertRow('older', 'London', 'UK', 51.51, -0.13, outside30d);
+
+  const top = await streamOrigins.topLocations({ range: '30d' });
+  assert.equal(top.length, 1);
+  assert.equal(top[0].place, 'Los Angeles, US');
+});
+
+test('topLocations() with range "90d" includes a row from 60 days ago that "30d" would exclude', async () => {
+  await clearRows();
+  const now = Date.now();
+  const within90d = now - 60 * 24 * 60 * 60 * 1000;
+  await insertRow('a', 'London', 'UK', 51.51, -0.13, within90d);
+
+  const top30 = await streamOrigins.topLocations({ range: '30d' });
+  const top90 = await streamOrigins.topLocations({ range: '90d' });
+  assert.equal(top30.length, 0);
+  assert.equal(top90.length, 1);
+});
+
+test('topLocations() includes the raw count alongside the percentage', async () => {
+  await clearRows();
+  const now = Date.UTC(2026, 5, 15);
+  await insertRow('a', 'Los Angeles', 'US', 34.05, -118.24, now);
+  await insertRow('b', 'Los Angeles', 'US', 34.06, -118.25, now);
+  await insertRow('c', 'London', 'UK', 51.51, -0.13, now);
+
+  const top = await streamOrigins.topLocations();
+  assert.equal(top.find((t) => t.place === 'Los Angeles, US').count, 2);
+  assert.equal(top.find((t) => t.place === 'London, UK').count, 1);
 });
 
 test('getWatermark() is null until setWatermark() has run, then returns the last value written', async () => {

@@ -645,10 +645,49 @@ function originsProject(lat, lon) {
   return { x: (lon + 180) * 2, y: (90 - lat) * 2 };
 }
 
+const ORIGINS_MEDALS = ['🥇', '🥈', '🥉'];
+const ORIGINS_RANK_CLASSES = ['gold', 'silver', 'bronze'];
+
+// Rank 1 is the warmest/brightest point; each rank after fades a step cooler and
+// dimmer, so the map reads at a glance which spots actually dominate rather than
+// every dot looking equally important — reusing this app's existing gold/silver/
+// bronze medal palette for ranks 1-3, plain amber for the rest.
+function originsPointColor(rank) {
+  if (rank === 0) return 'var(--gold)';
+  if (rank === 1) return 'var(--silver)';
+  if (rank === 2) return 'var(--bronze)';
+  return 'var(--amber)';
+}
+
+let originsTooltipEl = null;
+function originsTooltip() {
+  if (!originsTooltipEl) {
+    originsTooltipEl = document.createElement('div');
+    originsTooltipEl.className = 'origins-tooltip hidden';
+    document.getElementById('panel-origins').appendChild(originsTooltipEl);
+  }
+  return originsTooltipEl;
+}
+
+function showOriginsTooltip(anchorEl, o) {
+  const tip = originsTooltip();
+  tip.innerHTML = `<div class="origins-tooltip-place">${escapeHtml(o.place)}</div>
+    <div class="origins-tooltip-detail">${o.count.toLocaleString('en-US')} stream${o.count === 1 ? '' : 's'} · ${o.pct}%</div>`;
+  const panelRect = document.getElementById('panel-origins').getBoundingClientRect();
+  const anchorRect = anchorEl.getBoundingClientRect();
+  tip.style.left = `${anchorRect.left - panelRect.left + anchorRect.width / 2}px`;
+  tip.style.top = `${anchorRect.top - panelRect.top}px`;
+  tip.classList.remove('hidden');
+}
+function hideOriginsTooltip() {
+  originsTooltipEl?.classList.add('hidden');
+}
+
 function renderOrigins(locations) {
   const body = document.getElementById('origins-body');
   if (!locations.length) {
-    body.innerHTML = '<p class="empty-state">No streams recorded yet this year.</p>';
+    const emptyLabel = originsRange === 'ytd' ? 'this year' : `in the last ${originsRange === '30d' ? '30' : '90'} days`;
+    body.innerHTML = `<p class="empty-state">No streams recorded yet ${emptyLabel}.</p>`;
     return;
   }
   const sorted = [...locations].sort((a, b) => b.pct - a.pct);
@@ -658,24 +697,31 @@ function renderOrigins(locations) {
     const { x, y } = originsProject(o.lat, o.lon);
     const coreR = 4 + (o.pct / maxPct) * 10;
     const glowR = coreR * 2.4;
-    return `<g class="origins-heat-point${i === 0 ? ' is-top' : ''}">
-      <circle class="origins-heat-glow" cx="${x}" cy="${y}" r="${glowR}" />
-      <circle class="origins-heat-core" cx="${x}" cy="${y}" r="${coreR}" />
+    const color = originsPointColor(i);
+    return `<g class="origins-heat-point${i === 0 ? ' is-top' : ''}" data-idx="${i}">
+      <circle class="origins-heat-glow" cx="${x}" cy="${y}" r="${glowR}" style="fill:${color}" />
+      <circle class="origins-heat-core" cx="${x}" cy="${y}" r="${coreR}" style="fill:${color}" />
+      <circle class="origins-heat-hitbox" cx="${x}" cy="${y}" r="${Math.max(glowR, 10)}" />
     </g>`;
   }).join('');
 
-  const legend = sorted.map((o, i) => `
-    <div class="origins-legend-row">
-      <span class="origins-legend-rank">${i + 1}</span>
+  const legend = sorted.map((o, i) => {
+    const rankMarker = i < 3
+      ? `<span class="origins-legend-medal">${ORIGINS_MEDALS[i]}</span>`
+      : `<span class="origins-legend-rank">${i + 1}</span>`;
+    const rankClass = i < 3 ? ` ${ORIGINS_RANK_CLASSES[i]}` : '';
+    return `
+    <div class="origins-legend-row" data-idx="${i}">
+      ${rankMarker}
       <div class="origins-legend-main">
         <div class="origins-legend-top-row">
-          <span class="origins-legend-place">${escapeHtml(o.place)}</span>
-          <span class="origins-legend-pct">${o.pct}%</span>
+          <span class="origins-legend-place${rankClass}">${escapeHtml(o.place)}</span>
+          <span class="origins-legend-pct">${o.count.toLocaleString('en-US')} · ${o.pct}%</span>
         </div>
         <div class="bar"><div class="bar-fill" style="width:${(o.pct / maxPct) * 100}%"></div></div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 
   body.innerHTML = `
     <div class="origins-map-wrap">
@@ -687,16 +733,50 @@ function renderOrigins(locations) {
     </div>
     ${legend}
   `;
+
+  // Hovering a map point highlights its legend row and vice versa — same `data-idx`
+  // correlates the two, both driven by the one shared tooltip.
+  const rows = body.querySelectorAll('.origins-legend-row');
+  const mapPoints = body.querySelectorAll('.origins-heat-point');
+  function setActive(idx) {
+    rows.forEach((r) => r.classList.toggle('is-active', r.dataset.idx === idx));
+    mapPoints.forEach((p) => p.classList.toggle('is-active', p.dataset.idx === idx));
+  }
+  function clearActive() {
+    rows.forEach((r) => r.classList.remove('is-active'));
+    mapPoints.forEach((p) => p.classList.remove('is-active'));
+    hideOriginsTooltip();
+  }
+  mapPoints.forEach((p) => {
+    p.addEventListener('mouseenter', () => { setActive(p.dataset.idx); showOriginsTooltip(p, sorted[Number(p.dataset.idx)]); });
+    p.addEventListener('mouseleave', clearActive);
+  });
+  rows.forEach((r) => {
+    r.addEventListener('mouseenter', () => { setActive(r.dataset.idx); showOriginsTooltip(r, sorted[Number(r.dataset.idx)]); });
+    r.addEventListener('mouseleave', clearActive);
+  });
 }
 
+let originsRange = 'ytd';
 async function loadOrigins() {
   const body = document.getElementById('origins-body');
   try {
-    renderOrigins(await api('/api/owner/stream-origins'));
+    renderOrigins(await api(`/api/owner/stream-origins?range=${originsRange}`));
   } catch (e) {
     if (!body.children.length) body.innerHTML = '<p class="empty-state">Could not load stream origins.</p>';
   }
 }
+
+document.querySelectorAll('.origins-range-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (btn.classList.contains('active')) return;
+    document.querySelectorAll('.origins-range-btn').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    originsRange = btn.dataset.range;
+    document.getElementById('origins-body').innerHTML = '<p class="empty-state">Loading…</p>';
+    loadOrigins();
+  });
+});
 
 async function loadAlerts() {
   const body = document.getElementById('alerts-body');
