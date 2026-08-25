@@ -24,3 +24,14 @@ test('record() then recent() round-trips a login', async () => {
   assert.equal(rows[0].username, 'alice');
   assert.equal(rows[0].is_owner, 1);
 });
+
+test('findUserIdByUsername() resolves a known username back to their plex user id', async () => {
+  await loginLog.record({ id: 99, username: 'drake', thumb: null, isOwner: false });
+  assert.equal(await loginLog.findUserIdByUsername('drake'), '99');
+});
+
+test('findUserIdByUsername() returns null for an unknown username or empty input', async () => {
+  assert.equal(await loginLog.findUserIdByUsername('nobody-has-ever-logged-in-as-this'), null);
+  assert.equal(await loginLog.findUserIdByUsername(''), null);
+  assert.equal(await loginLog.findUserIdByUsername(undefined), null);
+});

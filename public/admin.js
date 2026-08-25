@@ -645,6 +645,57 @@ function originsProject(lat, lon) {
   return { x: (lon + 180) * 2, y: (90 - lat) * 2 };
 }
 
+// Auto-frames the map to wherever the actual data is instead of always
+// showing the full 720x360 world canvas — for a deployment whose viewers
+// are overwhelmingly one region (the common case), the full world wastes
+// most of the map on empty ocean/continents. Crops to the bounding box of
+// the real points (+ the server point, if set) with padding, then expands
+// the shorter axis to match .origins-map-wrap's 2:1 aspect ratio so the
+// crop never stretches. Purely data-driven — a deployment with genuinely
+// global viewers still gets the full spread, not a hardcoded region.
+function originsViewBox(points, server) {
+  const pts = (server ? [...points, server] : points).map(p => originsProject(p.lat, p.lon));
+  if (!pts.length) return '0 0 720 360';
+  const PAD = 40;
+  const MIN_W = 200; // floor so a single-city deployment doesn't zoom in absurdly tight
+  let minX = Math.min(...pts.map(p => p.x)) - PAD;
+  let maxX = Math.max(...pts.map(p => p.x)) + PAD;
+  let minY = Math.min(...pts.map(p => p.y)) - PAD;
+  let maxY = Math.max(...pts.map(p => p.y)) + PAD;
+  if (maxX - minX < MIN_W) {
+    const cx = (minX + maxX) / 2;
+    minX = cx - MIN_W / 2; maxX = cx + MIN_W / 2;
+  }
+  const targetH = (maxX - minX) / 2;
+  if (targetH > maxY - minY) {
+    const cy = (minY + maxY) / 2;
+    minY = cy - targetH / 2; maxY = cy + targetH / 2;
+  } else {
+    const targetW = (maxY - minY) * 2;
+    const cx = (minX + maxX) / 2;
+    minX = cx - targetW / 2; maxX = cx + targetW / 2;
+  }
+  // Shift back inside the world canvas rather than shrinking, so the 2:1
+  // ratio survives clamping.
+  if (minX < 0) { maxX -= minX; minX = 0; }
+  if (maxX > 720) { minX -= (maxX - 720); maxX = 720; }
+  if (minY < 0) { maxY -= minY; minY = 0; }
+  if (maxY > 360) { minY -= (maxY - 360); maxY = 360; }
+  minX = Math.max(0, minX); maxX = Math.min(720, maxX);
+  minY = Math.max(0, minY); maxY = Math.min(360, maxY);
+  return `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
+}
+
+// Great-circle-ish visual arc between two projected points — a quadratic
+// Bezier lifted perpendicular to the chord, capped so short hops don't
+// balloon and long hops don't flatten into a straight line.
+function originsArcPath(x1, y1, x2, y2) {
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+  const dist = Math.hypot(x2 - x1, y2 - y1);
+  const lift = Math.min(dist * 0.28, 40);
+  return `M${x1},${y1} Q${mx},${my - lift} ${x2},${y2}`;
+}
+
 const ORIGINS_MEDALS = ['🥇', '🥈', '🥉'];
 const ORIGINS_RANK_CLASSES = ['gold', 'silver', 'bronze'];
 
@@ -683,27 +734,48 @@ function hideOriginsTooltip() {
   originsTooltipEl?.classList.add('hidden');
 }
 
-function renderOrigins(locations) {
+function renderOrigins(locations, server) {
   const body = document.getElementById('origins-body');
   if (!locations.length) {
-    const emptyLabel = originsRange === 'ytd' ? 'this year' : `in the last ${originsRange === '30d' ? '30' : '90'} days`;
+    const emptyLabel = originsRange === 'ytd' ? 'this year' : originsRange === 'all' ? '' : `in the last ${originsRange === '30d' ? '30' : '90'} days`;
     body.innerHTML = `<p class="empty-state">No streams recorded yet ${emptyLabel}.</p>`;
     return;
   }
   const sorted = [...locations].sort((a, b) => b.pct - a.pct);
   const maxPct = sorted[0].pct;
 
-  const points = sorted.map((o, i) => {
-    const { x, y } = originsProject(o.lat, o.lon);
-    const coreR = 4 + (o.pct / maxPct) * 10;
-    const glowR = coreR * 2.4;
-    const color = originsPointColor(i);
-    return `<g class="origins-heat-point${i === 0 ? ' is-top' : ''}" data-idx="${i}">
-      <circle class="origins-heat-glow" cx="${x}" cy="${y}" r="${glowR}" style="fill:${color}" />
-      <circle class="origins-heat-core" cx="${x}" cy="${y}" r="${coreR}" style="fill:${color}" />
-      <circle class="origins-heat-hitbox" cx="${x}" cy="${y}" r="${Math.max(glowR, 10)}" />
-    </g>`;
-  }).join('');
+  // SERVER_LAT/SERVER_LON (routes/owner.js) is optional — when set, draw a
+  // sparkline arc from every origin to that one point instead of isolated
+  // heat-point blobs, so the map reads as "streams reaching your server"
+  // rather than just "where viewers are." Unset falls back to the original
+  // blob rendering unchanged.
+  const points = server
+    ? sorted.map((o, i) => {
+        const { x, y } = originsProject(o.lat, o.lon);
+        const sp = originsProject(server.lat, server.lon);
+        const color = originsPointColor(i);
+        const isTop = i === 0;
+        const width = 0.8 + (o.pct / maxPct) * 1.6;
+        const dotR = 2 + (o.pct / maxPct) * 3;
+        return `<g class="origins-heat-point${isTop ? ' is-top' : ''}" data-idx="${i}">
+          <path class="origins-arc${isTop ? ' origins-arc-top' : ''}" d="${originsArcPath(x, y, sp.x, sp.y)}"
+            style="stroke:${color}" stroke-width="${width}" opacity="${isTop ? 0.85 : 0.4}" />
+          <circle class="origins-origin-dot" cx="${x}" cy="${y}" r="${dotR}" style="fill:${color}" />
+          <circle class="origins-heat-hitbox" cx="${x}" cy="${y}" r="10" />
+        </g>`;
+      }).join('') + `<circle class="origins-server-ring" cx="${originsProject(server.lat, server.lon).x}" cy="${originsProject(server.lat, server.lon).y}" r="6" />
+      <circle class="origins-server-dot" cx="${originsProject(server.lat, server.lon).x}" cy="${originsProject(server.lat, server.lon).y}" r="4" />`
+    : sorted.map((o, i) => {
+        const { x, y } = originsProject(o.lat, o.lon);
+        const coreR = 4 + (o.pct / maxPct) * 10;
+        const glowR = coreR * 2.4;
+        const color = originsPointColor(i);
+        return `<g class="origins-heat-point${i === 0 ? ' is-top' : ''}" data-idx="${i}">
+          <circle class="origins-heat-glow" cx="${x}" cy="${y}" r="${glowR}" style="fill:${color}" />
+          <circle class="origins-heat-core" cx="${x}" cy="${y}" r="${coreR}" style="fill:${color}" />
+          <circle class="origins-heat-hitbox" cx="${x}" cy="${y}" r="${Math.max(glowR, 10)}" />
+        </g>`;
+      }).join('');
 
   const legend = sorted.map((o, i) => {
     const rankMarker = i < 3
@@ -725,10 +797,10 @@ function renderOrigins(locations) {
 
   body.innerHTML = `
     <div class="origins-map-wrap">
-      <svg viewBox="0 0 720 360" role="img" aria-label="World map of stream origins">
+      <svg viewBox="${originsViewBox(sorted, server)}" role="img" aria-label="Map of stream origins">
         <filter id="origins-blur"><feGaussianBlur stdDeviation="3" /></filter>
         <path class="origins-land" d="${ORIGINS_WORLD_PATH}" />
-        <g filter="url(#origins-blur)">${points}</g>
+        ${server ? `<g>${points}</g>` : `<g filter="url(#origins-blur)">${points}</g>`}
       </svg>
     </div>
     ${legend}
@@ -761,7 +833,8 @@ let originsRange = 'ytd';
 async function loadOrigins() {
   const body = document.getElementById('origins-body');
   try {
-    renderOrigins(await api(`/api/owner/stream-origins?range=${originsRange}`));
+    const { locations, server } = await api(`/api/owner/stream-origins?range=${originsRange}`);
+    renderOrigins(locations, server);
   } catch (e) {
     if (!body.children.length) body.innerHTML = '<p class="empty-state">Could not load stream origins.</p>';
   }

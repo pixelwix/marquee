@@ -18,6 +18,7 @@
 <meta name="apple-mobile-web-app-title" content="{{SITE_NAME}}">
 
 <script>window.SITE_TAGLINES = {{TAGLINES_JSON}};</script>
+<script>window.VAPID_PUBLIC_KEY = "{{VAPID_PUBLIC_KEY}}";</script>
 <script>
 (function() {
   var t = localStorage.getItem('marquee-theme') || 'marquee-light';
@@ -58,6 +59,12 @@
         <div class="hero-icons">
           <button id="search-btn" class="icon-btn" aria-label="Request something">+</button>
           <button id="report-search-btn" class="icon-btn" aria-label="Report an issue">&#9873;</button>
+          <button id="notify-toggle-btn" class="icon-btn hidden" aria-label="Enable notifications">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+          </button>
           <button id="theme-btn" class="icon-btn" aria-label="Theme" title="Theme">🎨</button>
           <a id="admin-link-btn" href="/admin" class="icon-btn hidden" aria-label="Admin">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -69,11 +76,15 @@
             <div class="avatar"></div>
             <div><div class="avatar-name" id="whoami"></div><div class="avatar-role">My Stats</div></div>
           </div>
-          <button id="logout-btn" class="icon-btn" aria-label="Sign out">&#8594;</button>
+          <button id="logout-btn" class="icon-btn" aria-label="Sign out">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 6l6 6-6 6"></path>
+            </svg>
+          </button>
         </div>
       </div>
       <div class="hero-mid">
-        <div>
+        <div class="hero-mid-info">
           <div class="hero-headline" id="hero-headline">Loading…</div>
           <div class="hero-sub" id="live-indicator">CH.01 &middot; ON AIR</div>
           <div id="hero-featured-tag" class="hero-featured-tag hidden"></div>
@@ -115,12 +126,18 @@
       </section>
 
       <section class="card span4" id="panel-airing-today">
-        <div class="card-label"><span class="chan">CH.05</span> Airing Today</div>
+        <div class="card-label">
+          <span class="chan">CH.05</span> Airing Today
+          <button type="button" class="pill-btn mine-toggle-btn" id="airing-mine-toggle" aria-pressed="false">Just Mine</button>
+        </div>
         <div class="poster-grid" id="airing-today-body"><p class="empty-state">Loading…</p></div>
       </section>
 
       <section class="card span4" id="panel-upcoming">
-        <div class="card-label"><span class="chan">CH.06</span> Releasing Soon</div>
+        <div class="card-label">
+          <span class="chan">CH.06</span> Releasing Soon
+          <button type="button" class="pill-btn mine-toggle-btn" id="upcoming-mine-toggle" aria-pressed="false">Just Mine</button>
+        </div>
         <div class="poster-grid poster-grid-scroll" id="upcoming-body"><p class="empty-state">Loading…</p></div>
       </section>
 

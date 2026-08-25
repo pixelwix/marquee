@@ -7,12 +7,17 @@ const overseerrSession = require('../lib/overseerrSession');
 const rateLimit = require('../lib/rateLimit');
 const sse = require('../lib/sse');
 const pushNotify = require('../lib/pushNotify');
+const loginLog = require('../lib/loginLog');
 const tautulliMedia = require('../lib/tautulliMedia');
 const autoFixIssue = require('../lib/autoFixIssue');
 const { adminClient, mapDiscoverItem, resolveMedia, fetchOpenIssues, ISSUE_TYPE_LABELS } = require('../lib/overseerrClient');
 const downloadQueueIds = require('../lib/downloadQueueIds');
 const { computeAvailability } = require('../lib/requestAvailability');
 const { extractTmdbId } = require('../lib/guid');
+const { fetchMissingMovies } = require('../lib/radarrClient');
+const { fetchMissingEpisodes } = require('../lib/sonarrClient');
+const { annotateAndSort } = require('../lib/stuckRequests');
+const settle = require('../lib/settle');
 const router = express.Router();
 
 // Unlike the read-only endpoints below, these have a real side effect (creates an
@@ -226,13 +231,25 @@ router.post('/request', requireAuth, requestLimiter, async (req, res) => {
 router.get('/requests/mine', requireAuth, async (req, res) => {
   try {
     const session = await overseerrSession.getSession(req.session.user.id, req.session.user.plexToken);
-    const [{ data }, queued] = await Promise.all([
+    const [{ data }, queued, wantedMovies, wantedEpisodes] = await Promise.all([
       axios.get(`${process.env.OVERSEERR_URL}/api/v1/request`, {
         params: { take: 20, sort: 'added', requestedBy: session.overseerrUserId },
         headers: { Cookie: session.cookie }
       }),
-      downloadQueueIds.getQueuedIds()
+      downloadQueueIds.getQueuedIds(),
+      // Cross-referenced below against each of this user's own approved-but-
+      // not-yet-available requests, so "Approved" doesn't just sit there
+      // forever with no hint that Radarr/Sonarr genuinely can't find a
+      // release for it — same stuck concept the owner's admin Wanted/Missing
+      // panel already surfaces (lib/stuckRequests.js), just reused here from
+      // the requester's own point of view. One upstream being down doesn't
+      // break the rest of this response (settle), it just means stuck-status
+      // silently isn't available this time.
+      settle('radarr wanted (requests/mine)', fetchMissingMovies(), []),
+      settle('sonarr wanted (requests/mine)', fetchMissingEpisodes(), [])
     ]);
+    const stuckMovieByTmdbId = new Map(annotateAndSort(wantedMovies).filter(m => m.stuck).map(m => [m.tmdbId, m]));
+    const stuckTvByTvdbId = new Map(annotateAndSort(wantedEpisodes).filter(e => e.stuck).map(e => [e.tvdbId, e]));
 
     const results = await Promise.all(data.results.map(async r => {
       const mediaType = r.type; // 'movie' | 'tv'
@@ -246,7 +263,9 @@ router.get('/requests/mine', requireAuth, async (req, res) => {
           ? queued.movieEta.get(r.media?.externalServiceId)
           : queued.seriesEta.get(r.media?.externalServiceId)) ?? null
         : null;
-      return { title, poster, mediaType, availability, etaSeconds, requestedAt: r.createdAt };
+      const stuckMatch = mediaType === 'movie' ? stuckMovieByTmdbId.get(r.media?.tmdbId) : stuckTvByTvdbId.get(r.media?.tvdbId);
+      const stuck = availability !== 'available' && !!stuckMatch;
+      return { title, poster, mediaType, availability, etaSeconds, requestedAt: r.createdAt, stuck, daysSinceRelease: stuckMatch?.daysSinceRelease ?? null };
     }));
 
     res.json(results);
@@ -482,9 +501,27 @@ router.post('/webhook', (req, res) => {
       .catch(err => console.error('overseerr webhook forward error', err.message));
   }
 
-  const { notification_type, subject, image } = req.body;
+  const { notification_type, subject, image, request } = req.body;
   if (notification_type === 'MEDIA_AVAILABLE') {
     sse.broadcast('media-available', { title: subject, poster: image });
+    // Overseerr's payload only ever gives us the requester's username, not a
+    // Marquee/Plex user id — resolve it via loginLog's durable sign-in
+    // history (see lib/loginLog.js's findUserIdByUsername). request is
+    // absent when content became available without ever going through an
+    // Overseerr request (e.g. the owner added it directly in Plex) — in
+    // that case there's no one specific to push to, so this just no-ops and
+    // leaves the SSE toast above as the only notification, same as before.
+    const requestedByUsername = request?.requestedBy_username;
+    if (requestedByUsername) {
+      loginLog.findUserIdByUsername(requestedByUsername)
+        .then(userId => userId && pushNotify.notifyUser(userId, {
+          title: 'Your request is available',
+          body: `${subject} is ready to watch.`,
+          icon: image,
+          url: '/'
+        }))
+        .catch(err => console.error('overseerr webhook push notify error', err.message));
+    }
   } else if (notification_type === 'MEDIA_PENDING') {
     // Fires once per new request that needs approval (auto-approved requests
     // never hit this type) — the owner otherwise had no way to know a request

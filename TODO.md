@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.44.0.**
+v1.50.1.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -536,5 +536,66 @@ gets versioned as it ships, not reconstructed later.
 - [x] Hover a map point or legend row for a detail tooltip; the two cross-highlight each other
 - [x] Top 3 locations get gold/silver/bronze medal styling (color + 🥇🥈🥉), reusing the same convention as Top of the Month
 - [x] `pruneOld()` changed from resetting every Jan 1 to a rolling ~13-month retention, so 90D stays accurate year-round instead of truncating in Jan-Mar
+
+## v1.45.0 — Stream Origins: sparkline arcs to server, state/region in labels
+
+- [x] New `SERVER_LAT`/`SERVER_LON` deployment setting (optional) — when set, map draws an animated arc from each origin to that point instead of plain heat blobs
+- [x] Legend/tooltip place labels now include state/region (e.g. "Saint Paul, US"), not just city/country
+- [x] Unset `SERVER_LAT`/`SERVER_LON` falls back to the original heat-blob rendering unchanged
+- [x] Added `ALL` to the range toggle (was 30D/90D/YTD only)
+
+## v1.45.1 — Fix: hero header broken on mobile
+
+- [x] Headline wrapping to 2 lines pushed the FEATURED tag past `.hero-mid`'s fixed 112px, clipped by `.hero`'s fixed 220px + overflow:hidden — both switch to `height: auto` under 480px
+- [x] A long FEATURED title pushed the date pill off-screen instead of ellipsizing — the text block had no `min-width: 0`, so the flex row refused to shrink below its content width
+
+## v1.46.0 — Stream Origins map auto-frames to where the data actually is
+
+- [x] viewBox now auto-crops to the bounding box of the real points (+ server point) instead of always showing the full 720x360 world canvas — a region-clustered deployment (e.g. all-US) now fills the frame instead of mostly showing empty ocean
+- [x] Purely data-driven, not hardcoded to any region — a deployment with genuinely global viewers still gets the full spread
+
+## v1.47.0 — Push notifications for family members, not just the owner
+
+- [x] `/api/push/subscribe`, `/unsubscribe`, `/vapid-public-key` no longer owner-only — any signed-in family member can turn on notifications for their own account
+- [x] New bell icon on the family dashboard (`#notify-toggle-btn`), same subscribe flow as the existing admin one
+- [x] `push_subscriptions` schema scoped per-user (`user_id`/`is_owner` columns, migrated from the old owner-only table) — `notifyOwners()` unchanged, new `notifyUser(userId, ...)` targets one person's own devices
+- [x] Overseerr's `MEDIA_AVAILABLE` webhook now pushes "Your request is available" to the actual requester (resolved via `loginLog.findUserIdByUsername`), not just the in-app SSE toast
+
+## v1.48.0 — "Just Mine" filter on Airing Today / Releasing Soon
+
+- [x] Airing Today's toggle filters to shows you've actually watched before (per Tautulli history)
+- [x] Releasing Soon's toggle filters to movies you personally requested (per Overseerr) — deliberately not watch history, since an upcoming movie is by definition unwatched
+- [x] Both off by default; state doesn't persist across a reload
+
+## v1.49.0 — My Requests now flags genuinely stuck requests
+
+- [x] An approved/downloading request now shows "Stuck — released Xd ago, still searching" instead of sitting at "Approved" forever, when Radarr/Sonarr's own Wanted/Missing list confirms it's actually stuck (same threshold the owner's admin panel already uses)
+
+## v1.49.1 — Fix: logout button pushed off-screen on mobile header
+
+- [x] **Fix**: notify/theme/admin icon buttons + avatar chip + logout button didn't fit one row on a real phone (worse for admins, extra icon) — logout-btn was pushed past the viewport edge, unreachable. Shrunk `.icon-btn`/`.avatar-chip`/`.avatar`/`.avatar-name` under the existing 900px breakpoint instead of hiding/moving anything further.
+
+## v1.49.2 — Fix: avatar chip scale + logout arrow centering, found via live mobile check on v1.49.1
+
+- [x] **Fix**: avatar chip's name/role text stayed full-size while the icon buttons around it shrank in v1.49.1, reading oversized next to them — shrunk `.avatar-name`/`.avatar-role` font sizes under the same mobile breakpoint
+- [x] **Fix**: logout button's `&#8594;` HTML entity rendered visibly off-center in its circle (asymmetric glyph metrics, not a centering bug) — replaced with the same stroke-based SVG icon pattern already used by the other header icon buttons, on both the family dashboard and admin page
+
+## v1.49.3 — Fix: admin page's back arrow didn't match the new logout arrow style
+
+- [x] **Fix**: admin header's back-to-dashboard button still used the raw `&#8592;` HTML entity (same off-center-glyph issue as the old logout arrow) — replaced with the matching stroke-based SVG arrow so both icon buttons render consistently
+
+## v1.50.0 — Stream Origins: real geolocation instead of a local database
+
+- [x] Switched from `geoip-lite` (free bundled database, ~94% of city-less lookups also had no region) to a live lookup, per owner request after noticing Tautulli's own IP lookup resolves real cities/ISPs it couldn't
+- [x] New `geo_cache` table — one lookup per distinct IP ever seen, permanent (no TTL), so this stays a one-time cost per IP, not per-session or per-sync-run
+- [x] `geoip-lite` dependency removed entirely
+- [x] Sync watermark reset on deploy so the existing year-to-date history actually re-resolves through the new source too, not just new sessions going forward
+
+## v1.50.1 — Fix: switched Stream Origins' geo source from ipapi.co to Tautulli's own lookup
+
+- [x] **Fix**: first shipped against `ipapi.co` (a new third party) — hit its free-tier burst rate limit almost immediately during the year-to-date backfill (no throttling at all between calls)
+- [x] **Fix**: separately, `ipapi.co` turned out to be on HaGeZi's Ultimate Blocklist (one of this deployment's own AdGuard filters), sinkholed to `0.0.0.0` — every lookup was failing before rate-limiting even became relevant
+- [x] Root-caused better: Tautulli already maintains its own real MaxMind GeoLite2 database for its own IP-lookup UI feature, exposed via its `get_geoip_lookup` API command — switched to that instead of a new third party entirely. No new service ever sees a viewer's IP (Tautulli already did, it's the source of `ip_address` in the first place), no external rate limit, no blocklist risk
+- [x] Confirmed `get_history` (already polled every sync) does NOT embed geo fields — a dedicated per-IP `get_geoip_lookup` call is genuinely required, verified live before committing to the approach
 
 ## Ideas

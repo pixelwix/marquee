@@ -33,12 +33,20 @@ router.get('/logins', requireAuth, requireOwner, async (req, res) => {
   }
 });
 
-const STREAM_ORIGINS_RANGES = new Set(['30d', '90d', 'ytd']);
+const STREAM_ORIGINS_RANGES = new Set(['30d', '90d', 'ytd', 'all']);
 
 router.get('/stream-origins', requireAuth, requireOwner, async (req, res) => {
   const range = STREAM_ORIGINS_RANGES.has(req.query.range) ? req.query.range : 'ytd';
   try {
-    res.json(await streamOrigins.topLocations({ range }));
+    const locations = await streamOrigins.topLocations({ range });
+    // SERVER_LAT/SERVER_LON are optional (Settings -> Edit Deployment Settings, same
+    // generic mechanism as any other unclaimed .env field — no dedicated route/UI
+    // needed). Unset entirely is a real, supported state: the panel falls back to the
+    // original heat-point rendering with no server point to draw arcs to.
+    const lat = Number(process.env.SERVER_LAT);
+    const lon = Number(process.env.SERVER_LON);
+    const server = Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+    res.json({ locations, server });
   } catch (err) {
     console.error('stream origins read error', err.message);
     res.status(500).json({ error: 'Could not read stream origins' });

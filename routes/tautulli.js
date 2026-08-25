@@ -3,7 +3,7 @@ const axios = require('axios');
 const requireAuth = require('./requireAuth');
 const nowPlaying = require('../lib/nowPlaying');
 const { imageUrl } = require('../lib/plexImage');
-const { computeStreak, computeTopWatched, computeRank, parseActivitySeries } = require('../lib/myStats');
+const { computeStreak, computeTopWatched, computeRank, parseActivitySeries, extractWatchedTvTitles } = require('../lib/myStats');
 const { sanitizeSession, sanitizeLeaderboard, getPrivacyConfigFromEnv } = require('../lib/privacy');
 const router = express.Router();
 
@@ -205,6 +205,32 @@ router.get('/recently-watched', requireAuth, async (req, res) => {
     res.json(items);
   } catch (err) {
     console.error('tautulli recently-watched error:', err.code || err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not reach Tautulli' });
+  }
+});
+
+// Powers Airing Today's "Just Mine" filter (public/app.js's loadMyShows) — a
+// deliberately generous history window (length: 500, not the 15-40 other
+// endpoints here cap at) since this needs to answer "have I EVER watched
+// this show," not "recently." Releasing Soon's own "Just Mine" is a
+// different signal (this user's own Overseerr requests, not watch history —
+// an upcoming movie is by definition unwatched) so it's served straight from
+// the existing GET /requests/mine in routes/overseerr.js instead of here.
+router.get('/my-shows', requireAuth, async (req, res) => {
+  try {
+    const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
+      params: {
+        apikey: process.env.TAUTULLI_API_KEY,
+        cmd: 'get_history',
+        user_id: req.session.user.id,
+        length: 500,
+        order_column: 'date',
+        order_dir: 'desc'
+      }
+    });
+    res.json({ tvTitles: extractWatchedTvTitles(data.response.data.data || []) });
+  } catch (err) {
+    console.error('tautulli my-shows error:', err.code || err.response?.status, err.message);
     res.status(502).json({ error: 'Could not reach Tautulli' });
   }
 });

@@ -191,7 +191,8 @@ const renderedHtml = fs.readFileSync(path.join(__dirname, 'public', 'index.html'
   .replace('{{TAGLINES_JSON}}', taglinesJson)
   .replaceAll('{{ASSET_VERSION}}', assetVersion)
   .replaceAll('{{APP_VERSION}}', appVersion)
-  .replaceAll('{{COPYRIGHT_YEAR}}', copyrightYear);
+  .replaceAll('{{COPYRIGHT_YEAR}}', copyrightYear)
+  .replaceAll('{{VAPID_PUBLIC_KEY}}', process.env.VAPID_PUBLIC_KEY || '');
 const renderedManifest = fs.readFileSync(path.join(__dirname, 'public', 'manifest.webmanifest'), 'utf8')
   .replaceAll('{{SITE_NAME}}', siteName);
 // Owner-only control center — a separate page (not just a hidden panel) so
@@ -199,10 +200,11 @@ const renderedManifest = fs.readFileSync(path.join(__dirname, 'public', 'manifes
 // control happens server-side on every /api/owner, /api/*/queue,
 // /api/*/releases, etc. route (requireAuth + requireOwner) — this page is
 // just a shell, same as index.html.
-// VAPID_PUBLIC_KEY is deliberately only templated into the owner page, not
-// index.html — Web Push here is owner-only (see routes/push.js), unlike the
-// family-wide version this replaces (removed entirely in v1.5.0 for going
-// unused; this one is scoped to something actually worth a ping: stack alerts).
+// VAPID_PUBLIC_KEY is also templated into index.html above — Web Push is no
+// longer owner-only (see routes/push.js/lib/pushNotify.js's notifyUser()),
+// unlike the original family-wide version this replaces (removed entirely in
+// v1.5.0 for going unused; that history is why subscriptions are scoped
+// per-user this time, not a blind resurrection of the old broadcast-to-all).
 const renderedAdminHtml = fs.readFileSync(path.join(__dirname, 'public', 'admin.html'), 'utf8')
   .replaceAll('{{SITE_NAME}}', siteName)
   .replaceAll('{{ASSET_VERSION}}', assetVersion)

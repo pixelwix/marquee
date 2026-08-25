@@ -96,6 +96,7 @@ function showDashboard(owner) {
   loadDownloads();
   setInterval(loadDownloads, 5000);
   loadReportFlagStatus();
+  initNotifyToggle();
   // Everything owner-only (sign-ins, pending requests, issues, system status,
   // stack management) lives on its own page now instead of crowding this one.
   document.getElementById('admin-link-btn').classList.toggle('hidden', !isOwner);
@@ -477,48 +478,132 @@ async function loadRecentlyAdded() {
 }
 
 // ---------- Airing Today ----------
+// "Just Mine" filter (Airing Today) — matches by title against every TV show
+// this signed-in user has ever watched per Tautulli history (GET
+// /api/tautulli/my-shows), same title-based show identity this codebase
+// already uses everywhere else (see routes/tautulli.js's showIdentity(),
+// lib/myStats.js's computeTopWatched) rather than introducing a tvdbId
+// cross-reference nothing else here needs. Fetched lazily (only once the
+// toggle is actually turned on) and cached for the rest of the page session.
+let myShowsCache = null;
+async function loadMyShows() {
+  if (myShowsCache) return myShowsCache;
+  try {
+    const data = await api('/api/tautulli/my-shows');
+    myShowsCache = new Set(data.tvTitles);
+  } catch (e) {
+    myShowsCache = new Set();
+  }
+  return myShowsCache;
+}
+
+// "Just Mine" filter (Releasing Soon) — deliberately a different signal than
+// Airing Today's: an upcoming movie is by definition one nobody's watched
+// yet, so "have I watched this" can never match anything actually useful
+// here. What's actually meaningful is "did I ask for this" — matches by
+// title against this user's own Overseerr requests (GET
+// /api/overseerr/requests/mine, already built for the My Requests tab), so
+// the filter reads as "movies I requested that are now coming up."
+let myRequestedMoviesCache = null;
+async function loadMyRequestedMovies() {
+  if (myRequestedMoviesCache) return myRequestedMoviesCache;
+  try {
+    const results = await api('/api/overseerr/requests/mine');
+    myRequestedMoviesCache = new Set(results.filter(r => r.mediaType === 'movie').map(r => r.title));
+  } catch (e) {
+    myRequestedMoviesCache = new Set();
+  }
+  return myRequestedMoviesCache;
+}
+
+let airingMineOnly = false;
+function renderAiringToday() {
+  const body = document.getElementById('airing-today-body');
+  const items = store.airingToday || [];
+  // data-idx stays the item's index in the full, unfiltered store.airingToday
+  // (not its position in this filtered render) — the click handler below
+  // indexes straight into that array, and needs to keep working identically
+  // whether the filter is on or off.
+  const shown = items
+    .map((i, idx) => ({ i, idx }))
+    .filter(({ i }) => !airingMineOnly || myShowsCache?.has(i.series));
+  if (!shown.length) {
+    body.innerHTML = `<p class="empty-state">${airingMineOnly ? 'Nothing airing today from shows you watch.' : 'Nothing airing today.'}</p>`;
+    return;
+  }
+  body.innerHTML = shown.map(({ i, idx }) => `
+    <div class="poster-card" data-idx="${idx}">
+      <div class="poster-frame">
+        <img class="poster-img" src="${i.poster || ''}" loading="lazy" onerror="this.style.visibility='hidden'">
+        <span class="poster-badge">${i.episode}</span>
+        <div class="poster-overlay"><span class="poster-overlay-text">${escapeHtml(i.series)}</span></div>
+      </div>
+      <div class="poster-meta">${i.hasFile ? 'Downloaded' : 'Airing'}</div>
+    </div>
+  `).join('');
+}
+
 async function loadAiringToday() {
   const body = document.getElementById('airing-today-body');
   try {
-    const items = await api('/api/sonarr/today');
-    store.airingToday = items;
-    if (!items.length) { body.innerHTML = '<p class="empty-state">Nothing airing today.</p>'; return; }
-    body.innerHTML = items.map((i, idx) => `
-      <div class="poster-card" data-idx="${idx}">
-        <div class="poster-frame">
-          <img class="poster-img" src="${i.poster || ''}" loading="lazy" onerror="this.style.visibility='hidden'">
-          <span class="poster-badge">${i.episode}</span>
-          <div class="poster-overlay"><span class="poster-overlay-text">${escapeHtml(i.series)}</span></div>
-        </div>
-        <div class="poster-meta">${i.hasFile ? 'Downloaded' : 'Airing'}</div>
-      </div>
-    `).join('');
+    store.airingToday = await api('/api/sonarr/today');
+    renderAiringToday();
   } catch (e) {
     body.innerHTML = '<p class="empty-state">Could not reach Sonarr.</p>';
   }
 }
 
+document.getElementById('airing-mine-toggle').addEventListener('click', async () => {
+  const btn = document.getElementById('airing-mine-toggle');
+  airingMineOnly = !airingMineOnly;
+  btn.classList.toggle('active', airingMineOnly);
+  btn.setAttribute('aria-pressed', String(airingMineOnly));
+  if (airingMineOnly) await loadMyShows();
+  renderAiringToday();
+});
+
 // ---------- Releasing Soon ----------
+let upcomingMineOnly = false;
+function renderUpcoming() {
+  const body = document.getElementById('upcoming-body');
+  const items = store.upcoming || [];
+  const shown = items
+    .map((i, idx) => ({ i, idx }))
+    .filter(({ i }) => !upcomingMineOnly || myRequestedMoviesCache?.has(i.title));
+  if (!shown.length) {
+    body.innerHTML = `<p class="empty-state">${upcomingMineOnly ? 'Nothing upcoming from movies you requested.' : 'Nothing on the calendar.'}</p>`;
+    return;
+  }
+  body.innerHTML = shown.map(({ i, idx }) => `
+    <div class="poster-card" data-idx="${idx}">
+      <div class="poster-frame">
+        <img class="poster-img" src="${i.poster || ''}" loading="lazy" onerror="this.style.visibility='hidden'">
+        <span class="poster-badge">${formatDate(i.releaseDate)}</span>
+        <div class="poster-overlay"><span class="poster-overlay-text">${escapeHtml(i.title)}</span></div>
+      </div>
+      ${i.hasFile ? '<div class="poster-meta">Available now</div>' : ''}
+    </div>
+  `).join('');
+}
+
 async function loadUpcoming() {
   const body = document.getElementById('upcoming-body');
   try {
-    const items = await api('/api/radarr/upcoming');
-    store.upcoming = items;
-    if (!items.length) { body.innerHTML = '<p class="empty-state">Nothing on the calendar.</p>'; return; }
-    body.innerHTML = items.map((i, idx) => `
-      <div class="poster-card" data-idx="${idx}">
-        <div class="poster-frame">
-          <img class="poster-img" src="${i.poster || ''}" loading="lazy" onerror="this.style.visibility='hidden'">
-          <span class="poster-badge">${formatDate(i.releaseDate)}</span>
-          <div class="poster-overlay"><span class="poster-overlay-text">${escapeHtml(i.title)}</span></div>
-        </div>
-        ${i.hasFile ? '<div class="poster-meta">Available now</div>' : ''}
-      </div>
-    `).join('');
+    store.upcoming = await api('/api/radarr/upcoming');
+    renderUpcoming();
   } catch (e) {
     body.innerHTML = '<p class="empty-state">Could not reach Radarr.</p>';
   }
 }
+
+document.getElementById('upcoming-mine-toggle').addEventListener('click', async () => {
+  const btn = document.getElementById('upcoming-mine-toggle');
+  upcomingMineOnly = !upcomingMineOnly;
+  btn.classList.toggle('active', upcomingMineOnly);
+  btn.setAttribute('aria-pressed', String(upcomingMineOnly));
+  if (upcomingMineOnly) await loadMyRequestedMovies();
+  renderUpcoming();
+});
 
 // Shared by every poll-refreshed list here that would otherwise do a full
 // innerHTML rebuild every cycle — same problem and fix as Now Playing/
@@ -900,17 +985,28 @@ async function loadMyRequests() {
       return;
     }
     const statusText = { available: 'Available', downloading: 'Downloading', approved: 'Approved', pending: 'Pending Approval', declined: 'Declined' };
-    listEl.innerHTML = results.map(r => `
+    // r.stuck (routes/overseerr.js's /requests/mine, cross-referenced against
+    // Radarr's/Sonarr's own Wanted/Missing list) overrides an otherwise-stale
+    // "Approved" that would just sit there forever with no hint anything's
+    // actually wrong — same stuck concept the owner's admin panel already
+    // shows, surfaced here from the requester's own point of view.
+    listEl.innerHTML = results.map(r => {
+      const statusClass = r.stuck ? 'stuck' : r.availability;
+      const label = r.stuck
+        ? `Stuck — released ${r.daysSinceRelease}d ago, still searching`
+        : `${statusText[r.availability] || r.availability}${r.availability === 'downloading' && r.etaSeconds != null ? ' · ' + formatEta(r.etaSeconds) : ''}`;
+      return `
       <div class="my-request-row">
         <img class="result-poster" src="${r.poster || ''}" loading="lazy" onerror="this.style.visibility='hidden'">
         <div class="result-info">
           <div class="result-title">${escapeHtml(r.title || 'Unknown title')}</div>
-          <div class="my-request-status ${r.availability}">
-            <span class="status-dot"></span>${statusText[r.availability] || r.availability}${r.availability === 'downloading' && r.etaSeconds != null ? ' · ' + formatEta(r.etaSeconds) : ''}
+          <div class="my-request-status ${statusClass}">
+            <span class="status-dot"></span>${label}
           </div>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   } catch (e) {
     listEl.innerHTML = '<p class="empty-state">Could not load requests.</p>';
   }
@@ -1341,6 +1437,72 @@ async function loadReportFlagStatus() {
     // Overseerr not configured/reachable — leave the icon at its default teal,
     // same graceful-degrade as loadHeroBanners() above.
   }
+}
+
+// Same Web Push subscribe/unsubscribe flow as admin.js's initNotifyToggle
+// (routes/push.js's /subscribe and /unsubscribe are no longer owner-only —
+// see lib/pushSubscriptions.js) — kept as its own copy rather than a shared
+// module since the two pages don't currently share any JS file, and the only
+// difference is which icon-btn id it wires up.
+async function initNotifyToggle() {
+  const btn = document.getElementById('notify-toggle-btn');
+  if (!window.VAPID_PUBLIC_KEY || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  btn.classList.remove('hidden');
+
+  const registration = await navigator.serviceWorker.ready;
+  const existing = await registration.pushManager.getSubscription();
+  btn.classList.toggle('active', !!existing);
+
+  btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const current = await reg.pushManager.getSubscription();
+      if (current) {
+        await current.unsubscribe();
+        await api('/api/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint: current.endpoint }) });
+        btn.classList.remove('active');
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        alert('Notifications are blocked for this site — check your browser\'s site settings (usually the padlock/site info icon next to the address bar) to allow them, then try again.');
+        return;
+      }
+      // Relying on subscribe() to implicitly trigger the permission prompt
+      // works on Chrome but isn't reliable on Safari — it can reject
+      // straight away with no prompt ever shown. Requesting permission
+      // explicitly first is the standard cross-browser-safe pattern.
+      if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          alert(permission === 'denied'
+            ? 'Notifications weren\'t enabled — permission was denied.'
+            : 'Notifications weren\'t enabled — no response to the permission prompt.');
+          return;
+        }
+      }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(window.VAPID_PUBLIC_KEY)
+      });
+      await api('/api/push/subscribe', { method: 'POST', body: JSON.stringify(sub) });
+      btn.classList.add('active');
+    } catch (err) {
+      console.error('push toggle failed:', err);
+      const detail = err && (err.name && err.message ? `${err.name}: ${err.message}` : err.message || err.name || String(err));
+      alert('Could not update notification settings (' + (detail || 'unknown error') + '). If your browser showed a permission prompt, it may need a response first — try clicking again.');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 
 function openReportModal() {

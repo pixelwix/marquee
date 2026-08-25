@@ -99,6 +99,27 @@ test('topLocations() aggregates by city/country and computes percentage of the t
   assert.equal(top[1].pct, 25);
 });
 
+test('topLocations() labels a row with no resolved city as "Unresolved (country)", not just the bare country', async () => {
+  await clearRows();
+  const now = Date.UTC(2026, 5, 15);
+  await insertRow('a', null, 'US', 39.0, -98.0, now);
+
+  const top = await streamOrigins.topLocations();
+  assert.equal(top[0].place, 'Unresolved (US)');
+});
+
+test('topLocations() with range "all" includes a row older than 90 days but within retention', async () => {
+  await clearRows();
+  const now = Date.now();
+  const old = now - 200 * 24 * 60 * 60 * 1000; // outside 90d, still within ~13-month retention
+  await insertRow('a', 'Berlin', 'DE', 52.52, 13.40, old);
+
+  const top90 = await streamOrigins.topLocations({ range: '90d' });
+  const topAll = await streamOrigins.topLocations({ range: 'all' });
+  assert.equal(top90.length, 0);
+  assert.equal(topAll.length, 1);
+});
+
 test('pruneOld() removes rows older than the ~13-month retention window, keeps newer ones', async () => {
   // A rolling window, not a calendar-year cutoff — a 90-day range toggle needs raw
   // rows to reach back 90 days even in, say, February, when Jan 1 is much closer

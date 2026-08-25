@@ -29,7 +29,11 @@
         <div class="logo-tag">Admin</div>
       </div>
       <div class="hero-icons">
-        <a href="/" class="icon-btn" aria-label="Back to dashboard">&#8592;</a>
+        <a href="/" class="icon-btn" aria-label="Back to dashboard">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 6l-6 6 6 6"></path>
+          </svg>
+        </a>
         <button id="notify-toggle-btn" class="icon-btn hidden" aria-label="Enable notifications">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
@@ -43,7 +47,11 @@
           </svg>
         </button>
         <button id="theme-btn" class="icon-btn" aria-label="Theme" title="Theme">🎨</button>
-        <button id="admin-logout-btn" class="icon-btn" aria-label="Sign out">&#8594;</button>
+        <button id="admin-logout-btn" class="icon-btn" aria-label="Sign out">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 6l6 6-6 6"></path>
+          </svg>
+        </button>
       </div>
     </div>
     <div class="hero-diskspace">
@@ -86,6 +94,7 @@
           <button type="button" class="origins-range-btn" data-range="30d">30D</button>
           <button type="button" class="origins-range-btn" data-range="90d">90D</button>
           <button type="button" class="origins-range-btn active" data-range="ytd">YTD</button>
+          <button type="button" class="origins-range-btn" data-range="all">ALL</button>
         </div>
       </div>
       <div id="origins-body"><p class="empty-state">Loading…</p></div>

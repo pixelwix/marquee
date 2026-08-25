@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { computeStreak, computeTopWatched, computeRank, parseActivitySeries } = require('../lib/myStats');
+const { computeStreak, computeTopWatched, computeRank, parseActivitySeries, extractWatchedTvTitles } = require('../lib/myStats');
 
 const NOW = new Date('2026-07-27T18:00:00Z').getTime(); // a Monday, 18:00 UTC
 const daysAgoTs = n => Math.floor((NOW - n * 86400000) / 1000); // Tautulli's `date` is unix seconds
@@ -83,4 +83,25 @@ test('parseActivitySeries defaults to 0 when a series is missing entirely', () =
     { label: '00', movies: 0, tv: 1 },
     { label: '01', movies: 0, tv: 0 }
   ]);
+});
+
+test('extractWatchedTvTitles returns each distinct show once, in no particular guaranteed order', () => {
+  const rows = [
+    { grandparent_title: 'Hana-Kimi' },
+    { grandparent_title: 'Hana-Kimi' },
+    { grandparent_title: 'Fruits Basket' }
+  ];
+  const titles = extractWatchedTvTitles(rows);
+  assert.equal(titles.length, 2);
+  assert.ok(titles.includes('Hana-Kimi'));
+  assert.ok(titles.includes('Fruits Basket'));
+});
+
+test('extractWatchedTvTitles skips movie rows (no grandparent_title)', () => {
+  const rows = [{ title: 'Oppenheimer' }, { grandparent_title: 'Fruits Basket' }];
+  assert.deepEqual(extractWatchedTvTitles(rows), ['Fruits Basket']);
+});
+
+test('extractWatchedTvTitles returns an empty array for no history', () => {
+  assert.deepEqual(extractWatchedTvTitles([]), []);
 });
