@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.50.1.**
+v1.51.1.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -597,5 +597,17 @@ gets versioned as it ships, not reconstructed later.
 - [x] **Fix**: separately, `ipapi.co` turned out to be on HaGeZi's Ultimate Blocklist (one of this deployment's own AdGuard filters), sinkholed to `0.0.0.0` — every lookup was failing before rate-limiting even became relevant
 - [x] Root-caused better: Tautulli already maintains its own real MaxMind GeoLite2 database for its own IP-lookup UI feature, exposed via its `get_geoip_lookup` API command — switched to that instead of a new third party entirely. No new service ever sees a viewer's IP (Tautulli already did, it's the source of `ip_address` in the first place), no external rate limit, no blocklist risk
 - [x] Confirmed `get_history` (already polled every sync) does NOT embed geo fields — a dedicated per-IP `get_geoip_lookup` call is genuinely required, verified live before committing to the approach
+
+## v1.51.0 — Stream Origins: who streamed from where, not just where
+
+- [x] `stream_origins` gets a `username` column, attributed from `get_history`'s own `friendly_name`/`user` (same convention as `nowPlaying.js`'s live feed) — no new Tautulli call needed, it was already in the synced rows
+- [x] `topLocations()` now returns each place's per-user breakdown (`users: [{name, count}]`, most-streams-first), folding unattributed legacy rows into an "Unknown" bucket rather than erroring
+- [x] Legend row gets a terse "who" byline under the place name (first 3 names, "& N more" beyond that); the hover tooltip carries the full per-user counts
+- [x] Owner-only surface, unchanged — `nowPlaying.js`'s shared family feed still never carries this data
+
+## v1.51.1 — Fix: GitHub Actions failing on record()'s live geo-lookup tests
+
+- [x] **Fix**: 2 `streamOrigins.test.js` tests assert `record()` against a real IP, which now requires a live call to this deployment's own Tautulli (see v1.51.0's `friendly_name`/`user` sourcing, and the underlying v1.50.0 switch off `geoip-lite`) — CI has no `TAUTULLI_URL`/`TAUTULLI_API_KEY` and never will, so these could never pass there
+- [x] Skipped (not mocked, matching this app's existing no-mock-Tautulli convention) via `test.skip` when the credentials aren't set — runs for real inside the deployment where the credentials exist
 
 ## Ideas

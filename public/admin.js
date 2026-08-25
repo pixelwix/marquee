@@ -720,10 +720,33 @@ function originsTooltip() {
   return originsTooltipEl;
 }
 
+// Terse "who streamed from here" line for a legend row — names only, no
+// counts (those live in the hover tooltip via originsUsersDetail below).
+// Capped at 3 named users so one shared VPN exit or a big household doesn't
+// blow out the row height; the rest are folded into a "& N more" tail.
+function originsUsersByline(users) {
+  if (!users?.length) return '';
+  const names = users.map(u => u.name);
+  const shown = names.slice(0, 3);
+  const rest = names.length - shown.length;
+  return escapeHtml(shown.join(', ')) + (rest > 0 ? ` <span class="origins-legend-who-more">& ${rest} more</span>` : '');
+}
+
+// Full per-user breakdown for a place, one line per person — the legend row
+// only has room for a terse "who" byline (see originsUsersByline), so the
+// tooltip is where the actual counts live.
+function originsUsersDetail(users) {
+  if (!users?.length) return '';
+  return `<div class="origins-tooltip-users">${users.map(u =>
+    `<span>${escapeHtml(u.name)} · ${u.count.toLocaleString('en-US')}</span>`
+  ).join('')}</div>`;
+}
+
 function showOriginsTooltip(anchorEl, o) {
   const tip = originsTooltip();
   tip.innerHTML = `<div class="origins-tooltip-place">${escapeHtml(o.place)}</div>
-    <div class="origins-tooltip-detail">${o.count.toLocaleString('en-US')} stream${o.count === 1 ? '' : 's'} · ${o.pct}%</div>`;
+    <div class="origins-tooltip-detail">${o.count.toLocaleString('en-US')} stream${o.count === 1 ? '' : 's'} · ${o.pct}%</div>
+    ${originsUsersDetail(o.users)}`;
   const panelRect = document.getElementById('panel-origins').getBoundingClientRect();
   const anchorRect = anchorEl.getBoundingClientRect();
   tip.style.left = `${anchorRect.left - panelRect.left + anchorRect.width / 2}px`;
@@ -790,6 +813,7 @@ function renderOrigins(locations, server) {
           <span class="origins-legend-place${rankClass}">${escapeHtml(o.place)}</span>
           <span class="origins-legend-pct">${o.count.toLocaleString('en-US')} · ${o.pct}%</span>
         </div>
+        <div class="origins-legend-who">${originsUsersByline(o.users)}</div>
         <div class="bar"><div class="bar-fill" style="width:${(o.pct / maxPct) * 100}%"></div></div>
       </div>
     </div>`;

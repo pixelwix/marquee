@@ -924,6 +924,8 @@ body {
 .origins-tooltip.hidden { display: none; }
 .origins-tooltip-place { font-size: 0.78rem; font-weight: 600; color: var(--text); }
 .origins-tooltip-detail { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-top: 0.1rem; }
+.origins-tooltip-users { display: flex; flex-direction: column; gap: 0.05rem; margin-top: 0.35rem; padding-top: 0.35rem; border-top: 1px solid rgba(255,255,255,0.1); }
+.origins-tooltip-users span { font-family: var(--mono); font-size: 0.66rem; color: var(--text); }
 
 .origins-range-toggle { display: flex; gap: 0.3rem; }
 .origins-range-btn {
@@ -946,6 +948,8 @@ body {
 .origins-legend-place.silver { color: var(--silver); }
 .origins-legend-place.bronze { color: var(--bronze); }
 .origins-legend-pct { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); flex-shrink: 0; }
+.origins-legend-who { font-size: 0.72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.05rem; }
+.origins-legend-who-more { font-family: var(--mono); font-size: 0.66rem; }
 
 .login-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem 0; }
 .login-row + .login-row { border-top: 1px solid rgba(20,25,35,0.06); }

@@ -9,6 +9,18 @@ const dbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'marquee-streamorigins-'));
 process.env.SESSION_DB_DIR = dbDir;
 const streamOrigins = require('../lib/streamOrigins');
 
+// record() geolocates through Tautulli's own live get_geoip_lookup API (see
+// lib/streamOrigins.js's module comment) — there's no local/offline geo
+// database anymore, so a resolvable-IP assertion can only pass with real
+// TAUTULLI_URL/TAUTULLI_API_KEY credentials and network access to this
+// deployment's own Tautulli. CI (and a bare clone with no .env) has neither.
+// Same scope split as diskSpaceHistory.test.js: pure/DB logic gets covered
+// unconditionally below, this one live-upstream-dependent case is skipped
+// rather than mocked (this app's tests don't mock Tautulli's HTTP API) when
+// the credentials aren't there to exercise it for real.
+const TAUTULLI_LIVE = Boolean(process.env.TAUTULLI_URL && process.env.TAUTULLI_API_KEY);
+const liveGeoTest = TAUTULLI_LIVE ? test : test.skip;
+
 // Same self-contained shape as diskSpaceHistory.test.js's withDb — a raw
 // connection to the same file the module's own lazy db opens, so rows
 // inserted here are visible to topLocations()/pruneOld() without going
@@ -26,6 +38,7 @@ function withDb(fn) {
       country TEXT,
       lat REAL,
       lon REAL,
+      username TEXT,
       at INTEGER
     )`, (createErr) => {
       if (createErr) { db.close(); return reject(createErr); }
@@ -34,11 +47,11 @@ function withDb(fn) {
   });
 }
 
-function insertRow(referenceId, city, country, lat, lon, at) {
+function insertRow(referenceId, city, country, lat, lon, at, username = null) {
   return withDb((db, done) => {
     db.run(
-      `INSERT INTO stream_origins (reference_id, city, country, lat, lon, at) VALUES (?, ?, ?, ?, ?, ?)`,
-      [referenceId, city, country, lat, lon, at],
+      `INSERT INTO stream_origins (reference_id, city, country, lat, lon, at, username) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [referenceId, city, country, lat, lon, at, username],
       (err) => done(err)
     );
   });
@@ -64,19 +77,20 @@ test('record() skips IPs geoip-lite can\'t place (missing or unresolvable)', asy
   assert.equal(await countRows(), 0);
 });
 
-test('record() writes a row for a resolvable public IP, at an explicit timestamp', async () => {
+liveGeoTest('record() writes a row for a resolvable public IP, at an explicit timestamp', async () => {
   await clearRows();
   const at = Date.UTC(2026, 2, 3);
-  await streamOrigins.record('r3', '8.8.8.8', at);
+  await streamOrigins.record('r3', '8.8.8.8', 'Mike', at);
   const rows = await withDb((db, done) => {
-    db.all('SELECT reference_id, at FROM stream_origins', (err, r) => done(err, r));
+    db.all('SELECT reference_id, username, at FROM stream_origins', (err, r) => done(err, r));
   });
   assert.equal(rows.length, 1);
   assert.equal(rows[0].reference_id, 'r3');
+  assert.equal(rows[0].username, 'Mike');
   assert.equal(rows[0].at, at);
 });
 
-test('record() is idempotent on a repeated reference_id (INSERT OR IGNORE)', async () => {
+liveGeoTest('record() is idempotent on a repeated reference_id (INSERT OR IGNORE)', async () => {
   await clearRows();
   await streamOrigins.record('r4', '8.8.8.8');
   await streamOrigins.record('r4', '8.8.8.8'); // syncFromHistory() re-scans the whole window every run
@@ -97,6 +111,26 @@ test('topLocations() aggregates by city/country and computes percentage of the t
   assert.equal(top[0].pct, 75);
   assert.equal(top[1].place, 'London, UK');
   assert.equal(top[1].pct, 25);
+});
+
+test('topLocations() breaks each place down by who streamed from there, most-streams first', async () => {
+  await clearRows();
+  const now = Date.UTC(2026, 5, 15);
+  await insertRow('a', 'Los Angeles', 'US', 34.05, -118.24, now, 'Mike');
+  await insertRow('b', 'Los Angeles', 'US', 34.06, -118.25, now, 'Mike');
+  await insertRow('c', 'Los Angeles', 'US', 34.04, -118.23, now, 'Sarah');
+
+  const top = await streamOrigins.topLocations();
+  assert.deepEqual(top[0].users, [{ name: 'Mike', count: 2 }, { name: 'Sarah', count: 1 }]);
+});
+
+test('topLocations() folds a row with no attributed username into an "Unknown" user bucket', async () => {
+  await clearRows();
+  const now = Date.UTC(2026, 5, 15);
+  await insertRow('a', 'London', 'UK', 51.51, -0.13, now, null);
+
+  const top = await streamOrigins.topLocations();
+  assert.deepEqual(top[0].users, [{ name: 'Unknown', count: 1 }]);
 });
 
 test('topLocations() labels a row with no resolved city as "Unresolved (country)", not just the bare country', async () => {
