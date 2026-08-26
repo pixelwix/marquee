@@ -76,7 +76,10 @@
       <div class="card-label"><span class="chan">CH.09</span> Family</div>
       <div class="settings-section-row">
         <h4 class="admin-subhead">Wanted / Missing</h4>
-        <button id="search-all-wanted-btn" class="pill-btn"><span class="state-dot"></span>Search All</button>
+        <div class="settings-section-row" style="gap:0.5rem;">
+          <button id="view-wanted-btn" class="pill-btn hidden"><span class="state-dot"></span>View list</button>
+          <button id="search-all-wanted-btn" class="pill-btn"><span class="state-dot"></span>Search All</button>
+        </div>
       </div>
       <p id="search-all-wanted-status" class="settings-status hidden"></p>
       <div id="wanted-body"><p class="empty-state">Loading…</p></div>
@@ -107,6 +110,11 @@
       <div id="library-search-body"><p class="empty-state">Type to search.</p></div>
       <h4 class="admin-subhead">Seeding</h4>
       <div id="seeding-body"><p class="empty-state">Loading…</p></div>
+      <div class="settings-section-row">
+        <h4 class="admin-subhead">Cleanup Candidates</h4>
+        <button id="view-cleanup-btn" class="pill-btn hidden"><span class="state-dot"></span>View list</button>
+      </div>
+      <div id="cleanup-body"><p class="empty-state">Loading…</p></div>
       <h4 class="admin-subhead">Download Issues</h4>
       <div id="download-issues-body"><p class="empty-state">Loading…</p></div>
       <h4 class="admin-subhead">Import Issues</h4>
@@ -127,6 +135,28 @@
       <button id="close-release-modal-btn" class="pill-btn pill-btn-icon">&#10005;</button>
     </div>
     <div id="release-list" class="release-list"><p class="empty-state">Loading…</p></div>
+  </div>
+</div>
+
+<!-- CLEANUP CANDIDATES MODAL -->
+<div id="cleanup-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="cleanup-modal-title">Cleanup Candidates</h3>
+      <button id="close-cleanup-modal-btn" class="pill-btn pill-btn-icon">&#10005;</button>
+    </div>
+    <div id="cleanup-list" class="release-list"><p class="empty-state">Loading…</p></div>
+  </div>
+</div>
+
+<!-- WANTED / MISSING LIST MODAL -->
+<div id="wanted-list-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>Wanted / Missing</h3>
+      <button id="close-wanted-list-modal-btn" class="pill-btn pill-btn-icon">&#10005;</button>
+    </div>
+    <div id="wanted-list" class="release-list"><p class="empty-state">Loading…</p></div>
   </div>
 </div>
 

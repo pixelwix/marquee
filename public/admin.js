@@ -32,6 +32,7 @@
   setInterval(loadDiskSpace, 60000);
   loadSeeding();
   setInterval(loadSeeding, 60000);
+  loadCleanupCandidates();
   loadDownloadIssues();
   setInterval(loadDownloadIssues, 15000);
   loadImportIssues();
@@ -1614,6 +1615,59 @@ async function loadSeeding() {
   }
 }
 
+// ---------- Stack: Cleanup Candidates ----------
+// A slow-moving report (watch history/file sizes don't shift minute to
+// minute), unlike Seeding/Disk Space above — loaded once on page load with
+// no recurring poll, rather than re-scanning Tautulli's whole movie library
+// (thousands of rows) every 60s indefinitely. See lib/cleanupCandidates.js
+// for exactly what qualifies; this is read-only by design — no delete
+// action wired up, just a ranked report of where space could be reclaimed.
+//
+// The full ranked list lives in a modal (openCleanupModal below), not
+// inline — a library-wide report can run into the thousands of rows (this
+// deployment's own: 3,810), which would make the admin page itself
+// unreasonably long. The card only ever shows a one-line summary + a
+// button.
+let cleanupCandidatesCache = [];
+
+async function loadCleanupCandidates() {
+  const body = document.getElementById('cleanup-body');
+  const viewBtn = document.getElementById('view-cleanup-btn');
+  try {
+    cleanupCandidatesCache = await api('/api/owner/cleanup-candidates');
+    if (!cleanupCandidatesCache.length) {
+      body.innerHTML = '<p class="empty-state">Nothing flagged — Movies library configured?</p>';
+      viewBtn.classList.add('hidden');
+      return;
+    }
+    const totalBytes = cleanupCandidatesCache.reduce((sum, c) => sum + c.sizeBytes, 0);
+    body.innerHTML = `<p class="now-meta">${cleanupCandidatesCache.length} movie${cleanupCandidatesCache.length === 1 ? '' : 's'} · ${formatBytes(totalBytes)} reclaimable</p>`;
+    viewBtn.classList.remove('hidden');
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not check cleanup candidates.</p>';
+    viewBtn.classList.add('hidden');
+  }
+}
+
+function openCleanupModal() {
+  const modal = document.getElementById('cleanup-modal');
+  const listEl = document.getElementById('cleanup-list');
+  listEl.innerHTML = cleanupCandidatesCache.map(c => `
+    <div class="dl-row">
+      <div class="dl-row-body">
+        <div class="now-title">${escapeHtml(c.title)}${c.year ? ` (${c.year})` : ''}</div>
+        <div class="now-meta">${formatBytes(c.sizeBytes)} · ${escapeHtml(c.reason)}</div>
+      </div>
+    </div>
+  `).join('');
+  modal.classList.remove('hidden');
+}
+
+document.getElementById('view-cleanup-btn').addEventListener('click', openCleanupModal);
+document.getElementById('close-cleanup-modal-btn').addEventListener('click', () => {
+  document.getElementById('cleanup-modal').classList.add('hidden');
+});
+
 // ---------- Stack: Download Issues ----------
 // Not actively downloading and not seeding/complete — i.e. actually stuck or
 // failed. Most torrents that are simply idling-while-seeding never show up
@@ -1741,14 +1795,31 @@ function updateWantedRow(row, r) {
     `${r.stuck ? '<span class="state-dot danger"></span>' : ''}Released ${formatDate(r.date)}${r.stuck ? ` · ${r.daysSinceRelease}d overdue` : ''}`;
 }
 
+// The reconciled row list itself lives in a modal (view-wanted-btn below),
+// not inline — same reasoning as Cleanup Candidates: a library-wide missing
+// list can run long, and the admin page stays short regardless of how many
+// items are on it. reconcileList still runs against the modal's list
+// container on every poll whether or not the modal is currently open, so
+// it's always current the moment it's opened, with the same no-flicker
+// diffing this list already relied on before the move.
 async function loadWanted() {
-  const body = document.getElementById('wanted-body');
+  const summary = document.getElementById('wanted-body');
+  const viewBtn = document.getElementById('view-wanted-btn');
+  const listEl = document.getElementById('wanted-list');
   try {
     wantedResults = await api('/api/owner/wanted');
-    if (!wantedResults.length) { body.innerHTML = '<p class="empty-state">Nothing missing.</p>'; return; }
-    reconcileList(body, wantedResults, wantedKey, createWantedRow, updateWantedRow);
+    if (!wantedResults.length) {
+      summary.innerHTML = '<p class="empty-state">Nothing missing.</p>';
+      viewBtn.classList.add('hidden');
+      return;
+    }
+    const stuckCount = wantedResults.filter(r => r.stuck).length;
+    summary.innerHTML = `<p class="now-meta">${wantedResults.length} missing${stuckCount ? ` · ${stuckCount} overdue` : ''}</p>`;
+    viewBtn.classList.remove('hidden');
+    reconcileList(listEl, wantedResults, wantedKey, createWantedRow, updateWantedRow);
   } catch (e) {
-    body.innerHTML = '<p class="empty-state">Could not load wanted/missing.</p>';
+    summary.innerHTML = '<p class="empty-state">Could not load wanted/missing.</p>';
+    viewBtn.classList.add('hidden');
   }
 }
 
@@ -1789,7 +1860,7 @@ document.getElementById('search-all-wanted-btn').addEventListener('click', async
 // before; clicking anywhere else on the row shows poster/overview/release
 // details first — same "details before committing" pattern as the main
 // dashboard's request modal.
-document.getElementById('wanted-body').addEventListener('click', e => {
+document.getElementById('wanted-list').addEventListener('click', e => {
   const row = e.target.closest('.pending-row');
   if (!row) return;
   const item = wantedResults.find(r => wantedKey(r) === row.dataset.reconKey);
@@ -1799,6 +1870,13 @@ document.getElementById('wanted-body').addEventListener('click', e => {
     return;
   }
   openWantedInfo(item);
+});
+
+document.getElementById('view-wanted-btn').addEventListener('click', () => {
+  document.getElementById('wanted-list-modal').classList.remove('hidden');
+});
+document.getElementById('close-wanted-list-modal-btn').addEventListener('click', () => {
+  document.getElementById('wanted-list-modal').classList.add('hidden');
 });
 
 function openWantedInfo(item) {
@@ -2066,34 +2144,72 @@ document.getElementById('close-settings-btn').addEventListener('click', () => {
 
 document.getElementById('run-health-check-btn').addEventListener('click', loadServiceHealth);
 
+// serviceUpdates lags behind the health grid on purpose (see routes/settings.js's
+// /updates comment) — it's fetched once per Settings-modal session, not on every
+// "Run Health Check" click, since it hits slower/rate-limited external checks
+// (GitHub releases) rather than fast local-network pings. lastServices is cached
+// so a late-arriving update-check result can re-render the same grid without a
+// second health check.
+let lastServices = null;
+let serviceUpdates = {};
+let updatesLoaded = false;
+
 async function loadServiceHealth() {
   const grid = document.getElementById('service-grid');
   grid.innerHTML = '<p class="empty-state">Checking services…</p>';
   try {
-    const services = await api('/api/settings/services');
-    grid.innerHTML = services.map(s => {
-      const h = s.health || { status: 'unconfigured' };
-      const statusText = h.status === 'online'
-        ? escapeHtml(String(h.detail))
-        : h.status === 'error' ? escapeHtml(h.message || 'Unreachable') : 'Not configured';
-      const badgeLabel = h.status === 'online' ? 'Online' : h.status === 'error' ? 'Error' : 'Unconfigured';
-      return `
-        <div class="service-card">
-          <div class="service-card-head">
-            <span class="service-card-name">${escapeHtml(s.label)}</span>
-            <span class="service-badge ${h.status}">${badgeLabel}</span>
-          </div>
-          <div class="service-card-meta">${h.status === 'online' ? `&#9889; ${h.latencyMs}ms` : ''}</div>
-          <div class="service-card-foot">
-            <span class="service-card-status-text" title="${statusText}">${statusText}</span>
-            <button class="pill-btn" data-service="${s.key}" data-label="${escapeHtml(s.label)}">Edit &#9998;</button>
-          </div>
-        </div>
-      `;
-    }).join('');
+    lastServices = await api('/api/settings/services');
+    renderServiceGrid();
   } catch (e) {
     grid.innerHTML = `<p class="empty-state">${escapeHtml(e.message || 'Could not check services.')}</p>`;
   }
+  if (!updatesLoaded) { updatesLoaded = true; loadServiceUpdates(); }
+}
+
+async function loadServiceUpdates() {
+  try {
+    const updates = await api('/api/settings/updates');
+    serviceUpdates = Object.fromEntries(updates.map(u => [u.key, u.update]));
+    if (lastServices) renderServiceGrid();
+  } catch (e) {
+    // Silent — an overlay on the health grid, not something that should
+    // block or blank it out if the update check itself fails.
+  }
+}
+
+function updateBadgeTitle(update) {
+  if (update.latestVersion) return `${update.currentVersion} → ${update.latestVersion}`;
+  if (update.commitsBehind != null) return `${update.commitsBehind} commit${update.commitsBehind === 1 ? '' : 's'} behind`;
+  return 'Update available';
+}
+
+function renderServiceGrid() {
+  const grid = document.getElementById('service-grid');
+  grid.innerHTML = lastServices.map(s => {
+    const h = s.health || { status: 'unconfigured' };
+    const statusText = h.status === 'online'
+      ? escapeHtml(String(h.detail))
+      : h.status === 'error' ? escapeHtml(h.message || 'Unreachable') : 'Not configured';
+    const badgeLabel = h.status === 'online' ? 'Online' : h.status === 'error' ? 'Error' : 'Unconfigured';
+    const update = serviceUpdates[s.key];
+    const updateBadge = update?.updateAvailable
+      ? `<span class="service-update-badge" title="${escapeHtml(updateBadgeTitle(update))}">Update available</span>`
+      : '';
+    return `
+      <div class="service-card">
+        <div class="service-card-head">
+          <span class="service-card-name">${escapeHtml(s.label)}</span>
+          <span class="service-badge ${h.status}">${badgeLabel}</span>
+        </div>
+        <div class="service-card-meta">${h.status === 'online' ? `&#9889; ${h.latencyMs}ms` : ''}</div>
+        ${updateBadge}
+        <div class="service-card-foot">
+          <span class="service-card-status-text" title="${statusText}">${statusText}</span>
+          <button class="pill-btn" data-service="${s.key}" data-label="${escapeHtml(s.label)}">Edit &#9998;</button>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 document.getElementById('service-grid').addEventListener('click', e => {

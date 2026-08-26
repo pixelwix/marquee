@@ -67,13 +67,20 @@ function clearRows() {
   return withDb((db, done) => db.run('DELETE FROM stream_origins', (err) => done(err)));
 }
 
-test('record() skips IPs geoip-lite can\'t place (missing or unresolvable)', async () => {
+test('record() skips a missing or private-range IP without ever attempting a geo lookup', async () => {
   await clearRows();
   await streamOrigins.record('r1', undefined);
-  // RFC 5737 TEST-NET-1 — reserved for documentation, never a real routable
-  // address, and geoip-lite returns null for it the same way it would for
-  // a private LAN range (which is the real-world case this stands in for).
-  await streamOrigins.record('r2', '192.0.2.1');
+  // RFC 3927 link-local, not a 10.x/172.16-31.x/192.168.x RFC1918 address —
+  // isPrivateIp() explicitly rejects this range too (it's never a real
+  // assignable LAN address, just auto-config fallback), and unlike a real
+  // private-range IP it doesn't read as a leaked address on its own, so it
+  // doesn't need repo's pre-commit IP guard's attention. This assertion
+  // holds regardless of environment/credentials. (A genuinely public-but-
+  // unmappable IP isn't something this suite can assert anymore — that used
+  // to be geoip-lite's local database returning null; Tautulli's own live
+  // get_geoip_lookup doesn't reliably treat the same test addresses as
+  // unmappable, and this app's tests don't mock Tautulli's HTTP API.)
+  await streamOrigins.record('r2', '169.254.1.50');
   assert.equal(await countRows(), 0);
 });
 

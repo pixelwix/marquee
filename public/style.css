@@ -1042,7 +1042,7 @@ body {
 
 /* Release search modal (owner only) — list of indexer results for resolving
    an issue directly, without leaving the dashboard for Sonarr/Radarr. */
-#release-list { flex: 1; min-height: 0; overflow-y: auto; }
+#release-list, #cleanup-list, #wanted-list { flex: 1; min-height: 0; overflow-y: auto; }
 .release-row { display: flex; gap: 0.85rem; align-items: center; padding: 0.65rem 0; }
 .release-row + .release-row { border-top: 1px solid rgba(20,25,35,0.08); }
 .release-row.rejected { opacity: 0.6; }
@@ -1118,6 +1118,11 @@ body {
 .service-badge.online { color: var(--teal); border-color: rgba(15,143,118,0.35); background: rgba(15,143,118,0.08); }
 .service-badge.unconfigured { color: var(--muted); border-color: rgba(20,25,35,0.12); background: rgba(20,25,35,0.04); }
 .service-badge.error { color: var(--danger); border-color: rgba(214,69,69,0.35); background: rgba(214,69,69,0.08); }
+.service-update-badge {
+  display: inline-block; font-family: var(--mono); font-size: 0.64rem; font-weight: 600;
+  padding: 0.2rem 0.5rem; border-radius: 20px; border: 1px solid rgba(224,138,30,0.35);
+  color: var(--amber); background: rgba(224,138,30,0.08); margin-top: 0.4rem; cursor: default;
+}
 .service-card-meta {
   font-family: var(--mono); font-size: 0.72rem; color: var(--muted); min-height: 1.1em;
   display: flex; align-items: center; gap: 0.35rem;

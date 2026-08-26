@@ -6,6 +6,7 @@ const requireOwner = require('./requireOwner');
 const { parseFields, applyUpdates, isSecretKey, isBooleanValue } = require('../lib/envFile');
 const { SERVICES } = require('../lib/serviceRegistry');
 const serviceHealth = require('../lib/serviceHealth');
+const updateCheck = require('../lib/updateCheck');
 const router = express.Router();
 
 const ENV_PATH = path.join(__dirname, '..', '.env');
@@ -61,6 +62,21 @@ router.get('/services', requireAuth, requireOwner, async (req, res) => {
   } catch (err) {
     console.error('settings services health error:', err.message);
     res.status(502).json({ error: 'Could not run health checks' });
+  }
+});
+
+// Separate from /services above rather than merged into it: this hits each
+// project's own update-check API or GitHub releases (see lib/updateCheck.js),
+// which is slower and, for the GitHub-fallback services, rate-limited — the
+// frontend fetches this once when the tab opens, not on every "Run Health
+// Check" click the way /services is.
+router.get('/updates', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const updates = await updateCheck.checkAll();
+    res.json(SERVICES.filter(s => updates[s.key] !== undefined).map(s => ({ key: s.key, label: s.label, update: updates[s.key] })));
+  } catch (err) {
+    console.error('settings updates check error:', err.message);
+    res.status(502).json({ error: 'Could not check for updates' });
   }
 });
 

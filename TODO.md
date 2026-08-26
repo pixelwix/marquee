@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.51.1.**
+v1.53.2.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -609,5 +609,37 @@ gets versioned as it ships, not reconstructed later.
 
 - [x] **Fix**: 2 `streamOrigins.test.js` tests assert `record()` against a real IP, which now requires a live call to this deployment's own Tautulli (see v1.51.0's `friendly_name`/`user` sourcing, and the underlying v1.50.0 switch off `geoip-lite`) — CI has no `TAUTULLI_URL`/`TAUTULLI_API_KEY` and never will, so these could never pass there
 - [x] Skipped (not mocked, matching this app's existing no-mock-Tautulli convention) via `test.skip` when the credentials aren't set — runs for real inside the deployment where the credentials exist
+
+## v1.51.2 — Fix: streamOrigins test asserted a claim Tautulli's geo lookup doesn't actually honor
+
+- [x] **Fix**: `record() skips IPs...` used the RFC 5737 TEST-NET-1 address as a stand-in for "an unresolvable public IP" — true of the old `geoip-lite` database, not reliably true of Tautulli's own live `get_geoip_lookup` (confirmed live: it doesn't treat that address as unmappable)
+- [x] Rewrote to assert what the code actually guarantees unconditionally: a missing IP or an RFC1918 private-range IP never reaches `lookupGeo()` at all (`isPrivateIp()`'s own job) — deterministic in every environment, verified passing both with and without real Tautulli credentials
+
+## v1.52.0 — Outdated-service detection in the Settings > Services grid
+
+- [x] Sonarr/Radarr/Prowlarr: read their own native `/api/*/update` endpoint (Servarr apps already know installed-vs-latest, no need to re-derive it) — verified live, all three correctly reported up to date
+- [x] Overseerr: its existing `/api/v1/status` call already returns `updateAvailable`/`commitsBehind` directly, just wasn't being surfaced
+- [x] Plex: no public "latest version" API of its own (closed-source) — rides on Tautulli's `get_pms_update`, which already tracks this for its own UI. Verified live: correctly flagged 1.43.3 → 1.43.4 available
+- [x] Tautulli, qBittorrent, SABnzbd: no built-in update-check API — falls back to each project's own GitHub releases (`releases/latest`), cached 12h in memory to stay well clear of GitHub's unauthenticated 60/hr rate limit. Verified live: correctly flagged Tautulli (2.17.2 → 2.18.0) and SABnzbd (5.1.1 → 5.1.2) outdated, qBittorrent up to date
+- [x] "Update available" badge on the existing service card, fetched once per Settings-modal session (not on every "Run Health Check" click, since GitHub/native-update calls are slower than the local health pings)
+
+## v1.53.0 — Cleanup Candidates: movies quietly taking up space, unwatched
+
+- [x] New Stack panel section — ranks movies by reclaimable size, flagging never-watched-past-a-60-day-grace-period and watched-once-180+-days-ago, using Tautulli's own `get_library_media_info` (file_size/last_played/play_count already computed there per item)
+- [x] TV deliberately out of scope for now — the same Tautulli endpoint returns show-level rows with those fields blank for TV sections; rolling them up ourselves from per-episode rows is real additional work, left as a known follow-up rather than shipped half-verified
+- [x] Read-only report, no delete action — actually removing a file is a separate, more consequential feature
+- [x] Loaded once on page load, no recurring poll (watch history/file sizes don't shift minute to minute, and the underlying Tautulli call returns thousands of rows)
+- [x] Live-verified: 3,810 of 4,921 movies qualify on this deployment's actual library — a real fact about a large, mostly-speculative back-catalog, not a bug (the never-watched rule and the 180-day stale-rewatch rule were each independently verified against known rows)
+
+## v1.53.1 — Fix: Cleanup Candidates was making the admin page too long
+
+- [x] **Fix**: the inline top-20 list (v1.53.0) still added a real chunk of page length to an already-dense admin view, worse on a library where most of it qualifies (3,810 of 4,921 movies here)
+- [x] Card now shows only a one-line summary (count + total reclaimable size) with a "View list" button — the full ranked list moved into a modal, same pattern as the existing Release Search modal, so the page itself stays short regardless of how many candidates there are
+
+## v1.53.2 — Wanted/Missing gets the same list-in-a-modal treatment
+
+- [x] Same pattern as v1.53.1's Cleanup Candidates fix: the reconciled row list moved into a modal (View list button), main page now shows just a one-line summary ("N missing · M overdue")
+- [x] Search All and its status line stay on the main page (unchanged) — that's a bulk action independent of browsing the list
+- [x] Per-row Search button and the click-through-to-poster/overview info popup both still work exactly as before, just inside the modal now — reconcileList() still runs against the modal's list container on every 60s poll whether or not the modal is open, so it's always current the moment it's opened
 
 ## Ideas
