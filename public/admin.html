@@ -127,17 +127,6 @@
   <div class="app-footer">{{SITE_NAME}} v{{APP_VERSION}}<span id="plex-uptime-footer"></span> &middot; &copy; {{COPYRIGHT_YEAR}}</div>
 </div>
 
-<!-- RELEASE SEARCH MODAL -->
-<div id="release-modal" class="modal hidden">
-  <div class="modal-card">
-    <div class="modal-head">
-      <h3 id="release-modal-title">Search for a release</h3>
-      <button id="close-release-modal-btn" class="pill-btn pill-btn-icon">&#10005;</button>
-    </div>
-    <div id="release-list" class="release-list"><p class="empty-state">Loading…</p></div>
-  </div>
-</div>
-
 <!-- CLEANUP CANDIDATES MODAL -->
 <div id="cleanup-modal" class="modal hidden">
   <div class="modal-card">
@@ -467,6 +456,20 @@
       <button id="close-theme-btn" class="pill-btn pill-btn-icon">&#10005;</button>
     </div>
     <div id="theme-grid" class="theme-grid"></div>
+  </div>
+</div>
+
+<!-- RELEASE SEARCH MODAL — defined last among content modals (only confirm-modal
+     comes after it) so it always stacks on top of whichever modal it was opened
+     from (Wanted/Missing's list modal, its info popup, issue suggestions, etc.)
+     rather than losing to same-z-index DOM-order stacking. -->
+<div id="release-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="release-modal-title">Search for a release</h3>
+      <button id="close-release-modal-btn" class="pill-btn pill-btn-icon">&#10005;</button>
+    </div>
+    <div id="release-list" class="release-list"><p class="empty-state">Loading…</p></div>
   </div>
 </div>
 

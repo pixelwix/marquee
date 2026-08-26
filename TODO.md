@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.53.2.**
+v1.53.3.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -641,5 +641,10 @@ gets versioned as it ships, not reconstructed later.
 - [x] Same pattern as v1.53.1's Cleanup Candidates fix: the reconciled row list moved into a modal (View list button), main page now shows just a one-line summary ("N missing · M overdue")
 - [x] Search All and its status line stay on the main page (unchanged) — that's a bulk action independent of browsing the list
 - [x] Per-row Search button and the click-through-to-poster/overview info popup both still work exactly as before, just inside the modal now — reconcileList() still runs against the modal's list container on every 60s poll whether or not the modal is open, so it's always current the moment it's opened
+
+## v1.53.3 — Fix: release-search modal opened behind the Wanted/Missing list modal
+
+- [x] **Fix**: v1.53.2 moved the Wanted/Missing row list into its own modal, but its per-row Search button opens `release-modal` on top of it without closing it first — both share `z-index: 20`, so which one visually wins is decided by DOM order, and `release-modal` was defined earlier in the HTML than the new list modal, so it lost
+- [x] Moved `release-modal`'s markup to be defined last among content modals (only the generic confirm dialog comes after it), so it reliably stacks on top of whatever modal it's launched from — Wanted/Missing's list, its info popup, issue suggestions, etc. — instead of relying on each new modal happening to be added earlier in the file
 
 ## Ideas
