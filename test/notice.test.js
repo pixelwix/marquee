@@ -92,12 +92,25 @@ test('buildKometaYaml targets the fixed placeholder movie by title, not a live "
 // an empty dict is true). Verified live 2026-08-28 across every run in
 // Kometa's logs while cleared. Fixed by keeping the collection genuinely
 // defined but pointed at a plex_search guaranteed to match nothing.
+//
+// That first fix introduced a second, different real [ERROR] on every run:
+// a plex_search matching zero items raises Kometa's own
+// Failed("Plex Error: No Items found in Plex") (modules/plex.py) — verified
+// live 2026-08-28 in the logs of a real Movies-library run while cleared.
+// Fixed for real with `schedule: never`, which raises NotScheduled before
+// any plex_search is ever evaluated, and is logged with logger.info(), not
+// logger.error() (confirmed in kometa.py's own exception handling).
 test('KOMETA_EMPTY_YAML defines a real (non-empty) collections block, not collections: {}', () => {
   // Anchored to a whole line so this doesn't false-positive on the doc
   // comment above the constant, which mentions the literal string for context.
   assert.doesNotMatch(KOMETA_EMPTY_YAML, /^collections:\s*\{\}\s*$/m);
   assert.match(KOMETA_EMPTY_YAML, /collections:\s*\n\s+"📌 Server Announcement":/);
-  assert.match(KOMETA_EMPTY_YAML, /plex_search:/);
+});
+
+test('KOMETA_EMPTY_YAML skips via schedule: never instead of a plex_search that matches nothing', () => {
+  assert.match(KOMETA_EMPTY_YAML, /schedule:\s*never/);
+  assert.doesNotMatch(KOMETA_EMPTY_YAML, /plex_search:/);
+  assert.match(KOMETA_EMPTY_YAML, /delete_not_scheduled:\s*false/);
 });
 
 test('buildKometaYaml points file_poster at the generated announcement poster', () => {
