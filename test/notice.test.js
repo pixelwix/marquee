@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { computeStatus, get, buildKometaYaml, buildAnnouncementPosterSvg } = require('../lib/notice');
+const { computeStatus, get, buildKometaYaml, buildAnnouncementPosterSvg, KOMETA_EMPTY_YAML } = require('../lib/notice');
 
 // getDb() is lazy — SESSION_DB_DIR only needs to be set before the first real
 // query, not before require(). Points this test's first query at a genuinely
@@ -82,6 +82,22 @@ test('buildKometaYaml targets the fixed placeholder movie by title, not a live "
   const yaml = buildKometaYaml('Anything.');
   assert.match(yaml, /title: Server Announcement/);
   assert.doesNotMatch(yaml, /added\.gte/);
+});
+
+// Regression test for a real, permanent [ERROR] on every single run while no
+// notice was active: Kometa treats an empty `collections: {}` dict as invalid
+// for any file referenced under collection_files, not as "no collections" —
+// it raises "YAML Error: collections or dynamic_collections attribute is
+// required" (Failed(...) in Kometa's own meta.py, `not self.collections` on
+// an empty dict is true). Verified live 2026-08-28 across every run in
+// Kometa's logs while cleared. Fixed by keeping the collection genuinely
+// defined but pointed at a plex_search guaranteed to match nothing.
+test('KOMETA_EMPTY_YAML defines a real (non-empty) collections block, not collections: {}', () => {
+  // Anchored to a whole line so this doesn't false-positive on the doc
+  // comment above the constant, which mentions the literal string for context.
+  assert.doesNotMatch(KOMETA_EMPTY_YAML, /^collections:\s*\{\}\s*$/m);
+  assert.match(KOMETA_EMPTY_YAML, /collections:\s*\n\s+"📌 Server Announcement":/);
+  assert.match(KOMETA_EMPTY_YAML, /plex_search:/);
 });
 
 test('buildKometaYaml points file_poster at the generated announcement poster', () => {
