@@ -691,4 +691,9 @@ gets versioned as it ships, not reconstructed later.
 - [x] `lib/notice.js` now drops a flag file (`.announcement-changed`) in the shared Kometa config mount on every post/clear. Marquee's own container has no Docker socket access and can't trigger Kometa itself, so a new host-side cron script (`scripts/kometa-announcement-trigger.mjs`, `* * * * *`, matching the existing `qbit-*.mjs` pattern) polls for it and runs a scoped `kometa --run --run-collections "📌 Server Announcement" --libraries Movies` — verified live at ~9-11s — instead of waiting for a full run
 - [x] Chose this over a Docker-socket-mounted watcher container specifically to avoid giving any always-on service that kind of host access for a cosmetic feature — worst case here is a ~60s poll lag, not a new privilege surface
 
+## v1.56.2 — Fix: clearing a bulletin left it stuck showing on Plex
+
+- [x] **Fix**: the scoped `--run-collections "📌 Server Announcement"` trigger (v1.56.1) only works when the collection is still *defined* — on clear, `marquee-announcement.yml` goes to `collections: {}`, so there's nothing left by that name for a scoped run to match, and Kometa silently did nothing. Deleting an orphaned collection is normally part of Kometa's full per-library cleanup pass, which a single-collection scoped run never triggers. Verified live: a real clear left the collection sitting in Plex indefinitely, still showing the last message, no error anywhere
+- [x] `lib/notice.js` now deletes the collection directly via Plex's API the moment a notice is cleared, instead of routing through Kometa at all for this part — looked up by title each time (`GET /library/sections/1/collections`), then a plain `DELETE /library/metadata/{ratingKey}`. Confirmed live this removes only the collection object; the placeholder movie itself is untouched and ready for the next message
+
 ## Ideas
