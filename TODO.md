@@ -673,4 +673,10 @@ gets versioned as it ships, not reconstructed later.
 - [x] Added `sharp` as a dependency; Dockerfile now installs `fontconfig ttf-dejavu` at runtime (not just build time) — without a real font, sharp's SVG rendering (via librsvg) has no glyphs and text silently renders as empty boxes
 - [x] Investigated moving the announcement above Trending Movies on Home — not possible. Confirmed via Plex's own `/hubs/promoted` API that hub order is fixed by Plex Media Server itself (dynamic library hubs always before promoted custom collections); no UI or documented API exposes reordering that
 
+## v1.55.1 — Fix: a season-pack drop spammed the same episode over and over
+
+- [x] **Fix**: a batch of newly-aired episodes all hitting Sonarr's "TBA title" import rejection at once (very common right after a season-pack drop) left Sonarr's own queue with several simultaneous records for the SAME episode — the pack's own file, plus another release Sonarr's automatic search grabbed later because the episode still looked missing while the first stayed stuck. Both the Import Issues list and the Alerts panel showed the identical episode repeated once per competing download — verified live against a real "Beauty in Black" S3 drop that produced exactly this (8 episodes, several 2-3x over)
+- [x] `lib/sonarrClient.js`'s `fetchImportQueue` now groups by episode (new pure `groupQueueRecordsByEpisode` in `lib/grabStatus.js`, unit tested) — one row per episode; Remove now clears every underlying queue id in the group, Force Import resolves the episode via whichever download Sonarr matched first
+- [x] Alerts panel's own dedup key was a second, independent bug: it used Sonarr's own queue-record id, which Sonarr can and does recreate for the same still-stuck episode across polls — churned the key and piled up duplicate "new" alerts instead of updating one ongoing alert in place. Now keyed on the stable `episodeId`
+
 ## Ideas

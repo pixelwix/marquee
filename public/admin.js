@@ -2092,6 +2092,11 @@ function createImportIssueRow(r) {
 
 function updateImportIssueRow(row, r) {
   row.dataset.id = r.id;
+  // A season-pack drop can leave several of Sonarr's own queue records
+  // pointing at the same episode (see lib/sonarrClient.js's fetchImportQueue)
+  // — those are pre-merged into this one row upstream, so Remove needs every
+  // id in the group, not just the first.
+  row.dataset.queueIds = JSON.stringify(r.queueIds && r.queueIds.length ? r.queueIds : [r.id]);
   row.dataset.service = r.service;
   row.dataset.downloadId = r.downloadId || '';
   row.dataset.title = r.title || 'Unknown title';
@@ -2127,12 +2132,18 @@ document.getElementById('import-issues-body').addEventListener('click', async e 
 
   const btn = e.target.closest('.remove-queue-btn');
   if (!btn) return;
-  if (!await confirmDialog('Remove this from the queue and blocklist the release?')) return;
   const row = btn.closest('.pending-row');
+  // Multiple ids here means a season-pack drop left several of Sonarr's own
+  // queue records pointing at this one episode (see updateImportIssueRow) —
+  // removing just the first would leave the others to keep re-triggering.
+  const queueIds = JSON.parse(row.dataset.queueIds || `["${row.dataset.id}"]`);
+  if (!await confirmDialog(queueIds.length > 1
+    ? `Remove all ${queueIds.length} pending downloads for this episode and blocklist them?`
+    : 'Remove this from the queue and blocklist the release?')) return;
   row.querySelectorAll('button').forEach(b => b.disabled = true);
   btn.querySelector('.btn-label').textContent = '…';
   try {
-    await api(`/api/${row.dataset.service}/queue/${row.dataset.id}`, { method: 'DELETE' });
+    await Promise.all(queueIds.map(id => api(`/api/${row.dataset.service}/queue/${id}`, { method: 'DELETE' })));
     row.remove();
     if (!document.getElementById('import-issues-body').children.length) {
       document.getElementById('import-issues-body').innerHTML = '<p class="empty-state">No import issues.</p>';
