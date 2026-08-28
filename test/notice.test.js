@@ -69,14 +69,19 @@ test('buildKometaYaml always includes the fixed collection identity Kometa keys 
   assert.match(yaml, /visible_home: true/);
 });
 
-// Regression test for a real failure: Kometa's added.gte/.after filter requires
-// an actual calendar date, not a bare day-count — the original "added.gte: 30"
-// failed Kometa's own validation on every run (verified live 2026-08-27), so the
-// announcement collection silently never built despite Marquee reporting success.
-test('buildKometaYaml emits a real YYYY-MM-DD date for the "added" filter, not a bare day-count', () => {
-  const yaml = buildKometaYaml('Anything.', undefined, new Date('2026-08-27T12:00:00Z'));
-  assert.match(yaml, /added\.gte: "2026-07-28"/);
-  assert.doesNotMatch(yaml, /added\.gte: 30/);
+// Regression test for two real failures in sequence: (1) added.gte/.after
+// requires an actual calendar date, not a bare day-count — "added.gte: 30"
+// failed Kometa's own validation on every run (verified live 2026-08-27). (2)
+// Even fixed, "match anything recently added" meant Home showed a random
+// real movie's poster with none of the actual message on it, because a Home
+// hub row always renders the *member item's* own poster/title, never the
+// collection's (verified live 2026-08-28 — true for every collection-based
+// Home row, not just this one; there's no setting that changes it). Fixed by
+// targeting one fixed, dedicated placeholder movie instead of a live search.
+test('buildKometaYaml targets the fixed placeholder movie by title, not a live "recently added" search', () => {
+  const yaml = buildKometaYaml('Anything.');
+  assert.match(yaml, /title: Server Announcement/);
+  assert.doesNotMatch(yaml, /added\.gte/);
 });
 
 test('buildKometaYaml points file_poster at the generated announcement poster', () => {

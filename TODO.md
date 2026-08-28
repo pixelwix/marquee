@@ -679,4 +679,16 @@ gets versioned as it ships, not reconstructed later.
 - [x] `lib/sonarrClient.js`'s `fetchImportQueue` now groups by episode (new pure `groupQueueRecordsByEpisode` in `lib/grabStatus.js`, unit tested) — one row per episode; Remove now clears every underlying queue id in the group, Force Import resolves the episode via whichever download Sonarr matched first
 - [x] Alerts panel's own dedup key was a second, independent bug: it used Sonarr's own queue-record id, which Sonarr can and does recreate for the same still-stuck episode across polls — churned the key and piled up duplicate "new" alerts instead of updating one ongoing alert in place. Now keyed on the stable `episodeId`
 
+## v1.56.0 — Server Announcement actually shows on Home now, not a random movie
+
+- [x] Root cause of yesterday's "still just shows Above and Below" complaint: a Plex Home hub row for a collection always renders its *member items'* own posters/titles, never the collection's own artwork — true for every collection-based Home row (confirmed live against "Trending Movies This Week" too), not fixable by any collection-level setting. The v1.55.0 poster was correctly generated and applied, just to a field Home structurally never displays
+- [x] Fixed properly: created a real, dedicated placeholder movie ("Server Announcement", a tiny local unmatched video file dropped directly into the Movies library folder) and pointed the Kometa collection's `plex_search` at it by exact title instead of "grab whatever was recently added" — so the Home row now always shows this one fixed item instead of a random real movie
+- [x] The actual per-message poster upload moved off Kometa's schedule entirely — `lib/notice.js` now pushes the rendered PNG straight to the placeholder movie's own Plex poster the moment a notice is posted, using the same raw-bytes upload python-plexapi's `uploadPoster()` does internally (confirmed by reading Kometa's own installed plexapi source). Updates are now instant instead of waiting up to ~12h for Kometa's next scheduled run; Kometa still owns creating/removing the collection itself on post/clear
+
+## v1.56.1 — Server Announcement collection updates within ~60s of posting/clearing
+
+- [x] The poster/message content already updated instantly (v1.56.0), but the Plex *collection* itself — what actually makes the Home row appear or disappear at all — still only rebuilt on Kometa's own schedule, up to ~12h away. Posting a bulletin could update its text immediately while the row itself hadn't shown up yet
+- [x] `lib/notice.js` now drops a flag file (`.announcement-changed`) in the shared Kometa config mount on every post/clear. Marquee's own container has no Docker socket access and can't trigger Kometa itself, so a new host-side cron script (`scripts/kometa-announcement-trigger.mjs`, `* * * * *`, matching the existing `qbit-*.mjs` pattern) polls for it and runs a scoped `kometa --run --run-collections "📌 Server Announcement" --libraries Movies` — verified live at ~9-11s — instead of waiting for a full run
+- [x] Chose this over a Docker-socket-mounted watcher container specifically to avoid giving any always-on service that kind of host access for a cosmetic feature — worst case here is a ~60s poll lag, not a new privilege surface
+
 ## Ideas
