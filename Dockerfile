@@ -1,6 +1,9 @@
 FROM node:20-alpine
 
-RUN apk add --no-cache tzdata
+# fontconfig + a real font are needed at runtime (not just build time) for
+# sharp's SVG rendering (the Kometa announcement poster, lib/notice.js) —
+# without them librsvg has no glyphs and text renders as empty boxes.
+RUN apk add --no-cache tzdata fontconfig ttf-dejavu
 
 WORKDIR /app
 

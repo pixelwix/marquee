@@ -282,4 +282,100 @@ router.delete('/queue/:id', requireAuth, requireOwner, async (req, res) => {
   }
 });
 
+// Owner-only search across TMDB (via Radarr's own lookup, which also flags
+// anything already tracked with a real `id`) — the "find anything, in the
+// library or not" counterpart to /search above, which only ever looks at
+// what's already tracked. Feeds the Find & Download panel.
+router.get('/lookup', requireAuth, requireOwner, async (req, res) => {
+  const term = (req.query.term || '').trim();
+  if (!term) return res.json([]);
+  try {
+    const { data } = await axios.get(`${process.env.RADARR_URL}/api/v3/movie/lookup`, {
+      params: { term },
+      headers: { 'X-Api-Key': process.env.RADARR_API_KEY },
+      timeout: 20000
+    });
+    const results = data.slice(0, 20).map(m => ({
+      mediaType: 'movie',
+      tmdbId: m.tmdbId,
+      title: m.title,
+      year: m.year,
+      poster: m.images?.find(i => i.coverType === 'poster')?.remoteUrl || null,
+      tracked: !!m.id
+    }));
+    res.json(results);
+  } catch (err) {
+    console.error('radarr lookup error:', err.code || err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not reach Radarr' });
+  }
+});
+
+// Quality-profile choices for the "Add to library" step below. Default is
+// whichever profile the existing library actually uses most (verified live:
+// 5003/5005 tracked movies use the same profile) rather than just whatever
+// Radarr happens to list first — cheap to compute, the movie list is one call.
+router.get('/options', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const [{ data: profiles }, { data: rootFolders }, { data: movies }] = await Promise.all([
+      axios.get(`${process.env.RADARR_URL}/api/v3/qualityprofile`, { headers: { 'X-Api-Key': process.env.RADARR_API_KEY } }),
+      axios.get(`${process.env.RADARR_URL}/api/v3/rootfolder`, { headers: { 'X-Api-Key': process.env.RADARR_API_KEY } }),
+      axios.get(`${process.env.RADARR_URL}/api/v3/movie`, { headers: { 'X-Api-Key': process.env.RADARR_API_KEY } })
+    ]);
+    const counts = new Map();
+    for (const m of movies) counts.set(m.qualityProfileId, (counts.get(m.qualityProfileId) || 0) + 1);
+    const defaultQualityProfileId = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? profiles[0]?.id;
+    res.json({
+      rootFolder: rootFolders[0]?.path || null,
+      qualityProfiles: profiles.map(p => ({ id: p.id, name: p.name })),
+      defaultQualityProfileId
+    });
+  } catch (err) {
+    console.error('radarr options error:', err.code || err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not reach Radarr' });
+  }
+});
+
+// Adds a new movie as monitored without triggering Radarr's own automatic
+// search — the owner picks the exact release themselves next, via the same
+// /releases + /releases/grab flow already used for anything else tracked.
+router.post('/add', requireAuth, requireOwner, async (req, res) => {
+  const tmdbId = Number(req.body.tmdbId);
+  const qualityProfileId = Number(req.body.qualityProfileId);
+  if (!Number.isInteger(tmdbId) || tmdbId <= 0 || !Number.isInteger(qualityProfileId)) {
+    return res.status(400).json({ error: 'Invalid movie or quality profile' });
+  }
+  try {
+    const { data: existing } = await axios.get(`${process.env.RADARR_URL}/api/v3/movie`, {
+      params: { tmdbId },
+      headers: { 'X-Api-Key': process.env.RADARR_API_KEY }
+    });
+    if (existing[0]) return res.status(409).json({ error: 'Already in your library' });
+
+    const { data: lookup } = await axios.get(`${process.env.RADARR_URL}/api/v3/movie/lookup`, {
+      params: { term: `tmdb:${tmdbId}` },
+      headers: { 'X-Api-Key': process.env.RADARR_API_KEY }
+    });
+    const found = lookup[0];
+    if (!found) return res.status(404).json({ error: 'Movie not found' });
+
+    const { data: rootFolders } = await axios.get(`${process.env.RADARR_URL}/api/v3/rootfolder`, {
+      headers: { 'X-Api-Key': process.env.RADARR_API_KEY }
+    });
+
+    const { data: created } = await axios.post(`${process.env.RADARR_URL}/api/v3/movie`, {
+      ...found,
+      qualityProfileId,
+      rootFolderPath: rootFolders[0]?.path,
+      monitored: true,
+      minimumAvailability: 'released',
+      addOptions: { monitor: 'movieOnly', searchForMovie: false }
+    }, { headers: { 'X-Api-Key': process.env.RADARR_API_KEY } });
+
+    res.json({ id: created.id, tmdbId: created.tmdbId, title: created.title });
+  } catch (err) {
+    console.error('radarr add error:', err.response?.data || err.message);
+    res.status(502).json({ error: err.response?.data?.[0]?.errorMessage || 'Could not add movie' });
+  }
+});
+
 module.exports = router;

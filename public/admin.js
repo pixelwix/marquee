@@ -1088,15 +1088,17 @@ async function openIssueFileInfo(ctx) {
 async function openReleaseModal(ctx) {
   const modal = document.getElementById('release-modal');
   const listEl = document.getElementById('release-list');
-  document.getElementById('release-modal-title').textContent = ctx.title +
-    (ctx.season ? ` — S${ctx.season}E${ctx.episode}` : '');
-  listEl.innerHTML = '<p class="empty-state">Searching indexers… this can take up to a minute.</p>';
+  document.getElementById('release-modal-title').textContent = ctx.title + (
+    ctx.episode != null ? ` — S${ctx.season}E${ctx.episode}` :
+    ctx.season != null ? ` — Season ${ctx.season}` : ''
+  );
+  listEl.innerHTML = '<p class="empty-state">Searching indexers… this can take up to a minute (longer for a whole-season search on a long-running show).</p>';
   modal.classList.remove('hidden');
 
   const isMovie = ctx.mediaType === 'movie';
   const url = isMovie
     ? `/api/radarr/releases?tmdbId=${ctx.tmdbId}`
-    : `/api/sonarr/releases?tvdbId=${ctx.tvdbId}&season=${ctx.season}&episode=${ctx.episode}`;
+    : `/api/sonarr/releases?tvdbId=${ctx.tvdbId}&season=${ctx.season}` + (ctx.episode != null ? `&episode=${ctx.episode}` : '');
   const grabUrl = isMovie ? '/api/radarr/releases/grab' : '/api/sonarr/releases/grab';
 
   try {
@@ -1105,7 +1107,7 @@ async function openReleaseModal(ctx) {
     listEl.innerHTML = releases.map(r => `
       <div class="release-row ${r.rejected ? 'rejected' : ''}">
         <div class="release-info">
-          <div class="release-title" title="${escapeHtml(r.title)}">${escapeHtml(r.title)}</div>
+          <div class="release-title" title="${escapeHtml(r.title)}">${r.fullSeason ? '<span class="chan chan-teal">Season Pack</span> ' : ''}${escapeHtml(r.title)}</div>
           <div class="release-meta">
             ${escapeHtml(r.quality || 'Unknown')} · ${formatBytes(r.sizeBytes)} · ${escapeHtml(r.indexer)}
             · ${r.protocol === 'torrent' ? `${r.seeders ?? 0} seeders` : `${r.ageDays ?? '?'}d old`}
@@ -1208,9 +1210,12 @@ function trackGrab(row, ctx, isMovie, releaseTitle) {
   // file apart from one that was already there before this grab (the
   // "resolve an issue" flow replaces an existing file, so hasFile alone
   // isn't confirmation — see isFileFromThisGrab in lib/grabStatus.js).
+  // ctx.episode is absent for a season-pack grab from the season list's
+  // own Search button — grab-status then reports an aggregate for the
+  // whole season instead of one episode (see routes/sonarr.js).
   const statusUrl = isMovie
     ? `/api/radarr/grab-status?tmdbId=${ctx.tmdbId}&since=${startedAt}`
-    : `/api/sonarr/grab-status?tvdbId=${ctx.tvdbId}&season=${ctx.season}&episode=${ctx.episode}&since=${startedAt}`;
+    : `/api/sonarr/grab-status?tvdbId=${ctx.tvdbId}&season=${ctx.season}&since=${startedAt}` + (ctx.episode != null ? `&episode=${ctx.episode}` : '');
 
   const poll = async () => {
     if (!document.body.contains(row)) return; // modal closed / list re-rendered since
@@ -1404,6 +1409,9 @@ function openLibraryBrowseSeasons(series) {
     <div class="browse-row" data-season="${se.seasonNumber}">
       <div class="browse-row-name">Season ${se.seasonNumber}</div>
       <div class="browse-row-index">${se.episodeCount} ep</div>
+      <button class="search-release-btn pill-btn browse-row-search" data-search-season="${se.seasonNumber}">
+        <span class="state-dot"></span><span class="btn-label">Search</span>
+      </button>
     </div>
   `).join('') : '<p class="empty-state">No seasons found.</p>';
   document.getElementById('library-browse-modal').classList.remove('hidden');
@@ -1416,7 +1424,15 @@ async function openLibraryBrowseEpisodes(season) {
   const listEl = document.getElementById('library-browse-list');
   listEl.innerHTML = '<p class="empty-state">Loading…</p>';
   try {
-    libraryBrowseEpisodes = await api(`/api/sonarr/episodes?seriesId=${libraryBrowseContext.seriesId}&season=${season}`);
+    // A series added seconds ago (Find & Download's "not tracked yet" path)
+    // may not have its episodes populated yet — Sonarr queues its own
+    // RefreshSeries on add and fills them in ~2s later — so a genuinely
+    // empty result gets a couple of quick retries before giving up.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      libraryBrowseEpisodes = await api(`/api/sonarr/episodes?seriesId=${libraryBrowseContext.seriesId}&season=${season}`);
+      if (libraryBrowseEpisodes.length || attempt === 2) break;
+      await new Promise(r => setTimeout(r, 1500));
+    }
     listEl.innerHTML = libraryBrowseEpisodes.length ? libraryBrowseEpisodes.map(ep => `
       <div class="browse-row" data-episode="${ep.episodeNumber}">
         <div class="browse-row-name">${ep.episodeNumber}. ${escapeHtml(ep.title || 'TBA')}</div>
@@ -1429,6 +1445,20 @@ async function openLibraryBrowseEpisodes(season) {
 }
 
 document.getElementById('library-browse-list').addEventListener('click', e => {
+  // Checked before the row-level [data-season] handler below, since the
+  // Search button sits inside that same row and would otherwise also
+  // trigger the season -> episode drill-down.
+  const searchBtn = e.target.closest('[data-search-season]');
+  if (searchBtn) {
+    openReleaseModal({
+      mediaType: 'tv',
+      tvdbId: libraryBrowseContext.tvdbId,
+      season: Number(searchBtn.dataset.searchSeason),
+      title: libraryBrowseContext.title
+    });
+    return;
+  }
+
   const seasonRow = e.target.closest('[data-season]');
   if (seasonRow) { openLibraryBrowseEpisodes(Number(seasonRow.dataset.season)); return; }
 
@@ -1451,6 +1481,145 @@ document.getElementById('library-browse-list').addEventListener('click', e => {
       title: libraryBrowseContext.title
     })
   });
+});
+
+// ---------- Stack: Find & Download ----------
+// Owner-only "search anything, add it if it's not already tracked" flow —
+// distinct from Search Library above (which only ever matches what's already
+// in Radarr/Sonarr, by fast substring). Tracked hits jump straight into the
+// same release-search modal / season picker Search Library uses; untracked
+// hits go through add-media-modal first (quality profile / root folder),
+// then land in that exact same flow.
+let findMediaResults = [];
+let findMediaTimer;
+let addMediaContext = null; // { item }
+
+document.getElementById('find-media-input').addEventListener('input', e => {
+  clearTimeout(findMediaTimer);
+  const q = e.target.value.trim();
+  const body = document.getElementById('find-media-body');
+  if (!q) { body.innerHTML = '<p class="empty-state">Type to search.</p>'; return; }
+  findMediaTimer = setTimeout(async () => {
+    body.innerHTML = '<p class="empty-state">Searching…</p>';
+    try {
+      const [movies, series] = await Promise.all([
+        api(`/api/radarr/lookup?term=${encodeURIComponent(q)}`),
+        api(`/api/sonarr/lookup?term=${encodeURIComponent(q)}`)
+      ]);
+      findMediaResults = [...movies, ...series];
+      if (!findMediaResults.length) { body.innerHTML = '<p class="empty-state">No matches.</p>'; return; }
+      body.innerHTML = findMediaResults.map((r, idx) => `
+        <div class="pending-row" data-idx="${idx}">
+          <img class="result-poster" src="${r.poster || ''}" loading="lazy" onerror="this.style.visibility='hidden'">
+          <div class="result-info">
+            <div class="result-title">${escapeHtml(r.title)}${r.year ? ` (${r.year})` : ''}</div>
+            <div class="pending-requester">${r.mediaType === 'tv' ? 'Series' : 'Movie'}${r.tracked ? ' · In library' : ''}</div>
+          </div>
+          <div class="pending-actions">
+            <button class="search-release-btn pill-btn"><span class="state-dot"></span><span class="btn-label">${r.tracked ? 'Search' : 'Add'}</span></button>
+          </div>
+        </div>
+      `).join('');
+    } catch (e) {
+      body.innerHTML = '<p class="empty-state">Search failed.</p>';
+    }
+  }, 400);
+});
+
+document.getElementById('find-media-body').addEventListener('click', e => {
+  const row = e.target.closest('.pending-row');
+  if (!row) return;
+  const item = findMediaResults[Number(row.dataset.idx)];
+  if (!item) return;
+  if (!item.tracked) { openAddMediaModal(item); return; }
+  if (item.mediaType === 'movie') {
+    openReleaseModal(item);
+  } else {
+    openLibraryBrowseSeasons({ seriesId: item.seriesId, tvdbId: item.tvdbId, title: item.title, poster: item.poster, seasons: item.seasons });
+  }
+});
+
+async function openAddMediaModal(item) {
+  addMediaContext = { item };
+  document.getElementById('add-media-title').textContent = `Add "${item.title}" to library`;
+  const qualitySelect = document.getElementById('add-media-quality-input');
+  const folderBlock = document.getElementById('add-media-folder-block');
+  const folderSelect = document.getElementById('add-media-folder-input');
+  const confirmBtn = document.getElementById('add-media-confirm-btn');
+  const statusEl = document.getElementById('add-media-status');
+  const isMovie = item.mediaType === 'movie';
+
+  qualitySelect.innerHTML = '<option>Loading…</option>';
+  folderBlock.classList.toggle('hidden', isMovie);
+  statusEl.classList.add('hidden');
+  confirmBtn.disabled = false;
+  confirmBtn.textContent = 'Add & Search Releases';
+  document.getElementById('add-media-modal').classList.remove('hidden');
+
+  try {
+    const options = await api(isMovie ? '/api/radarr/options' : '/api/sonarr/options');
+    qualitySelect.innerHTML = options.qualityProfiles.map(p =>
+      `<option value="${p.id}" ${p.id === options.defaultQualityProfileId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
+    ).join('');
+    if (!isMovie) {
+      folderSelect.innerHTML = options.rootFolders.map(f =>
+        `<option value="${escapeHtml(f)}" ${f === options.defaultRootFolder ? 'selected' : ''}>${escapeHtml(f)}</option>`
+      ).join('');
+    }
+  } catch (e) {
+    qualitySelect.innerHTML = '';
+    statusEl.textContent = 'Could not load quality profiles/root folders.';
+    statusEl.classList.remove('hidden');
+    confirmBtn.disabled = true;
+  }
+}
+
+function closeAddMediaModal() {
+  document.getElementById('add-media-modal').classList.add('hidden');
+  addMediaContext = null;
+}
+document.getElementById('close-add-media-modal-btn').addEventListener('click', closeAddMediaModal);
+document.getElementById('add-media-cancel-btn').addEventListener('click', closeAddMediaModal);
+
+document.getElementById('add-media-confirm-btn').addEventListener('click', async () => {
+  if (!addMediaContext) return;
+  const { item } = addMediaContext;
+  const isMovie = item.mediaType === 'movie';
+  const qualityProfileId = Number(document.getElementById('add-media-quality-input').value);
+  const rootFolderPath = document.getElementById('add-media-folder-input').value;
+  const confirmBtn = document.getElementById('add-media-confirm-btn');
+  const statusEl = document.getElementById('add-media-status');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Adding…';
+  statusEl.classList.add('hidden');
+  try {
+    if (isMovie) {
+      const created = await api('/api/radarr/add', {
+        method: 'POST',
+        body: JSON.stringify({ tmdbId: item.tmdbId, qualityProfileId })
+      });
+      closeAddMediaModal();
+      openReleaseModal({ mediaType: 'movie', tmdbId: created.tmdbId, title: created.title });
+    } else {
+      const created = await api('/api/sonarr/add', {
+        method: 'POST',
+        body: JSON.stringify({ tmdbId: item.tmdbId, qualityProfileId, rootFolderPath })
+      });
+      closeAddMediaModal();
+      openLibraryBrowseSeasons({
+        seriesId: created.seriesId,
+        tvdbId: created.tvdbId,
+        title: created.title,
+        poster: created.poster,
+        seasons: created.seasons
+      });
+    }
+  } catch (e) {
+    statusEl.textContent = e.message || 'Could not add to library.';
+    statusEl.classList.remove('hidden');
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Add & Search Releases';
+  }
 });
 
 // ---------- Current file info (shown before jumping to release search) ----------

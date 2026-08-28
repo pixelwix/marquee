@@ -647,4 +647,30 @@ gets versioned as it ships, not reconstructed later.
 - [x] **Fix**: v1.53.2 moved the Wanted/Missing row list into its own modal, but its per-row Search button opens `release-modal` on top of it without closing it first — both share `z-index: 20`, so which one visually wins is decided by DOM order, and `release-modal` was defined earlier in the HTML than the new list modal, so it lost
 - [x] Moved `release-modal`'s markup to be defined last among content modals (only the generic confirm dialog comes after it), so it reliably stacks on top of whatever modal it's launched from — Wanted/Missing's list, its info popup, issue suggestions, etc. — instead of relying on each new modal happening to be added earlier in the file
 
+## v1.54.0 — "Find & Download" — search for new media directly from the Stack panel
+
+- [x] New search box under Search Library: searches TMDB/TVDB via Radarr's/Sonarr's own `lookup` endpoints (not Overseerr) — a single query surfaces both what's already tracked and what isn't, unlike Search Library above which only ever matches the existing library
+- [x] Already-tracked hits jump straight into the same release-search modal / season-episode picker Search Library uses (movies straight to release search, TV through the same season → episode drill-down)
+- [x] Untracked hits go through a new "Add to library" confirm step first (quality profile, plus root folder for TV) before landing in that same flow — added as monitored with `searchForMovie`/`searchForMissingEpisodes: false` so the owner picks the exact release themselves instead of waiting on Radarr's/Sonarr's own automatic search
+- [x] Quality-profile and root-folder defaults are computed live from what the existing library actually uses most, not just whichever Radarr/Sonarr happens to list first — verified live this matters for Sonarr specifically, which splits TV across 4 root folders (`/tv`, `/tv2`, `/tv3`, `/anime2`) where the literal first one returned is actually the least-used
+- [x] Sonarr queues its own `RefreshSeries` on add and populates episodes ~2s later (verified live) rather than instantly — the season/episode picker retries briefly instead of assuming the episode list is ready right away
+
+## v1.54.1 — Fix: Find & Download's search box was unstyled + season packs
+
+- [x] **Fix**: the new `#find-media-input` box from v1.54.0 wasn't included in the CSS rule styling `#library-search-input`/`#search-input`/`#report-search-input`, so it rendered as a bare unstyled browser input instead of matching the rest of the panel
+- [x] Season list (used by both Search Library and Find & Download) gets its own Search button per row, for searching a whole season at once — Sonarr's `/release` endpoint tells a season-pack search apart from a single-episode one by which params it gets (`seriesId`+`seasonNumber` alone vs. adding `episodeId`); season-pack results come back flagged `fullSeason` and get a badge in the results list since they're now mixed in with per-episode releases
+- [x] Grabbing a season pack reuses the exact same grab endpoint (Sonarr doesn't care whether a release is a pack or a single episode), but status tracking is aggregated across every queue record for that series+season rather than the single-episode match used everywhere else — a season pack shows up as one queue record per episode inside it, verified live
+
+## v1.54.2 — Fix: Kometa never actually built the Server Announcement collection
+
+- [x] **Fix**: `buildKometaYaml()` generated `plex_search: any: added.gte: 30`, treating Kometa's `added.gte`/`.after` filter as "N days" — it's actually "on or after this calendar date" and requires `YYYY-MM-DD`. Every real Kometa run rejected it with `Collection Error: added.after: 30 must match pattern YYYY-MM-DD`, so the announcement collection silently never built despite Marquee reporting the notice as posted — caught live 2026-08-27 watching a real scheduled Kometa run process it
+- [x] Now computes an actual date 30 days before the write (`now` param, defaults to `Date.now()`, same pattern as `computeStatus`) — keeps the original "match anything recently added" intent, just as a real date Kometa accepts
+
+## v1.55.0 — Server Announcement gets a real poster instead of a random movie's
+
+- [x] A Plex Home hub row only ever shows a collection's title + poster, never its summary — so the announcement message itself was never actually visible on Home, just "📌 Server Announcement" over whatever random movie the `plex_search` filter happened to grab (e.g. "Above and Below")
+- [x] `lib/notice.js` now renders the actual notice message as an SVG text card (dark background, amber border, wrapped and auto-shrunk to fit any length up to the 500-char cap) via `sharp`, and points the collection's `file_poster` at it — same lifecycle as the existing YAML mirror: regenerated on every post, removed when the notice is cleared
+- [x] Added `sharp` as a dependency; Dockerfile now installs `fontconfig ttf-dejavu` at runtime (not just build time) — without a real font, sharp's SVG rendering (via librsvg) has no glyphs and text silently renders as empty boxes
+- [x] Investigated moving the announcement above Trending Movies on Home — not possible. Confirmed via Plex's own `/hubs/promoted` API that hub order is fixed by Plex Media Server itself (dynamic library hubs always before promoted custom collections); no UI or documented API exposes reordering that
+
 ## Ideas

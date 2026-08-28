@@ -108,6 +108,9 @@
       <h4 class="admin-subhead">Search Library</h4>
       <input id="library-search-input" type="text" placeholder="Search your Radarr/Sonarr library…" autocomplete="off">
       <div id="library-search-body"><p class="empty-state">Type to search.</p></div>
+      <h4 class="admin-subhead">Find &amp; Download</h4>
+      <input id="find-media-input" type="text" placeholder="Search for a movie or show to add…" autocomplete="off">
+      <div id="find-media-body"><p class="empty-state">Type to search.</p></div>
       <h4 class="admin-subhead">Seeding</h4>
       <div id="seeding-body"><p class="empty-state">Loading…</p></div>
       <div class="settings-section-row">
@@ -456,6 +459,31 @@
       <button id="close-theme-btn" class="pill-btn pill-btn-icon">&#10005;</button>
     </div>
     <div id="theme-grid" class="theme-grid"></div>
+  </div>
+</div>
+
+<!-- ADD TO LIBRARY MODAL (Find & Download's "not tracked yet" path — confirms
+     quality profile / root folder before adding to Radarr/Sonarr, then hands
+     straight off to the season/episode picker or release-search modal) -->
+<div id="add-media-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="add-media-title">Add to library</h3>
+      <button id="close-add-media-modal-btn" class="pill-btn pill-btn-icon">&#10005;</button>
+    </div>
+    <div class="settings-field-block">
+      <label class="settings-field-block-label">Quality profile</label>
+      <select id="add-media-quality-input" class="settings-input-full"></select>
+    </div>
+    <div id="add-media-folder-block" class="settings-field-block hidden">
+      <label class="settings-field-block-label">Root folder</label>
+      <select id="add-media-folder-input" class="settings-input-full"></select>
+    </div>
+    <div class="settings-edit-actions">
+      <button id="add-media-cancel-btn" class="pill-btn">Cancel</button>
+      <button id="add-media-confirm-btn" class="btn-primary">Add &amp; Search Releases</button>
+    </div>
+    <p id="add-media-status" class="settings-status hidden"></p>
   </div>
 </div>
 

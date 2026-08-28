@@ -726,13 +726,14 @@ body {
 .browse-row-thumb { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; background: #E2E6EC; flex-shrink: 0; }
 .browse-row-name { font-size: 0.85rem; font-weight: 600; }
 .browse-row-index { font-size: 0.75rem; color: var(--muted); font-family: var(--mono); }
+.browse-row-search { margin-left: auto; flex-shrink: 0; }
 
-#search-input, #report-search-input, #library-search-input {
+#search-input, #report-search-input, #library-search-input, #find-media-input {
   width: 100%; padding: 0.75rem 0.95rem; background: var(--input-bg);
   border: 1px solid var(--input-border); border-radius: 9px; color: var(--text);
   font-family: var(--body); font-size: 0.9rem; margin-bottom: 0.85rem;
 }
-#search-input:focus, #report-search-input:focus { outline: none; border-color: var(--teal); }
+#search-input:focus, #report-search-input:focus, #library-search-input:focus, #find-media-input:focus { outline: none; border-color: var(--teal); }
 .discover-label {
   font-family: var(--mono); font-size: 0.68rem; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.05em; margin: -0.35rem 0 0.5rem;

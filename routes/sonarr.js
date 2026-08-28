@@ -177,11 +177,18 @@ router.get('/file-info', requireAuth, requireOwner, async (req, res) => {
 // idea as Radarr's /releases below, but Sonarr needs two lookups first
 // (series by tvdbId, then the specific episode within that season) since
 // release search is per-episode, not per-series.
+// `episode` is optional — omit it to search the whole season at once (season
+// packs), same as Sonarr's own "Search Season" interactive search. Sonarr's
+// /release endpoint tells the two apart by which params it gets: seriesId +
+// seasonNumber alone searches the season; adding episodeId narrows to one
+// episode. Season packs come back in the same list, flagged `fullSeason`
+// (see lib/releaseSearch.js's mapReleases) — verified live.
 router.get('/releases', requireAuth, requireOwner, async (req, res) => {
   const tvdbId = Number(req.query.tvdbId);
   const season = Number(req.query.season);
+  const hasEpisode = req.query.episode !== undefined;
   const episode = Number(req.query.episode);
-  if (!Number.isInteger(tvdbId) || tvdbId <= 0 || !Number.isInteger(season) || !Number.isInteger(episode)) {
+  if (!Number.isInteger(tvdbId) || tvdbId <= 0 || !Number.isInteger(season) || (hasEpisode && !Number.isInteger(episode))) {
     return res.status(400).json({ error: 'Invalid series/season/episode' });
   }
   try {
@@ -192,17 +199,22 @@ router.get('/releases', requireAuth, requireOwner, async (req, res) => {
     const series = seriesList[0];
     if (!series) return res.status(404).json({ error: 'Series not tracked in Sonarr' });
 
-    const { data: episodes } = await axios.get(`${process.env.SONARR_URL}/api/v3/episode`, {
-      params: { seriesId: series.id, seasonNumber: season },
-      headers: { 'X-Api-Key': process.env.SONARR_API_KEY }
-    });
-    const ep = episodes.find(e => e.episodeNumber === episode);
-    if (!ep) return res.status(404).json({ error: 'Episode not found in Sonarr' });
+    const releaseParams = { seriesId: series.id, seasonNumber: season };
+    if (hasEpisode) {
+      const { data: episodes } = await axios.get(`${process.env.SONARR_URL}/api/v3/episode`, {
+        params: { seriesId: series.id, seasonNumber: season },
+        headers: { 'X-Api-Key': process.env.SONARR_API_KEY }
+      });
+      const ep = episodes.find(e => e.episodeNumber === episode);
+      if (!ep) return res.status(404).json({ error: 'Episode not found in Sonarr' });
+      delete releaseParams.seasonNumber;
+      releaseParams.episodeId = ep.id;
+    }
 
     const { data: releases } = await axios.get(`${process.env.SONARR_URL}/api/v3/release`, {
-      params: { episodeId: ep.id },
+      params: releaseParams,
       headers: { 'X-Api-Key': process.env.SONARR_API_KEY },
-      timeout: 60000
+      timeout: 90000
     });
     res.json(mapReleases(releases));
   } catch (err) {
@@ -231,12 +243,14 @@ router.post('/releases/grab', requireAuth, requireOwner, async (req, res) => {
 // tracking through downloading -> importing -> done/failed instead of
 // freezing at "Grabbed ✓" with no idea what actually happened. Same
 // series/episode lookup as /releases above; queue records are per-episode
-// here (unlike Radarr's per-movie), so matched on episodeId.
+// here (unlike Radarr's per-movie), so matched on episodeId. `episode`
+// omitted means a season-pack grab — see the branch below.
 router.get('/grab-status', requireAuth, requireOwner, async (req, res) => {
   const tvdbId = Number(req.query.tvdbId);
   const season = Number(req.query.season);
+  const hasEpisode = req.query.episode !== undefined;
   const episode = Number(req.query.episode);
-  if (!Number.isInteger(tvdbId) || tvdbId <= 0 || !Number.isInteger(season) || !Number.isInteger(episode)) {
+  if (!Number.isInteger(tvdbId) || tvdbId <= 0 || !Number.isInteger(season) || (hasEpisode && !Number.isInteger(episode))) {
     return res.status(400).json({ error: 'Invalid series/season/episode' });
   }
   try {
@@ -251,13 +265,34 @@ router.get('/grab-status', requireAuth, requireOwner, async (req, res) => {
       params: { seriesId: series.id, seasonNumber: season },
       headers: { 'X-Api-Key': process.env.SONARR_API_KEY }
     });
-    const ep = episodes.find(e => e.episodeNumber === episode);
-    if (!ep) return res.status(404).json({ error: 'Episode not found in Sonarr' });
 
     const { data: queueData } = await axios.get(`${process.env.SONARR_URL}/api/v3/queue`, {
       params: { pageSize: 200 },
       headers: { 'X-Api-Key': process.env.SONARR_API_KEY }
     });
+
+    if (!hasEpisode) {
+      // A season pack can land as several queue records (Sonarr tracks each
+      // episode inside the pack separately even though it was one grab), so
+      // this reports an aggregate: any failure wins, else the least-done
+      // downloading record, else "importing" once every record's finished
+      // downloading. Doesn't attempt per-episode isFileFromThisGrab (would
+      // mean one extra request per episode in the season) — "done" is a
+      // coarser "no queue activity left and every episode now has a file".
+      const records = (queueData.records || []).filter(r => r.seriesId === series.id && r.seasonNumber === season);
+      if (records.length) {
+        const failed = records.find(r => r.trackedDownloadStatus && r.trackedDownloadStatus !== 'ok');
+        if (failed) return res.json(classifyQueueRecord(failed));
+        const downloading = records.find(r => r.status !== 'completed');
+        if (downloading) return res.json(classifyQueueRecord(downloading));
+        return res.json({ stage: 'importing' });
+      }
+      return res.json({ stage: episodes.length && episodes.every(e => e.hasFile) ? 'done' : 'unknown' });
+    }
+
+    const ep = episodes.find(e => e.episodeNumber === episode);
+    if (!ep) return res.status(404).json({ error: 'Episode not found in Sonarr' });
+
     const rec = (queueData.records || []).find(r => r.episodeId === ep.id);
     if (rec) return res.json(classifyQueueRecord(rec));
 
@@ -409,6 +444,122 @@ router.delete('/queue/:id', requireAuth, requireOwner, async (req, res) => {
   } catch (err) {
     console.error('sonarr queue delete error:', err.response?.status, err.message);
     res.status(502).json({ error: 'Could not remove item' });
+  }
+});
+
+// Owner-only search across TVDB/TMDB (via Sonarr's own lookup, which also
+// flags anything already tracked) — the "find anything, in the library or
+// not" counterpart to /search above. Lookup's own `seasons` never carries
+// per-season episode counts (tracked or not — verified live), so tracked
+// hits get real numbers from the library list instead.
+router.get('/lookup', requireAuth, requireOwner, async (req, res) => {
+  const term = (req.query.term || '').trim();
+  if (!term) return res.json([]);
+  try {
+    const [{ data: lookupResults }, { data: allSeries }] = await Promise.all([
+      axios.get(`${process.env.SONARR_URL}/api/v3/series/lookup`, {
+        params: { term },
+        headers: { 'X-Api-Key': process.env.SONARR_API_KEY },
+        timeout: 20000
+      }),
+      axios.get(`${process.env.SONARR_URL}/api/v3/series`, { headers: { 'X-Api-Key': process.env.SONARR_API_KEY } })
+    ]);
+    const byTmdbId = new Map(allSeries.filter(s => s.tmdbId).map(s => [s.tmdbId, s]));
+    const results = lookupResults.slice(0, 20).map(r => {
+      const tracked = byTmdbId.get(r.tmdbId);
+      return {
+        mediaType: 'tv',
+        tmdbId: r.tmdbId,
+        tvdbId: r.tvdbId,
+        title: r.title,
+        year: r.year,
+        poster: (tracked || r).images?.find(i => i.coverType === 'poster')?.remoteUrl || null,
+        tracked: !!tracked,
+        seriesId: tracked?.id || null,
+        seasons: tracked ? (tracked.seasons || [])
+          .filter(se => se.seasonNumber > 0)
+          .map(se => ({ seasonNumber: se.seasonNumber, episodeCount: se.statistics?.totalEpisodeCount || 0 })) : []
+      };
+    });
+    res.json(results);
+  } catch (err) {
+    console.error('sonarr lookup error:', err.code || err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not reach Sonarr' });
+  }
+});
+
+// Root-folder + quality-profile choices for the "Add to library" step below.
+// Defaults are whichever the existing library actually uses most — this
+// instance splits TV across 4 root folders (mount-capacity/genre reasons),
+// so unlike Radarr's single folder, "first in the list" would be wrong here
+// (verified live: /tv is first but the least-used of the four).
+router.get('/options', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const [{ data: profiles }, { data: rootFolders }, { data: series }] = await Promise.all([
+      axios.get(`${process.env.SONARR_URL}/api/v3/qualityprofile`, { headers: { 'X-Api-Key': process.env.SONARR_API_KEY } }),
+      axios.get(`${process.env.SONARR_URL}/api/v3/rootfolder`, { headers: { 'X-Api-Key': process.env.SONARR_API_KEY } }),
+      axios.get(`${process.env.SONARR_URL}/api/v3/series`, { headers: { 'X-Api-Key': process.env.SONARR_API_KEY } })
+    ]);
+    const profileCounts = new Map();
+    const folderCounts = new Map();
+    for (const s of series) {
+      profileCounts.set(s.qualityProfileId, (profileCounts.get(s.qualityProfileId) || 0) + 1);
+      folderCounts.set(s.rootFolderPath, (folderCounts.get(s.rootFolderPath) || 0) + 1);
+    }
+    const defaultQualityProfileId = [...profileCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? profiles[0]?.id;
+    const defaultRootFolder = [...folderCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? rootFolders[0]?.path;
+    res.json({
+      rootFolders: rootFolders.map(f => f.path),
+      defaultRootFolder,
+      qualityProfiles: profiles.map(p => ({ id: p.id, name: p.name })),
+      defaultQualityProfileId
+    });
+  } catch (err) {
+    console.error('sonarr options error:', err.code || err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not reach Sonarr' });
+  }
+});
+
+// Adds a new series as monitored without triggering Sonarr's own automatic
+// search — the owner picks a season/episode and its exact release themselves
+// next, via the same /episodes + /releases + /releases/grab flow already
+// used for anything else tracked. Sonarr queues its own RefreshSeries on add
+// (verified live: episodes populate ~2s later), so the frontend retries the
+// episode fetch briefly rather than assuming it's instant.
+router.post('/add', requireAuth, requireOwner, async (req, res) => {
+  const tmdbId = Number(req.body.tmdbId);
+  const qualityProfileId = Number(req.body.qualityProfileId);
+  const rootFolderPath = (req.body.rootFolderPath || '').trim();
+  if (!Number.isInteger(tmdbId) || tmdbId <= 0 || !Number.isInteger(qualityProfileId) || !rootFolderPath) {
+    return res.status(400).json({ error: 'Invalid series, quality profile, or root folder' });
+  }
+  try {
+    const { data: lookup } = await axios.get(`${process.env.SONARR_URL}/api/v3/series/lookup`, {
+      params: { term: `tmdb:${tmdbId}` },
+      headers: { 'X-Api-Key': process.env.SONARR_API_KEY }
+    });
+    const found = lookup[0];
+    if (!found) return res.status(404).json({ error: 'Series not found' });
+    if (found.id) return res.status(409).json({ error: 'Already in your library' });
+
+    const { data: created } = await axios.post(`${process.env.SONARR_URL}/api/v3/series`, {
+      ...found,
+      qualityProfileId,
+      rootFolderPath,
+      monitored: true,
+      addOptions: { monitor: 'all', searchForMissingEpisodes: false }
+    }, { headers: { 'X-Api-Key': process.env.SONARR_API_KEY } });
+
+    res.json({
+      seriesId: created.id,
+      tvdbId: created.tvdbId,
+      title: created.title,
+      poster: created.images?.find(i => i.coverType === 'poster')?.remoteUrl || null,
+      seasons: (created.seasons || []).filter(se => se.seasonNumber > 0).map(se => ({ seasonNumber: se.seasonNumber, episodeCount: 0 }))
+    });
+  } catch (err) {
+    console.error('sonarr add error:', err.response?.data || err.message);
+    res.status(502).json({ error: err.response?.data?.[0]?.errorMessage || 'Could not add series' });
   }
 });
 
