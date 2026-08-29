@@ -12,19 +12,6 @@ UI. It also includes owner-reviewed monthly recap emails with unsubscribe,
 duplicate-send protection, send history, and a privacy-conscious security/
 owner-action audit log.
 
-## Screenshots
-
-|                             Dashboard                             |                          Recently added                           |
-| :----------------------------------------------------------------: | :-----------------------------------------------------------------: |
-| ![Dashboard — Now Playing, Recently Watched](screenshots/dashboard.jpg) | ![Recently added — movies, TV, anime](screenshots/recently-added.jpg) |
-
-|                              Admin                              |
-| :---------------------------------------------------------------: |
-| ![Admin — disk space, alerts, wanted/missing](screenshots/admin.jpg) |
-
-(Usernames and a few identifying details in these screenshots have been
-replaced with placeholders — everything else is the app running for real.)
-
 ## 1. Configure
 
 ```bash
