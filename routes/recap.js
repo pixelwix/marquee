@@ -213,12 +213,19 @@ router.post('/send', requireAuth, requireOwner, async (req, res) => {
   if (!claimed.length) return;
 
   (async () => {
+    // A failed lookup here used to abort the whole request before anyone was
+    // claimed — safe to just retry. Now that claiming already happened, the
+    // batch has to proceed either way, but that means every recipient in it
+    // silently loses the Service Status section with no record anywhere else
+    // that it was dropped — logging plainly here, naming the batch, is the
+    // only place that gap is visible at all.
     const uptime = await uptimeKuma.getMonthlyUptime('plex', period).catch((err) => {
-      console.error('recap send: uptime lookup failed, continuing without it:', err.message);
+      console.error(`recap send (${period.label}): uptime lookup failed, all ${claimed.length} email(s) in this batch will render without the Service Status section:`, err.message);
       return null;
     });
 
     const messages = [];
+    let preparationFailures = 0;
     for (const { userId, candidate, attemptId } of claimed) {
       try {
         // eslint-disable-next-line no-await-in-loop
@@ -237,6 +244,7 @@ router.post('/send', requireAuth, requireOwner, async (req, res) => {
       } catch (err) {
         // eslint-disable-next-line no-await-in-loop
         await sendLog.finish(attemptId, { ok: false, error: err.message });
+        preparationFailures += 1;
         console.error(`recap send: preparing ${userId} failed:`, err.message);
       }
     }
@@ -246,8 +254,13 @@ router.post('/send', requireAuth, requireOwner, async (req, res) => {
       // eslint-disable-next-line no-await-in-loop
       await sendLog.finish(messages[i].attemptId, { ok: sendResults[i].ok, error: sendResults[i].error || null });
     }
-    const failedCount = sendResults.filter((r) => !r.ok).length;
-    console.log(`recap send (${period.label}): ${sendResults.length - failedCount} sent, ${failedCount} failed, out of ${claimed.length} queued`);
+    // Counts every claimed recipient, not just the ones that made it as far
+    // as sendEmailBatch — a prep failure above (bad Tautulli data, a render
+    // error) is just as real a failure as an SMTP one, and recap_send_attempts
+    // already records both the same way; this line should read the same.
+    const sentCount = sendResults.filter((r) => r.ok).length;
+    const failedCount = preparationFailures + sendResults.filter((r) => !r.ok).length;
+    console.log(`recap send (${period.label}): ${sentCount} sent, ${failedCount} failed, out of ${claimed.length} queued`);
   })().catch((err) => console.error('recap send: background job crashed:', err.message));
 });
 

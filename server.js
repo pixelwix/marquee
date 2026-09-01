@@ -142,6 +142,12 @@ require('./lib/dbBackup').start();
 require('./lib/mediaCache').start();
 require('./lib/diskSpaceHistory').start();
 require('./lib/streamOrigins').start();
+// One-shot, not a .start() scheduler like the above — see the function's own
+// comment in lib/recapSendLog.js for why this has to run once at boot,
+// before any real request can claim anything.
+require('./lib/recapSendLog').reconcileAbandoned()
+  .then((n) => { if (n) console.log(`[recapSendLog] reconciled ${n} abandoned send(s) from a previous run`); })
+  .catch((err) => console.error('[recapSendLog] reconcile failed:', err.message));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/plex', require('./routes/plex'));

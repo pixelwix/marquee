@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.57.2.**
+v1.57.3.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -706,9 +706,7 @@ gets versioned as it ships, not reconstructed later.
 - [x] **Second fix, same version**: `schedule: never` alone isn't safe on the near-instant `--run-collections` trigger path (`scripts/kometa-announcement-trigger.mjs`) — confirmed live and in Kometa's own source (`builder.py`) that `--run-collections` sets `config.requested_collections`, which makes Kometa skip the `schedule` check entirely, so a schedule-only collection block hits a *third* real error, "Collection Error: No builders were found". Fixed by no longer triggering that fast path on clear at all (`clearKometaAnnouncement` stopped calling `touchAnnouncementTrigger()`) — the direct Plex delete already removes the collection instantly, and `schedule: never` only ever needs to be seen by Kometa's own regular/scheduled full runs, where it works correctly
 - [x] Cosmetic, not functional — the collection already correctly stayed off Plex either way (this app deletes it directly, see v1.56.2) — but permanent noise in Kometa's own error reporting. Fixed by keeping a real collection block whose `plex_search` is guaranteed to never match anything, instead of an empty dict; Kometa's own `minimum_items` floor then just never (re)creates it — this also gives a harmless fallback if this app's direct Plex delete on clear ever failed silently
 
-## Ideas
-
-## v1.57.2.— Origins map can now be turned off from Settings
+## v1.57.0 — Origins map can now be turned off from Settings
 
 - [x] Added a toggle (Settings -> Privacy & Visibility, next to the Strict/Family/Full Open presets) to show or hide the CH.11 Stream Origins map entirely — some owners don't want a live geo-map of where family members are streaming from on the admin dashboard at all
 - [x] `PRIVACY_ORIGINS_ENABLED` (default on/unset) is checked server-side at startup — when off, the whole `#panel-origins` section and its `originsWorldPath.js` coastline-data script are stripped out of the rendered admin page entirely, not just hidden client-side. Same save-writes-.env-then-restarts flow as the other four privacy settings
@@ -724,3 +722,15 @@ gets versioned as it ships, not reconstructed later.
 
 - [x] **Fix**: the recap's greeting line ("Evening, Name — the projector's been running hot...") was hardcoded, not derived from the actual send time — visibly wrong for a recap sent mid-afternoon (confirmed live via a real recap received at 12:23pm still saying "Evening")
 - [x] New `timeOfDayGreeting()` in `lib/monthlyRecapTemplate.js` picks Morning/Afternoon/Evening/Night from the actual local time at render — computed per recipient, not once for the whole batch, so a large batch spanning real wall-clock time (see v1.57.1) now gets an honest greeting for whoever it actually reaches at that moment
+
+## v1.57.3 — Code review hardening for the v1.57.1/v1.57.2 recap fixes
+
+- [x] **Fix**: a careless global `sed` while hand-editing a "Current version" mention had also corrupted the real `## v1.57.0` changelog heading further down into a mangled duplicate `## v1.57.2.—`, and the three newest version entries had landed after the trailing `## Ideas` section instead of before it. Restored the correct heading and file ordering
+- [x] The background recap-send job now has a startup-time reconciliation sweep (`recapSendLog.reconcileAbandoned()`, called once in `server.js` before any request can claim anything) — if a redeploy interrupts a batch mid-send, every recipient still marked `sending` from a dead process is immediately flipped to `failed` with a clear reason, instead of sitting silently until some unrelated later attempt happens to reclaim it (which, for a given month, might never happen)
+- [x] A failed Uptime Kuma lookup mid-batch now logs plainly which batch and how many recipients will render without the Service Status section, instead of silently falling back to `null` with zero record anywhere that content was dropped
+- [x] The background job's final summary log now counts a recipient who failed during data-fetch/render the same as one who failed at the actual send step — previously only the latter were counted as "failed", understating real failures in the operator-facing log line (the per-attempt DB record was always correct either way)
+- [x] Recent Send History's refresh after a send now polls until every queued recipient actually leaves `sending` (or 10 minutes pass), reusing the same poll-until-terminal shape as `trackGrab`/`trackAutoFix` elsewhere in this file — replaces four fixed one-shot timers that couldn't stop early for a small batch, couldn't keep going past 5 minutes for a large one, and stacked redundant timers on a second send within that window
+- [x] Removed a wrong code comment citing "arr-health-watchdog.mjs's restartBlipFor" as an in-repo precedent — that script lives outside this project entirely and doesn't exist anywhere in Marquee
+- [x] `timeOfDayGreeting()` now pins its timezone explicitly (`RECAP_TIMEZONE` env var, defaulting to `America/Chicago`) via `Intl.DateTimeFormat` instead of reading the process's raw local hour — previously depended entirely on `docker-compose.yml`'s `TZ` var being present; a future deploy path that dropped it would have silently reverted to UTC and shifted every greeting by 5-6 hours
+
+## Ideas

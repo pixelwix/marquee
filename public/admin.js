@@ -2710,11 +2710,9 @@ document.getElementById('newsletter-send-btn').addEventListener('click', async (
     if (result.queued) parts.push('Sending now in the background — Recent Send History below will update as each one finishes.');
     status.textContent = parts.join(' ');
     await loadNewsletterCandidates();
-    // A few delayed refreshes so results actually show up without the owner
-    // needing to remember to reopen this tab — the background send can take
-    // several minutes for a large list.
     if (result.queued) {
-      [30000, 90000, 180000, 300000].forEach((delay) => setTimeout(loadNewsletterHistory, delay));
+      const queuedUserIds = userIds.filter((id) => !result.skipped.some((s) => s.userId === String(id)));
+      pollRecapSendProgress(queuedUserIds, result.period.key);
     }
   } catch (e) {
     status.textContent = `Send failed: ${e.message}`;
@@ -2723,10 +2721,10 @@ document.getElementById('newsletter-send-btn').addEventListener('click', async (
   }
 });
 
-async function loadNewsletterHistory() {
+async function loadNewsletterHistory(limit = 30) {
   const body = document.getElementById('newsletter-history-body');
   try {
-    const rows = await api('/api/recap/history?limit=30');
+    const rows = await api(`/api/recap/history?limit=${limit}`);
     body.innerHTML = rows.length ? rows.map(row => `
       <div class="audit-row">
         <span class="state-dot ${row.status === 'sent' ? '' : row.status === 'sending' ? 'paused' : 'danger'}"></span>
@@ -2735,9 +2733,41 @@ async function loadNewsletterHistory() {
           <div class="now-meta">${escapeHtml(row.periodKey)} · ${escapeHtml(row.status)} · ${timeAgo(row.startedAt)}${row.error ? ` · ${escapeHtml(row.error)}` : ''}</div>
         </div>
       </div>`).join('') : '<p class="empty-state">No sends recorded yet.</p>';
+    return rows;
   } catch (e) {
     body.innerHTML = '<p class="empty-state">Could not load send history.</p>';
+    return [];
   }
+}
+
+const RECAP_SEND_POLL_INTERVAL_MS = 15000;
+// A batch's real duration scales with recipient count (~2s/recipient plus a
+// per-user data fetch, see routes/recap.js) — 10 minutes covers a much
+// larger list than this app has ever actually sent, well past the ~3.5
+// minutes a real 38-recipient batch took.
+const RECAP_SEND_POLL_TIMEOUT_MS = 10 * 60 * 1000;
+
+// Same poll-until-terminal shape as trackGrab/trackAutoFix above, rather than
+// the fixed 30s/90s/3min/5min one-shot timers this replaced — those couldn't
+// stop early for a small batch, couldn't keep going past 5 minutes for a
+// large one, and stacked redundant timers on a second send within that
+// window. Terminal here means every queued userId has left 'sending' for
+// this exact period in the fetched history, not just that some request
+// succeeded.
+function pollRecapSendProgress(userIds, periodKey) {
+  const startedAt = Date.now();
+  const pending = new Set(userIds.map(String));
+  const poll = async () => {
+    if (!document.getElementById('newsletter-history-body')) return; // tab/DOM gone
+    const rows = await loadNewsletterHistory(Math.max(30, pending.size + 10));
+    for (const row of rows) {
+      if (row.periodKey === periodKey && row.status !== 'sending') pending.delete(String(row.userId));
+    }
+    if (!pending.size) return; // terminal — every queued recipient resolved
+    if (Date.now() - startedAt > RECAP_SEND_POLL_TIMEOUT_MS) return; // give up quietly, same as trackGrab's timeout
+    setTimeout(poll, RECAP_SEND_POLL_INTERVAL_MS);
+  };
+  poll();
 }
 
 // ---------- Invite to Plex ----------
