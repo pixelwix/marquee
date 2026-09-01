@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.57.0.**
+v1.57.2.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -708,8 +708,19 @@ gets versioned as it ships, not reconstructed later.
 
 ## Ideas
 
-## v1.57.0 — Origins map can now be turned off from Settings
+## v1.57.2.— Origins map can now be turned off from Settings
 
 - [x] Added a toggle (Settings -> Privacy & Visibility, next to the Strict/Family/Full Open presets) to show or hide the CH.11 Stream Origins map entirely — some owners don't want a live geo-map of where family members are streaming from on the admin dashboard at all
 - [x] `PRIVACY_ORIGINS_ENABLED` (default on/unset) is checked server-side at startup — when off, the whole `#panel-origins` section and its `originsWorldPath.js` coastline-data script are stripped out of the rendered admin page entirely, not just hidden client-side. Same save-writes-.env-then-restarts flow as the other four privacy settings
 - [x] `admin.js`'s origins polling (`loadOrigins()` + its 60s interval) now guards on `#panel-origins` actually existing in the page, since it won't when this is off
+
+## v1.57.1 — Fix: monthly recap send falsely reported "failed" even when it fully succeeded
+
+- [x] **Fix**: `POST /api/recap/send` stayed open for the entire real send — per-recipient Tautulli data fetch plus the mandatory ~2s-throttled email send (Tautulli's Email notifier has no per-recipient override, sends can't be parallelized) — confirmed live on a real 38-recipient send that this takes ~3.5 minutes end to end. The browser/network gave up long before that, showing "Send failed" even though the server had zero errors and completed every send successfully (confirmed after the fact via `recap_send_attempts`)
+- [x] Split into a fast synchronous claim phase (responds immediately with `{queued, skipped}`) and a background phase that does the actual data-fetch-then-throttled-send work — a double-click still can't send the same person twice, since claiming (not sending) is what happens before the response
+- [x] Admin UI now says "Queued N — sending now in the background" and auto-refreshes Recent Send History at 30s/90s/3min/5min so results show up without reopening the tab
+
+## v1.57.2 — Fix: recap email always said "Evening" regardless of when it was actually sent
+
+- [x] **Fix**: the recap's greeting line ("Evening, Name — the projector's been running hot...") was hardcoded, not derived from the actual send time — visibly wrong for a recap sent mid-afternoon (confirmed live via a real recap received at 12:23pm still saying "Evening")
+- [x] New `timeOfDayGreeting()` in `lib/monthlyRecapTemplate.js` picks Morning/Afternoon/Evening/Night from the actual local time at render — computed per recipient, not once for the whole batch, so a large batch spanning real wall-clock time (see v1.57.1) now gets an honest greeting for whoever it actually reaches at that moment

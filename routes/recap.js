@@ -137,25 +137,41 @@ router.post('/test-email', requireAuth, requireOwner, async (req, res) => {
   }
 });
 
+// Split into a fast synchronous "claim" phase (responds right away) and a
+// slow background phase (data fetch + render + the actually-mandatory
+// throttled send, see lib/mailer.js's sendEmailBatch comment — Tautulli's
+// Email notifier has no per-recipient override, so sends MUST stay
+// sequential with a real delay between them, never parallelized). Before
+// this split, the whole request stayed open for however long a real batch
+// took end to end — confirmed live at ~3.5 minutes for 38 recipients (2s
+// mandatory delay + per-user Tautulli data fetch + render, each awaited in
+// sequence). That's well past what a browser tab, Cloudflare, or Traefik
+// will patiently hold a connection open for — a real 2026-09-01 send of all
+// 38 people completed with zero errors on the server (confirmed after the
+// fact via recap_send_attempts), but the owner's browser had already given
+// up and shown "Send failed" long before the response could ever arrive.
+// Claiming (fast, local DB only) still happens before responding, so the
+// response's "queued" count is real and a double-click still can't send the
+// same person twice — only the slow per-user work moves to the background.
 router.post('/send', requireAuth, requireOwner, async (req, res) => {
   const { userIds, resend = false } = req.body || {};
   const allowResend = resend === true;
   if (!Array.isArray(userIds) || !userIds.length) {
     return res.status(400).json({ error: 'userIds (non-empty array) is required' });
   }
+
+  let period, claimed, skipped;
   try {
-    const period = previousMonthRange();
+    period = previousMonthRange();
     // Recomputed here, not trusted from the client's earlier /candidates
     // call — the threshold/eligibility check has to hold at send time, not
     // just at review time (someone could otherwise be sent a recap for a
     // month they didn't actually qualify for by the time the request lands).
     const candidates = await listRecapCandidates(period);
     const byId = new Map(candidates.map((c) => [c.userId, c]));
-    const uptime = await uptimeKuma.getMonthlyUptime('plex', period);
 
-    const messages = [];
-    const skipped = [];
-    const preparationFailures = [];
+    claimed = [];
+    skipped = [];
     for (const rawId of userIds) {
       const userId = String(rawId);
       const candidate = byId.get(userId);
@@ -182,6 +198,28 @@ router.post('/send', requireAuth, requireOwner, async (req, res) => {
         skipped.push({ userId, reason: claim.reason, sentAt: claim.lastSentAt });
         continue;
       }
+      claimed.push({ userId, candidate, attemptId: claim.attemptId });
+    }
+  } catch (err) {
+    console.error('recap send error:', err.message);
+    return res.status(500).json({ error: 'Send failed' });
+  }
+
+  // Respond now — everything from here is real network work (per-user
+  // Tautulli data fetch, then the throttled send) that the client should
+  // never have to sit through. Progress is visible via GET /api/recap/history
+  // (already polled by the admin UI) as each attempt finishes below.
+  res.json({ period, requested: userIds.length, queued: claimed.length, skipped });
+  if (!claimed.length) return;
+
+  (async () => {
+    const uptime = await uptimeKuma.getMonthlyUptime('plex', period).catch((err) => {
+      console.error('recap send: uptime lookup failed, continuing without it:', err.message);
+      return null;
+    });
+
+    const messages = [];
+    for (const { userId, candidate, attemptId } of claimed) {
       try {
         // eslint-disable-next-line no-await-in-loop
         const data = await fetchUserRecapData(userId, period);
@@ -194,12 +232,12 @@ router.post('/send', requireAuth, requireOwner, async (req, res) => {
           uptime,
           unsubscribeUrl: buildUnsubscribeUrl(userId),
         });
-        messages.push({ userId, attemptId: claim.attemptId, to: candidate.email,
+        messages.push({ userId, attemptId, to: candidate.email,
           subject: `Your ${siteName} recap — ${period.label}`, html });
       } catch (err) {
         // eslint-disable-next-line no-await-in-loop
-        await sendLog.finish(claim.attemptId, { ok: false, error: err.message });
-        preparationFailures.push({ userId, ok: false, error: err.message });
+        await sendLog.finish(attemptId, { ok: false, error: err.message });
+        console.error(`recap send: preparing ${userId} failed:`, err.message);
       }
     }
 
@@ -208,21 +246,9 @@ router.post('/send', requireAuth, requireOwner, async (req, res) => {
       // eslint-disable-next-line no-await-in-loop
       await sendLog.finish(messages[i].attemptId, { ok: sendResults[i].ok, error: sendResults[i].error || null });
     }
-    const failed = [...preparationFailures, ...sendResults
-      .map((r, i) => ({ userId: messages[i].userId, ...r }))
-      .filter((r) => !r.ok)];
-
-    res.json({
-      period,
-      requested: userIds.length,
-      sent: sendResults.filter((r) => r.ok).length,
-      failed,
-      skipped,
-    });
-  } catch (err) {
-    console.error('recap send error:', err.message);
-    res.status(500).json({ error: 'Send failed' });
-  }
+    const failedCount = sendResults.filter((r) => !r.ok).length;
+    console.log(`recap send (${period.label}): ${sendResults.length - failedCount} sent, ${failedCount} failed, out of ${claimed.length} queued`);
+  })().catch((err) => console.error('recap send: background job crashed:', err.message));
 });
 
 module.exports = router;

@@ -2696,12 +2696,26 @@ document.getElementById('newsletter-send-btn').addEventListener('click', async (
   status.classList.remove('hidden');
   status.textContent = 'Sending…';
   try {
+    // /api/recap/send now responds as soon as recipients are validated and
+    // claimed, not once every email has actually gone out — the real send
+    // (throttled, ~2s/recipient, plus a per-user Tautulli data fetch) can
+    // take minutes for a full list and used to leave this request hanging
+    // that whole time, long enough for the browser/Cloudflare/Traefik to
+    // give up and show a false "Send failed" even when the server went on
+    // to complete every send successfully. See routes/recap.js's own
+    // comment on the 2026-09-01 incident this fixed.
     const result = await api('/api/recap/send', { method: 'POST', body: JSON.stringify({ userIds, resend }) });
-    const parts = [`Sent ${result.sent} of ${result.requested}.`];
-    if (result.failed.length) parts.push(`${result.failed.length} failed.`);
+    const parts = [`Queued ${result.queued} of ${result.requested}.`];
     if (result.skipped.length) parts.push(`${result.skipped.length} skipped.`);
+    if (result.queued) parts.push('Sending now in the background — Recent Send History below will update as each one finishes.');
     status.textContent = parts.join(' ');
     await loadNewsletterCandidates();
+    // A few delayed refreshes so results actually show up without the owner
+    // needing to remember to reopen this tab — the background send can take
+    // several minutes for a large list.
+    if (result.queued) {
+      [30000, 90000, 180000, 300000].forEach((delay) => setTimeout(loadNewsletterHistory, delay));
+    }
   } catch (e) {
     status.textContent = `Send failed: ${e.message}`;
   } finally {
