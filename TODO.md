@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.57.3.**
+v1.57.4.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -732,5 +732,11 @@ gets versioned as it ships, not reconstructed later.
 - [x] Recent Send History's refresh after a send now polls until every queued recipient actually leaves `sending` (or 10 minutes pass), reusing the same poll-until-terminal shape as `trackGrab`/`trackAutoFix` elsewhere in this file — replaces four fixed one-shot timers that couldn't stop early for a small batch, couldn't keep going past 5 minutes for a large one, and stacked redundant timers on a second send within that window
 - [x] Removed a wrong code comment citing "arr-health-watchdog.mjs's restartBlipFor" as an in-repo precedent — that script lives outside this project entirely and doesn't exist anywhere in Marquee
 - [x] `timeOfDayGreeting()` now pins its timezone explicitly (`RECAP_TIMEZONE` env var, defaulting to `America/Chicago`) via `Intl.DateTimeFormat` instead of reading the process's raw local hour — previously depended entirely on `docker-compose.yml`'s `TZ` var being present; a future deploy path that dropped it would have silently reverted to UTC and shifted every greeting by 5-6 hours
+
+## v1.57.4 — Fix: a real recap email got clipped/mangled by Gmail
+
+- [x] **Fix**: a user reported their recap arriving with all styling stripped, stats stacked as plain unlabeled text — Gmail clips any message over ~102KB and renders a stripped fallback. Measured the real email: 625KB total, 98% of it one embedded headliner image. Tautulli's `pms_image_proxy` resizes the image but doesn't normalize format, and had handed back a PNG straight from Plex's own stored art file for this title — PNG's lossless compression on photographic backdrop art runs 5-7x larger than the equivalent JPEG at the same pixel dimensions (measured: 472KB as PNG, 66-95KB as JPEG at quality 70-85 for the same image)
+- [x] `fetchHeadlinerImage` now always re-encodes to JPEG via `sharp` (already a dependency) regardless of what format Tautulli hands back, trying a quality ladder (75/60/45/30) and capping the final base64-encoded size at 75KB — comfortably under Gmail's threshold alongside the rest of the template's own ~11-20KB. Still oversized at the lowest quality, or an outright fetch failure, both degrade to the existing plain-gradient header rather than ever risking another clipped email
+- [x] Verified live across 6 real recipients' actual August recaps (previously up to 625KB) — all now land between 10.8KB and 85.9KB, most keeping a real header image
 
 ## Ideas
