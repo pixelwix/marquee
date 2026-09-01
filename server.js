@@ -205,12 +205,24 @@ const renderedManifest = fs.readFileSync(path.join(__dirname, 'public', 'manifes
 // unlike the original family-wide version this replaces (removed entirely in
 // v1.5.0 for going unused; that history is why subscriptions are scoped
 // per-user this time, not a blind resurrection of the old broadcast-to-all).
-const renderedAdminHtml = fs.readFileSync(path.join(__dirname, 'public', 'admin.html'), 'utf8')
+let renderedAdminHtml = fs.readFileSync(path.join(__dirname, 'public', 'admin.html'), 'utf8')
   .replaceAll('{{SITE_NAME}}', siteName)
   .replaceAll('{{ASSET_VERSION}}', assetVersion)
   .replaceAll('{{APP_VERSION}}', appVersion)
   .replaceAll('{{COPYRIGHT_YEAR}}', copyrightYear)
   .replaceAll('{{VAPID_PUBLIC_KEY}}', process.env.VAPID_PUBLIC_KEY || '');
+// Stream Origins (CH.11) is owner-configurable from Settings -> Privacy &
+// Visibility (PRIVACY_ORIGINS_ENABLED, default on) — stripped out of the page
+// entirely here rather than just hidden client-side, so a disabled deployment
+// never ships the map/legend markup or its originsWorldPath.js coastline-data
+// script at all. renderedAdminHtml is only built once at startup (see comment
+// above), and saving any Settings tab already restarts the container, so
+// toggling this takes effect on the very next save with no separate reload path.
+if (process.env.PRIVACY_ORIGINS_ENABLED === 'false') {
+  renderedAdminHtml = renderedAdminHtml
+    .replace(/<section class="card span4" id="panel-origins">[\s\S]*?<\/section>\s*/, '')
+    .replace(/<script src="originsWorldPath\.js\?v=[^"]*"><\/script>\s*/, '');
+}
 
 app.get('/', (req, res) => {
   // Always revalidate the page shell itself, so it picks up the new asset

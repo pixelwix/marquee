@@ -20,8 +20,14 @@
   // below) — loaded lazily on first view rather than eagerly here.
   loadAlerts();
   setInterval(loadAlerts, 30000);
-  loadOrigins();
-  setInterval(loadOrigins, 60000);
+  // #panel-origins is stripped server-side entirely (see server.js) when the
+  // owner has PRIVACY_ORIGINS_ENABLED set to 'false' — guard rather than call
+  // unconditionally, since renderOrigins()/loadOrigins() reach into elements
+  // (origins-body, panel-origins) that simply won't exist on that page.
+  if (document.getElementById('panel-origins')) {
+    loadOrigins();
+    setInterval(loadOrigins, 60000);
+  }
   loadWanted();
   setInterval(loadWanted, 60000);
   loadPendingRequests();
@@ -2934,6 +2940,10 @@ async function loadPrivacySettings() {
       const value = privacy[PRIVACY_ENV_KEYS[field]];
       if (value) document.getElementById(elId).value = value;
     }
+    // Unset (never saved before) defaults to checked/shown — matches
+    // server.js only stripping the panel on an explicit 'false', so a
+    // deployment that's never touched this setting keeps today's behavior.
+    document.getElementById('privacy-origins-input').checked = privacy.PRIVACY_ORIGINS_ENABLED !== 'false';
   } catch (e) {
     document.getElementById('privacy-save-status').className = 'settings-status error';
     document.getElementById('privacy-save-status').textContent = 'Could not load privacy settings.';
@@ -2973,6 +2983,7 @@ document.getElementById('privacy-save-btn').addEventListener('click', async () =
   for (const [field, elId] of Object.entries(PRIVACY_FIELDS)) {
     changes[PRIVACY_ENV_KEYS[field]] = document.getElementById(elId).value;
   }
+  changes.PRIVACY_ORIGINS_ENABLED = document.getElementById('privacy-origins-input').checked ? 'true' : 'false';
 
   try {
     await api('/api/settings', { method: 'POST', body: JSON.stringify({ changes }) });

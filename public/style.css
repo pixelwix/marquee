@@ -1163,6 +1163,11 @@ body {
 .newsletter-candidate-row input[type="checkbox"] { flex: none; }
 .newsletter-candidate-row .now-title { flex: 1; }
 .newsletter-resend-toggle { display: flex; align-items: center; gap: 8px; margin: 12px 0; color: var(--ink-dim); font-size: 12px; }
+/* Reuses .newsletter-resend-toggle's base look but sits inline in
+   .notice-preset-row next to the Strict/Family/Full Open pills rather than
+   on its own line — overrides the vertical margin and adds a left divider
+   so it still reads as a separate, independent control, not a fourth preset. */
+.privacy-origins-toggle-label { margin: 0 0 0 0.5rem; padding-left: 0.75rem; border-left: 1px solid var(--input-border); }
 
 /* Invite to Plex tab — library checkboxes shared between the invite form and
    each share row's inline edit panel (see admin.js's libraryCheckboxesHtml). */

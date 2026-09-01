@@ -24,11 +24,18 @@ const SERVICE_KEYS = new Set(SERVICES.flatMap(s => s.fields.map(f => f.key)));
 
 // Privacy & Visibility settings — their own tab (see lib/privacy.js), not
 // tied to an integration and not part of the generic Deployment popup either.
+// PRIVACY_ORIGINS_ENABLED isn't a lib/privacy.js sanitization rule like the
+// other four (those control what non-owners see of each other; this is
+// owner-only either way) — it just decides whether the CH.11 Stream Origins
+// map (lib/streamOrigins.js) is built into admin.html at all. Lives in the
+// same tab/env-key set anyway since it's still a visibility toggle the owner
+// configures from the same place, and reuses the exact same save/restart path.
 const PRIVACY_KEYS = new Set([
   'PRIVACY_STREAM_USER_IDENTITY',
   'PRIVACY_STREAM_MEDIA_CONTENT',
   'PRIVACY_STREAM_TECHNICAL',
-  'PRIVACY_STATS'
+  'PRIVACY_STATS',
+  'PRIVACY_ORIGINS_ENABLED'
 ]);
 
 function toClientField(f) {

@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.53.3.**
+v1.57.0.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -707,3 +707,9 @@ gets versioned as it ships, not reconstructed later.
 - [x] Cosmetic, not functional — the collection already correctly stayed off Plex either way (this app deletes it directly, see v1.56.2) — but permanent noise in Kometa's own error reporting. Fixed by keeping a real collection block whose `plex_search` is guaranteed to never match anything, instead of an empty dict; Kometa's own `minimum_items` floor then just never (re)creates it — this also gives a harmless fallback if this app's direct Plex delete on clear ever failed silently
 
 ## Ideas
+
+## v1.57.0 — Origins map can now be turned off from Settings
+
+- [x] Added a toggle (Settings -> Privacy & Visibility, next to the Strict/Family/Full Open presets) to show or hide the CH.11 Stream Origins map entirely — some owners don't want a live geo-map of where family members are streaming from on the admin dashboard at all
+- [x] `PRIVACY_ORIGINS_ENABLED` (default on/unset) is checked server-side at startup — when off, the whole `#panel-origins` section and its `originsWorldPath.js` coastline-data script are stripped out of the rendered admin page entirely, not just hidden client-side. Same save-writes-.env-then-restarts flow as the other four privacy settings
+- [x] `admin.js`'s origins polling (`loadOrigins()` + its 60s interval) now guards on `#panel-origins` actually existing in the page, since it won't when this is off
