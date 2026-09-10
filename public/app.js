@@ -829,6 +829,53 @@ function renderMostWatched(topWatched) {
   return `<div class="medal-rows medal-rows-full">${cells}</div>`;
 }
 
+// A ▲/▼ change chip vs last month. null (last month had no activity) renders
+// nothing rather than a misleading "+100%".
+function renderStatDelta(deltaPct) {
+  if (deltaPct == null || deltaPct === 0) return '';
+  const up = deltaPct > 0;
+  return `<span class="stat-delta ${up ? 'up' : 'down'}">${up ? '▲' : '▼'}${Math.abs(deltaPct)}%</span>`;
+}
+
+// 12-week viewing heatmap: one cell per day, oldest on the left, shaded in
+// five steps by hours watched that day. Rendered column-major — each column
+// is a consecutive 7-day block (not calendar-week aligned), 84 cells into
+// 7 rows. dailyActivity is already zero-filled to a fixed length by the
+// server.
+function renderHeatmap(days) {
+  if (!days || !days.length) return '';
+  const level = h => (h <= 0 ? 0 : h < 0.5 ? 1 : h < 1.5 ? 2 : h < 3 ? 3 : 4);
+  const cells = days.map(d => {
+    const label = new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const title = d.plays ? `${label} — ${d.plays} play${d.plays === 1 ? '' : 's'}, ${d.hours}h` : `${label} — nothing`;
+    return `<div class="heat-cell heat-l${level(d.hours)}" title="${escapeHtml(title)}"></div>`;
+  }).join('');
+  return `<div class="heat-grid">${cells}</div>`;
+}
+
+// Movies / TV / Anime play-count split for the year as one stacked bar plus a
+// counted legend. Segments under a couple percent are still given a sliver so
+// the colour shows.
+function renderTypeSplit(split) {
+  if (!split) return '';
+  const total = split.movies + split.tv + split.anime;
+  if (!total) return '';
+  const parts = [
+    { key: 'movies', lbl: 'Movies', n: split.movies },
+    { key: 'tv', lbl: 'TV', n: split.tv },
+    { key: 'anime', lbl: 'Anime', n: split.anime }
+  ].filter(p => p.n > 0);
+  const bar = parts.map(p => `<div class="type-seg ${p.key}" style="flex:${p.n}" title="${p.lbl}: ${p.n} plays"></div>`).join('');
+  const legend = parts.map(p =>
+    `<span><span class="dot ${p.key}"></span>${p.lbl} <b>${Math.round((p.n / total) * 100)}%</b> · ${p.n}</span>`
+  ).join('');
+  return `
+    <div class="card-label" style="margin-top: 1.3rem;">Library mix</div>
+    <div class="chart-sub">This year</div>
+    <div class="type-split">${bar}</div>
+    <div class="type-legend">${legend}</div>`;
+}
+
 // Shared by both Watch Activity charts — bars are scaled to the tallest
 // combined (Movies+TV) bucket in the series, not a fixed max, since a light
 // week and a heavy binge week need very different scales to stay readable.
@@ -850,19 +897,28 @@ async function loadMyStats() {
   const body = document.getElementById('mystats-body');
   try {
     const s = await api('/api/tautulli/my-stats');
+    const d = s.deltas || { plays: {}, hours: {} };
     const tiles = [
       { val: s.rank ? `#${s.rank.position}` : '—', lbl: 'Family Rank', cls: 'teal' },
       { val: s.streakDays ? `${s.streakDays} day${s.streakDays === 1 ? '' : 's'}` : '—', lbl: 'Binge Streak', cls: 'amber' },
-      { val: s.playsThisMonth, lbl: 'Plays This Month', cls: '' }
+      { val: `${s.playsThisMonth}${renderStatDelta(d.plays?.deltaPct)}`, lbl: 'Plays This Month', cls: '' },
+      { val: `${d.hours?.current ?? 0}h${renderStatDelta(d.hours?.deltaPct)}`, lbl: 'Hours This Month', cls: 'teal' }
     ];
+    const rec = s.records || {};
+    const records = [
+      rec.longestStreak ? { val: `${rec.longestStreak}d`, lbl: 'Longest streak' } : null,
+      rec.biggestDay ? { val: `${rec.biggestDay.plays} plays`, lbl: `Biggest day · ${formatDate(rec.biggestDay.date)}` } : null,
+      rec.bestMonth ? { val: new Date(rec.bestMonth.month + '-01').toLocaleDateString(undefined, { month: 'long' }), lbl: `Best month · ${rec.bestMonth.plays} plays` } : null
+    ].filter(Boolean);
     const byDay = s.activity?.byDay || [];
     const byHour = s.activity?.byHour || [];
     body.innerHTML = `
       <div class="stat-hero">
         <div><span class="stat-hero-num">${s.hours}</span><span class="stat-hero-unit">hrs watched</span></div>
-        <div class="stat-hero-cap">Year to date</div>
+        <div class="stat-hero-cap">Year to date${s.hoursPace ? ` · on pace for ~${s.hoursPace}` : ''}</div>
       </div>
-      <div class="stat-tiles">
+      ${s.thisWeek ? `<div class="stat-thisweek">This week — <b>${s.thisWeek.plays}</b> play${s.thisWeek.plays === 1 ? '' : 's'} · <b>${s.thisWeek.hours}h</b></div>` : ''}
+      <div class="stat-tiles four">
         ${tiles.map(t => `
           <div class="mystats-tile">
             <div class="stat-tile-val ${t.cls}">${t.val}</div>
@@ -870,7 +926,19 @@ async function loadMyStats() {
           </div>
         `).join('')}
       </div>
-      <div class="card-label">Most Watched</div>
+      ${records.length ? `
+        <div class="card-label">Records · this year</div>
+        <div class="stat-records">
+          ${records.map(r => `<div class="stat-record"><div class="stat-record-val">${escapeHtml(String(r.val))}</div><div class="stat-record-lbl">${escapeHtml(r.lbl)}</div></div>`).join('')}
+        </div>
+      ` : ''}
+      ${s.dailyActivity?.length ? `
+        <div class="card-label" style="margin-top: 1.3rem;">Viewing heatmap</div>
+        <div class="chart-sub">Last 12 weeks</div>
+        ${renderHeatmap(s.dailyActivity)}
+      ` : ''}
+      ${renderTypeSplit(s.typeSplit)}
+      <div class="card-label" style="margin-top: 1.3rem;">Most Watched</div>
       ${renderMostWatched(s.topWatched)}
       ${byDay.length ? `
         <div class="card-label" style="margin-top: 1.3rem;">Watch Activity</div>

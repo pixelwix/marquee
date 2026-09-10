@@ -3,7 +3,10 @@ const axios = require('axios');
 const requireAuth = require('./requireAuth');
 const nowPlaying = require('../lib/nowPlaying');
 const { imageUrl } = require('../lib/plexImage');
-const { computeStreak, computeTopWatched, computeRank, parseActivitySeries, extractWatchedTvTitles } = require('../lib/myStats');
+const {
+  computeStreak, computeTopWatched, computeRank, parseActivitySeries, extractWatchedTvTitles,
+  computeMonthDeltas, projectAnnualHours, computeDailyActivity, computeRecords, computeThisWeek, computeTypeSplit
+} = require('../lib/myStats');
 const { sanitizeSession, sanitizeLeaderboard, getPrivacyConfigFromEnv } = require('../lib/privacy');
 const router = express.Router();
 
@@ -351,12 +354,20 @@ router.get('/top-of-month', requireAuth, async (req, res) => {
 // days-elapsed-since-the-period-started — resets itself on Jan 1 / the 1st,
 // no separate rollover logic needed.
 //
-// Binge streak deliberately stays on its own genuinely-rolling 60-day
-// get_history call (see streakHistoryRes below), NOT the calendar-year one
-// Most Watched uses — a streak spanning Dec 31 into January would otherwise
-// look truncated for the first few days of a new year, since there'd be no
-// prior-year data in a Jan-1-onward window to see it continuing. 60 days is
-// far more than any realistic streak needs.
+// Binge streak deliberately stays on its own genuinely-rolling get_history
+// call (recentHistoryRes below, 95 days), NOT the calendar-year one Most
+// Watched uses — a streak spanning Dec 31 into January would otherwise look
+// truncated for the first few days of a new year, since there'd be no
+// prior-year data in a Jan-1-onward window to see it continuing. That same
+// rolling window also feeds the 12-week heatmap (dailyActivity), the
+// this-week line, and the month-over-month deltas.
+//
+// hoursPace is a naive straight-line extrapolation of the YTD hours to a
+// full year. records (biggest day / best month / longest run) come off the
+// year-history rows and are labelled "this year" in the UI accordingly.
+// typeSplit (Movies/TV/Anime play counts) can't be bucketed from raw
+// history rows — they carry no section_id — so it reads recordsFiltered off
+// two cheap length:1 filtered get_history calls, TV being the remainder.
 //
 // hours/plays come from Tautulli's own get_user_watch_time_stats (one call
 // covers both windows); streak and most-watched are computed here from raw
@@ -375,33 +386,49 @@ router.get('/my-stats', requireAuth, async (req, res) => {
   const userId = req.session.user.id;
   try {
     const now = new Date();
+    const nowMs = now.getTime();
     const daysElapsedThisMonth = now.getDate();
     const startOfYear = new Date(now.getFullYear(), 0, 1);
     const daysElapsedThisYear = Math.floor((now - startOfYear) / 86400000) + 1;
     const startOfYearIso = startOfYear.toISOString().slice(0, 10);
-    const sixtyDaysAgo = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+    // One rolling window feeds the binge streak, the 12-week heatmap (84 days),
+    // the this-week line and the month-over-month deltas (this + last calendar
+    // month — up to ~62 days). 95 gives all of them headroom.
+    const recentAfterIso = new Date(nowMs - 95 * 86400000).toISOString().slice(0, 10);
     // In January these two are numerically identical (both count from Jan 1) —
     // dedupe rather than send Tautulli a literal "N,N" query_days value.
     const queryDays = [...new Set([daysElapsedThisMonth, daysElapsedThisYear])].join(',');
 
     const apikey = process.env.TAUTULLI_API_KEY;
     const base = `${process.env.TAUTULLI_URL}/api/v2`;
+    const animeSection = process.env.TAUTULLI_SECTION_ANIME;
 
-    const [watchTime, yearHistoryRes, streakHistoryRes, homeStats, dayRes, hourRes] = await Promise.all([
+    // Raw get_history rows carry no section_id, so the Movies/TV/Anime split
+    // can't be bucketed from the year-history rows — instead two cheap
+    // length:1 calls read `recordsFiltered` (the filtered total) for movies
+    // and anime, and TV is the remainder of the authoritative year play count.
+    const [watchTime, yearHistoryRes, recentHistoryRes, homeStats, dayRes, hourRes, movieCountRes, animeCountRes] = await Promise.all([
       axios.get(base, { params: { apikey, cmd: 'get_user_watch_time_stats', user_id: userId, query_days: queryDays } }),
-      axios.get(base, { params: { apikey, cmd: 'get_history', user_id: userId, after: startOfYearIso, length: 1000, order_column: 'date', order_dir: 'desc' } }),
-      axios.get(base, { params: { apikey, cmd: 'get_history', user_id: userId, after: sixtyDaysAgo, length: 1000, order_column: 'date', order_dir: 'desc' } }),
+      axios.get(base, { params: { apikey, cmd: 'get_history', user_id: userId, after: startOfYearIso, length: 2000, order_column: 'date', order_dir: 'desc' } }),
+      axios.get(base, { params: { apikey, cmd: 'get_history', user_id: userId, after: recentAfterIso, length: 2000, order_column: 'date', order_dir: 'desc' } }),
       axios.get(base, { params: { apikey, cmd: 'get_home_stats', time_range: daysElapsedThisYear, stats_type: 'plays', stats_count: 50 } }),
       axios.get(base, { params: { apikey, cmd: 'get_plays_by_dayofweek', user_id: userId, time_range: 30, y_axis: 'duration' } }),
-      axios.get(base, { params: { apikey, cmd: 'get_plays_by_hourofday', user_id: userId, time_range: 30, y_axis: 'duration' } })
+      axios.get(base, { params: { apikey, cmd: 'get_plays_by_hourofday', user_id: userId, time_range: 30, y_axis: 'duration' } }),
+      axios.get(base, { params: { apikey, cmd: 'get_history', user_id: userId, after: startOfYearIso, media_type: 'movie', length: 1 } }),
+      animeSection
+        ? axios.get(base, { params: { apikey, cmd: 'get_history', user_id: userId, after: startOfYearIso, section_id: animeSection, length: 1 } })
+        : Promise.resolve(null)
     ]);
 
     const windows = watchTime.data.response.data || [];
     const yearStats = windows.find(w => String(w.query_days) === String(daysElapsedThisYear)) || {};
     const monthStats = windows.find(w => String(w.query_days) === String(daysElapsedThisMonth)) || {};
 
-    const streakDays = computeStreak(streakHistoryRes.data.response.data.data || []);
-    const topWatched = computeTopWatched(yearHistoryRes.data.response.data.data || []);
+    const yearRows = yearHistoryRes.data.response.data.data || [];
+    const recentRows = recentHistoryRes.data.response.data.data || [];
+
+    const streakDays = computeStreak(recentRows);
+    const topWatched = computeTopWatched(yearRows);
 
     const topUsersRows = (homeStats.data.response.data || []).find(s => s.stat_id === 'top_users')?.rows || [];
     const position = computeRank(topUsersRows, userId);
@@ -409,12 +436,25 @@ router.get('/my-stats', requireAuth, async (req, res) => {
     const dayData = dayRes.data.response.data;
     const hourData = hourRes.data.response.data;
 
+    const hoursYtd = Math.round((yearStats.total_time || 0) / 3600);
+    const typeSplit = computeTypeSplit({
+      totalPlays: yearStats.total_plays || 0,
+      moviePlays: movieCountRes.data.response.data.recordsFiltered || 0,
+      animePlays: animeCountRes ? (animeCountRes.data.response.data.recordsFiltered || 0) : 0
+    });
+
     res.json({
-      hours: Math.round((yearStats.total_time || 0) / 3600),
+      hours: hoursYtd,
+      hoursPace: projectAnnualHours(hoursYtd, nowMs),
       playsThisMonth: monthStats.total_plays || 0,
       streakDays,
       rank: position ? { position, of: topUsersRows.length } : null,
       topWatched,
+      deltas: computeMonthDeltas(recentRows, nowMs),
+      records: computeRecords(yearRows),
+      thisWeek: computeThisWeek(recentRows, nowMs),
+      dailyActivity: computeDailyActivity(recentRows, { now: nowMs, days: 84 }),
+      typeSplit,
       activity: {
         byDay: parseActivitySeries(dayData.categories, dayData.series),
         byHour: parseActivitySeries(hourData.categories, hourData.series)

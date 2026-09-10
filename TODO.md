@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
- v1.58.3.**
+ v1.59.0.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -759,5 +759,15 @@ gets versioned as it ships, not reconstructed later.
 ## v1.58.3 - Removed Cleanup Candidates (Stack panel)
 
 - [x] The movies-by-reclaimable-size report (v1.53.0) wasn't being used - removed entirely: `lib/cleanupCandidates.js`, its test, the `GET /api/owner/cleanup-candidates` route, the Stack-panel card + its modal (admin.html/admin.js), and `#cleanup-list` from the shared modal-list CSS rule.
+
+## v1.59.0 — My Stats tab: motion, records, heatmap, library mix
+
+- [x] The tab was all slow-moving year-to-date aggregates with nothing that changes visit-to-visit. Added four things, all from data the `/my-stats` route already had or two cheap extra `recordsFiltered` calls — no new dependency, no new toggle.
+- [x] **Month-over-month + pace**: hero caption now shows "on pace for ~N hrs" (naive straight-line YTD extrapolation, `projectAnnualHours`). Tiles are now four (2×2): added Hours This Month, and both month tiles carry a ▲/▼ chip vs last calendar month (`computeMonthDeltas` — null % when last month was empty so a fresh January doesn't read "+100%").
+- [x] **Records · this year**: longest consecutive-day run (`longestDailyRun`), biggest single day by plays, best month — off the year-history rows, labelled "this year" since that's the window.
+- [x] **12-week viewing heatmap**: 84 day-cells shaded in five steps by hours watched (`computeDailyActivity`, zero-filled server-side). Shares the rolling window that already backs the binge streak — bumped 60→95 days.
+- [x] **Library mix**: Movies/TV/Anime play-count split for the year as one stacked bar + counted legend. Raw `get_history` rows carry no `section_id`, so movie and anime counts come from two `length:1` filtered calls (`media_type=movie`, `section_id=<anime>`) reading `recordsFiltered`; TV is the remainder of the authoritative year total, clamped ≥0 (`computeTypeSplit`).
+- [x] "This week — N plays · Xh" one-liner between hero and tiles (`computeThisWeek`).
+- [x] `lib/myStats.js` gains seven pure helpers, all unit-tested (25 tests in `test/myStats.test.js`, up from 13).
 
 ## Ideas
