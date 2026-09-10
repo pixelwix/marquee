@@ -812,11 +812,12 @@ function renderTopMonthTile(label, items, isUser) {
 
 // ---------- My Stats ----------
 // Personal, per-signed-in-user numbers behind the request modal's fourth
-// tab — a big hero number (hours watched), three quick stat tiles, and a
-// top-3 most-watched list reusing the same gold/silver/bronze medal markup
-// Top of the Month uses above, just as a compact stack instead of a big tile.
-// Most Watched is text-only (medal + title + plays), all three ranks in one
-// grid — no poster art, so there's no fetch-per-item metadata round trip.
+// tab — hero (hours watched YTD + pace), a this-week line, four stat tiles
+// with month-over-month deltas, personal records, a 12-week viewing heatmap,
+// the Movies/TV/Anime library mix, and a top-3 most-watched list.
+// renderMostWatched reuses the same gold/silver/bronze medal markup Top of
+// the Month uses above, text-only (medal + title + plays), all three ranks
+// in one grid — no poster art, so no fetch-per-item metadata round trip.
 function renderMostWatched(topWatched) {
   if (!topWatched || !topWatched.length) return '<p class="empty-state">Nothing watched yet this year.</p>';
   const medals = ['🥇', '🥈', '🥉'];
@@ -876,23 +877,6 @@ function renderTypeSplit(split) {
     <div class="type-legend">${legend}</div>`;
 }
 
-// Shared by both Watch Activity charts — bars are scaled to the tallest
-// combined (Movies+TV) bucket in the series, not a fixed max, since a light
-// week and a heavy binge week need very different scales to stay readable.
-// Segments with 0 height are omitted entirely rather than rendered at 0px.
-function renderActivityBars(buckets, trackPx, colClass, segClass) {
-  const max = Math.max(0.1, ...buckets.map(b => b.movies + b.tv));
-  const scale = trackPx / max;
-  return buckets.map(b => {
-    const tvPx = Math.round(b.tv * scale);
-    const moviesPx = Math.round(b.movies * scale);
-    const title = `${b.label} — ${b.tv}h TV${b.movies ? `, ${b.movies}h Movies` : ''}`;
-    const tvSeg = tvPx ? `<div class="${segClass} tv" style="height:${tvPx}px"></div>` : '';
-    const moviesSeg = moviesPx ? `<div class="${segClass} movies" style="height:${moviesPx}px"></div>` : '';
-    return `<div class="${colClass}" title="${escapeHtml(title)}">${tvSeg}${moviesSeg}</div>`;
-  }).join('');
-}
-
 async function loadMyStats() {
   const body = document.getElementById('mystats-body');
   try {
@@ -910,8 +894,6 @@ async function loadMyStats() {
       rec.biggestDay ? { val: `${rec.biggestDay.plays} plays`, lbl: `Biggest day · ${formatDate(rec.biggestDay.date)}` } : null,
       rec.bestMonth ? { val: new Date(rec.bestMonth.month + '-01').toLocaleDateString(undefined, { month: 'long' }), lbl: `Best month · ${rec.bestMonth.plays} plays` } : null
     ].filter(Boolean);
-    const byDay = s.activity?.byDay || [];
-    const byHour = s.activity?.byHour || [];
     body.innerHTML = `
       <div class="stat-hero">
         <div><span class="stat-hero-num">${s.hours}</span><span class="stat-hero-unit">hrs watched</span></div>
@@ -940,20 +922,6 @@ async function loadMyStats() {
       ${renderTypeSplit(s.typeSplit)}
       <div class="card-label" style="margin-top: 1.3rem;">Most Watched</div>
       ${renderMostWatched(s.topWatched)}
-      ${byDay.length ? `
-        <div class="card-label" style="margin-top: 1.3rem;">Watch Activity</div>
-        <div class="chart-sub">Last 30 days</div>
-        <div class="chart-legend">
-          <span><span class="dot movies"></span>Movies</span>
-          <span><span class="dot tv"></span>TV</span>
-        </div>
-        <div class="chart-title">By day of week</div>
-        <div class="dow-chart">${renderActivityBars(byDay, 108, 'dow-col', 'dow-seg')}</div>
-        <div class="dow-labels">${byDay.map(d => `<span>${d.label.slice(0, 2)}</span>`).join('')}</div>
-        <div class="chart-title" style="margin-top: 1.3rem;">By hour of day</div>
-        <div class="hod-chart">${renderActivityBars(byHour, 84, 'hod-col', 'hod-seg')}</div>
-        <div class="hod-labels">${byHour.map((h, i) => `<span>${i % 3 === 0 ? h.label : ''}</span>`).join('')}</div>
-      ` : ''}
     `;
   } catch (e) {
     body.innerHTML = '<p class="empty-state">Could not reach Tautulli.</p>';

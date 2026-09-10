@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
- v1.59.0.**
+ v1.59.1.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -769,5 +769,9 @@ gets versioned as it ships, not reconstructed later.
 - [x] **Library mix**: Movies/TV/Anime play-count split for the year as one stacked bar + counted legend. Raw `get_history` rows carry no `section_id`, so movie and anime counts come from two `length:1` filtered calls (`media_type=movie`, `section_id=<anime>`) reading `recordsFiltered`; TV is the remainder of the authoritative year total, clamped ≥0 (`computeTypeSplit`).
 - [x] "This week — N plays · Xh" one-liner between hero and tiles (`computeThisWeek`).
 - [x] `lib/myStats.js` gains seven pure helpers, all unit-tested (25 tests in `test/myStats.test.js`, up from 13).
+
+## v1.59.1 — My Stats: drop the "Watch Activity" (last 30 days) charts
+
+- [x] The by-day-of-week and by-hour-of-day duration bar charts were redundant next to the new 12-week heatmap and added little. Removed the section, the two `get_plays_by_dayofweek`/`get_plays_by_hourofday` calls, the `activity` response field, `renderActivityBars` (app.js), `parseActivitySeries` + its 2 tests (lib/myStats.js), and the `.chart-legend`/`.chart-title`/`.dow-*`/`.hod-*` CSS. `.chart-sub` stays — the heatmap and library-mix captions use it.
 
 ## Ideas

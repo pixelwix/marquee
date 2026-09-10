@@ -625,51 +625,8 @@ body {
 .medal-rows-full .medal-badge { font-size: 1.05rem; }
 .medal-name.gold { color: var(--gold); font-weight: 600; }
 
-/* Watch Activity — day-of-week and hour-of-day breakdowns adapted from
-   Tautulli's own Graphs page, scoped to this user, Movies/TV only (this
-   deployment has no Live TV sessions, so that series is dropped rather than
-   shipped as a permanently-empty legend entry). Bar heights are set inline
-   per row (see renderActivityBars in app.js), scaled to that chart's own
-   tallest bucket rather than a fixed max. */
+/* Sub-caption under a My Stats section label (e.g. "Last 12 weeks") */
 .chart-sub { font-size: 0.74rem; color: var(--muted); margin: 0 0 0.7rem; }
-.chart-legend {
-  display: flex; gap: 1.1rem; align-items: center; margin-bottom: 1rem;
-  font-family: var(--mono); font-size: 0.68rem; color: var(--muted);
-}
-.chart-legend .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 0.4rem; vertical-align: -1px; }
-.chart-legend .dot.movies { background: var(--teal); }
-.chart-legend .dot.tv { background: var(--amber); }
-.chart-title { font-family: var(--display); font-weight: 600; font-size: 0.86rem; margin-bottom: 0.6rem; }
-
-.dow-chart {
-  display: flex; align-items: flex-end; gap: 0.55rem; height: 108px;
-  border-bottom: 1px solid rgba(20,25,35,0.12);
-}
-.dow-col {
-  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
-  height: 100%; cursor: default; transition: filter 0.15s ease;
-}
-.dow-col:hover { filter: brightness(1.08); }
-.dow-seg { width: 100%; max-width: 24px; border-radius: 3px 3px 0 0; }
-.dow-seg.tv { background: var(--amber); }
-.dow-seg.movies { background: var(--teal); border-radius: 0; }
-.dow-labels { display: flex; gap: 0.55rem; margin-top: 0.4rem; }
-.dow-labels span { flex: 1; text-align: center; font-family: var(--mono); font-size: 0.62rem; color: var(--muted); }
-
-.hod-chart {
-  display: flex; align-items: flex-end; gap: 2px; height: 84px;
-  border-bottom: 1px solid rgba(20,25,35,0.12);
-}
-.hod-col {
-  flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%;
-  border-radius: 2px 2px 0 0; overflow: hidden; cursor: default; transition: filter 0.15s ease;
-}
-.hod-col:hover { filter: brightness(1.15); }
-.hod-seg { width: 100%; }
-.hod-seg.tv { background: var(--amber); }
-.hod-seg.movies { background: var(--teal); }
-.hod-labels { display: flex; gap: 2px; margin-top: 0.35rem; }
-.hod-labels span { flex: 1; text-align: center; font-family: var(--mono); font-size: 0.52rem; color: var(--muted); }
 
 /* Admin: Seeding — just a handful of numbers, no file list. Wraps to 2x2 on
    narrow cards instead of squeezing four values onto one line. */

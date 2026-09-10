@@ -4,7 +4,7 @@ const requireAuth = require('./requireAuth');
 const nowPlaying = require('../lib/nowPlaying');
 const { imageUrl } = require('../lib/plexImage');
 const {
-  computeStreak, computeTopWatched, computeRank, parseActivitySeries, extractWatchedTvTitles,
+  computeStreak, computeTopWatched, computeRank, extractWatchedTvTitles,
   computeMonthDeltas, projectAnnualHours, computeDailyActivity, computeRecords, computeThisWeek, computeTypeSplit
 } = require('../lib/myStats');
 const { sanitizeSession, sanitizeLeaderboard, getPrivacyConfigFromEnv } = require('../lib/privacy');
@@ -375,13 +375,6 @@ router.get('/top-of-month', requireAuth, async (req, res) => {
 // equivalent of its own get_home_stats leaderboard. Family rank reuses that
 // same get_home_stats call Top of the Month relies on, matched against this
 // user's id instead of only taking the top 3.
-// Watch Activity (by day of week / hour of day) reuses Tautulli's own Graphs
-// page endpoints, scoped to this user and to duration instead of play count —
-// their "Live TV" series is dropped in parseActivitySeries since this
-// deployment has no live sessions (always all-zero). Deliberately left as a
-// genuinely rolling 30-day window rather than calendar-month — "your viewing
-// pattern over the last month" is more useful here than year-to-date, and
-// stays meaningful even in the first few days of a new month.
 router.get('/my-stats', requireAuth, async (req, res) => {
   const userId = req.session.user.id;
   try {
@@ -407,13 +400,11 @@ router.get('/my-stats', requireAuth, async (req, res) => {
     // can't be bucketed from the year-history rows — instead two cheap
     // length:1 calls read `recordsFiltered` (the filtered total) for movies
     // and anime, and TV is the remainder of the authoritative year play count.
-    const [watchTime, yearHistoryRes, recentHistoryRes, homeStats, dayRes, hourRes, movieCountRes, animeCountRes] = await Promise.all([
+    const [watchTime, yearHistoryRes, recentHistoryRes, homeStats, movieCountRes, animeCountRes] = await Promise.all([
       axios.get(base, { params: { apikey, cmd: 'get_user_watch_time_stats', user_id: userId, query_days: queryDays } }),
       axios.get(base, { params: { apikey, cmd: 'get_history', user_id: userId, after: startOfYearIso, length: 2000, order_column: 'date', order_dir: 'desc' } }),
       axios.get(base, { params: { apikey, cmd: 'get_history', user_id: userId, after: recentAfterIso, length: 2000, order_column: 'date', order_dir: 'desc' } }),
       axios.get(base, { params: { apikey, cmd: 'get_home_stats', time_range: daysElapsedThisYear, stats_type: 'plays', stats_count: 50 } }),
-      axios.get(base, { params: { apikey, cmd: 'get_plays_by_dayofweek', user_id: userId, time_range: 30, y_axis: 'duration' } }),
-      axios.get(base, { params: { apikey, cmd: 'get_plays_by_hourofday', user_id: userId, time_range: 30, y_axis: 'duration' } }),
       axios.get(base, { params: { apikey, cmd: 'get_history', user_id: userId, after: startOfYearIso, media_type: 'movie', length: 1 } }),
       animeSection
         ? axios.get(base, { params: { apikey, cmd: 'get_history', user_id: userId, after: startOfYearIso, section_id: animeSection, length: 1 } })
@@ -433,9 +424,6 @@ router.get('/my-stats', requireAuth, async (req, res) => {
     const topUsersRows = (homeStats.data.response.data || []).find(s => s.stat_id === 'top_users')?.rows || [];
     const position = computeRank(topUsersRows, userId);
 
-    const dayData = dayRes.data.response.data;
-    const hourData = hourRes.data.response.data;
-
     const hoursYtd = Math.round((yearStats.total_time || 0) / 3600);
     const typeSplit = computeTypeSplit({
       totalPlays: yearStats.total_plays || 0,
@@ -454,11 +442,7 @@ router.get('/my-stats', requireAuth, async (req, res) => {
       records: computeRecords(yearRows),
       thisWeek: computeThisWeek(recentRows, nowMs),
       dailyActivity: computeDailyActivity(recentRows, { now: nowMs, days: 84 }),
-      typeSplit,
-      activity: {
-        byDay: parseActivitySeries(dayData.categories, dayData.series),
-        byHour: parseActivitySeries(hourData.categories, hourData.series)
-      }
+      typeSplit
     });
   } catch (err) {
     console.error('tautulli my-stats error:', err.code || err.response?.status, err.message);

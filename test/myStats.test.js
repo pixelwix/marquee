@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  computeStreak, computeTopWatched, computeRank, parseActivitySeries, extractWatchedTvTitles,
+  computeStreak, computeTopWatched, computeRank, extractWatchedTvTitles,
   computeMonthDeltas, projectAnnualHours, computeDailyActivity, computeRecords, computeThisWeek,
   computeTypeSplit, longestDailyRun
 } = require('../lib/myStats');
@@ -66,28 +66,6 @@ test('computeRank finds a 1-based position by user_id', () => {
 test('computeRank returns null when the user has no plays in the window', () => {
   const rows = [{ user_id: 5, total_plays: 40 }];
   assert.equal(computeRank(rows, 99), null);
-});
-
-test('parseActivitySeries converts seconds to hours and pairs by category index', () => {
-  const categories = ['Sunday', 'Monday'];
-  const series = [
-    { name: 'TV', data: [5046, 17055] },
-    { name: 'Movies', data: [0, 3600] },
-    { name: 'Live TV', data: [0, 0] }
-  ];
-  assert.deepEqual(parseActivitySeries(categories, series), [
-    { label: 'Sunday', movies: 0, tv: 1.4 },
-    { label: 'Monday', movies: 1, tv: 4.7 }
-  ]);
-});
-
-test('parseActivitySeries defaults to 0 when a series is missing entirely', () => {
-  const categories = ['00', '01'];
-  const series = [{ name: 'TV', data: [3600, 0] }];
-  assert.deepEqual(parseActivitySeries(categories, series), [
-    { label: '00', movies: 0, tv: 1 },
-    { label: '01', movies: 0, tv: 0 }
-  ]);
 });
 
 test('extractWatchedTvTitles returns each distinct show once, in no particular guaranteed order', () => {
