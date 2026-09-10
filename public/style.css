@@ -826,6 +826,36 @@ body {
 .info-stream dt { color: var(--muted); }
 .info-stream dd { margin: 0; color: #2b3140; }
 
+/* "Played By" row — who in the household has watched this title. Divider
+   convention matches .info-stream above; label matches .admin-subhead's
+   uppercase mono eyebrow used everywhere else in this app. */
+.info-played-by {
+  margin: 0.9rem 0 0; padding-top: 0.75rem; border-top: 1px solid rgba(20,25,35,0.1);
+}
+.info-played-by.hidden { display: none; }
+.info-played-by-label {
+  font-family: var(--mono); font-size: 0.68rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.55rem;
+}
+.info-played-by-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.played-by-chip {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display); font-weight: 600; font-size: 0.8rem; color: #fff;
+  cursor: default;
+}
+.played-by-chip img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; background: #E2E6EC; }
+
+/* Initial-letter fallback for a user with no avatar (an anonymized entry
+   under the "anonymous leaderboard" privacy setting, or a real Plex account
+   that never set one) — cycles through the app's existing accent/medal
+   tokens rather than introducing new colors just for this. */
+.played-by-chip.fill-teal   { background: var(--teal); }
+.played-by-chip.fill-amber  { background: var(--amber); }
+.played-by-chip.fill-gold   { background: var(--gold); }
+.played-by-chip.fill-bronze { background: var(--bronze); }
+.played-by-chip.fill-silver { background: var(--silver); color: var(--text); }
+
 /* Torrent details modal (Download Queue -> click a torrent row) */
 .torrent-details-card { width: min(560px, 92vw); }
 .torrent-details-layout { padding: 1.5rem; max-height: 78vh; overflow-y: auto; }
@@ -1043,7 +1073,7 @@ body {
 
 /* Release search modal (owner only) — list of indexer results for resolving
    an issue directly, without leaving the dashboard for Sonarr/Radarr. */
-#release-list, #cleanup-list, #wanted-list { flex: 1; min-height: 0; overflow-y: auto; }
+#release-list, #wanted-list { flex: 1; min-height: 0; overflow-y: auto; }
 .release-row { display: flex; gap: 0.85rem; align-items: center; padding: 0.65rem 0; }
 .release-row + .release-row { border-top: 1px solid rgba(20,25,35,0.08); }
 .release-row.rejected { opacity: 0.6; }

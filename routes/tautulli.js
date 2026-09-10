@@ -255,6 +255,42 @@ router.get('/metadata/:ratingKey', requireAuth, async (req, res) => {
   }
 });
 
+// Powers the info modal's "Played By" row (Now Playing / Recently Watched
+// only — those are the two openInfo() callers that pass a ratingKey at all).
+// A TV rating key is the specific episode that was clicked, but "played by"
+// for a show should mean "has watched this show", not "has watched this
+// exact episode" — get_item_user_stats only counts plays of the *exact* key
+// it's given, so an episode key resolves up to its grandparent (show) first,
+// the same grouping computeHeadliner (lib/monthlyRecap.js) uses for the same
+// reason. A movie has no grandparent, so its own rating_key is already right.
+// Reuses the statsLeaderboard privacy setting (lib/privacy.js) Top of the
+// Month already applies to this exact data shape (name/plays/avatar) — this
+// is the same category of exposure, who watched what and how often.
+router.get('/played-by/:ratingKey', requireAuth, async (req, res) => {
+  if (!/^\d+$/.test(req.params.ratingKey)) {
+    return res.status(400).json({ error: 'Invalid ratingKey' });
+  }
+  try {
+    const apikey = process.env.TAUTULLI_API_KEY;
+    const base = `${process.env.TAUTULLI_URL}/api/v2`;
+    const meta = await axios.get(base, { params: { apikey, cmd: 'get_metadata', rating_key: req.params.ratingKey } });
+    const d = meta.data.response.data || {};
+    const key = d.grandparent_rating_key || d.rating_key || req.params.ratingKey;
+
+    const { data } = await axios.get(base, { params: { apikey, cmd: 'get_item_user_stats', rating_key: key } });
+    const rows = data.response.data || [];
+    const players = rows
+      .sort((a, b) => b.total_plays - a.total_plays)
+      .slice(0, 10)
+      .map(u => ({ name: u.friendly_name || u.username, plays: u.total_plays, avatar: u.user_thumb || null }));
+
+    res.json({ players: sanitizeLeaderboard(players, req.session.user, getPrivacyConfigFromEnv()) });
+  } catch (err) {
+    console.error('tautulli played-by error:', err.code || err.response?.status, err.message);
+    res.status(502).json({ error: 'Could not reach Tautulli' });
+  }
+});
+
 // True calendar-month leaderboard, top 3 (gold/silver/bronze) each: viewer,
 // movie, TV show, anime. Tautulli's time_range is "N days back from now", so
 // month-to-date is just today's day-of-month number as that N — resets itself

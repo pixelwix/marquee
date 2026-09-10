@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { planReconciliation, listOpen } = require('../lib/alerts');
+const { planReconciliation, planPush, listOpen } = require('../lib/alerts');
 
 const NOW = 5000;
 
@@ -83,4 +83,66 @@ test('duplicate keys within one batch: last one wins', () => {
   );
   assert.equal(plan.inserts.length, 1);
   assert.equal(plan.inserts[0].title, 'second');
+});
+
+// --- planPush: per-source push policy (v1.58.1) ---
+
+const IMPORT_GRACE_MS = 10 * 60 * 1000;
+const emptyPlan = { inserts: [], reopens: [], touches: [] };
+
+test('a normal source (health) pushes as soon as it is inserted', () => {
+  const toPush = planPush({ ...emptyPlan, inserts: [alert()] }, new Map(), NOW);
+  assert.equal(toPush.length, 1);
+});
+
+test('a normal source pushes on reopen too', () => {
+  const toPush = planPush({ ...emptyPlan, reopens: [alert()] }, new Map(), NOW);
+  assert.equal(toPush.length, 1);
+});
+
+test('silent sources (downloads attention, wanted) are never pushed, even when new', () => {
+  const toPush = planPush({
+    ...emptyPlan,
+    inserts: [
+      alert({ key: 'downloads:attention:torrent-1', source: 'attention' }),
+      alert({ key: 'sonarr:wanted:e1', source: 'wanted' }),
+    ],
+  }, new Map(), NOW);
+  assert.deepEqual(toPush, []);
+});
+
+test('an import alert does not push on first sight', () => {
+  const toPush = planPush({
+    ...emptyPlan,
+    inserts: [alert({ key: 'sonarr:import:1', source: 'import' })],
+  }, new Map(), NOW);
+  assert.deepEqual(toPush, []);
+});
+
+test('an import alert still inside the grace window does not push on a touch', () => {
+  const row = { key: 'sonarr:import:1', first_seen_at: NOW - 60_000, pushed_at: null };
+  const toPush = planPush({
+    ...emptyPlan,
+    touches: [alert({ key: 'sonarr:import:1', source: 'import' })],
+  }, new Map([[row.key, row]]), NOW);
+  assert.deepEqual(toPush, []);
+});
+
+test('an import alert pushes once it has stayed open past the grace window', () => {
+  const row = { key: 'sonarr:import:1', first_seen_at: NOW - IMPORT_GRACE_MS - 1, pushed_at: null };
+  const toPush = planPush({
+    ...emptyPlan,
+    touches: [alert({ key: 'sonarr:import:1', source: 'import' })],
+  }, new Map([[row.key, row]]), NOW);
+  assert.equal(toPush.length, 1);
+  assert.equal(toPush[0].key, 'sonarr:import:1');
+});
+
+test('an import alert that already pushed once does not push again on later touches', () => {
+  const row = { key: 'sonarr:import:1', first_seen_at: NOW - IMPORT_GRACE_MS * 5, pushed_at: NOW - IMPORT_GRACE_MS };
+  const toPush = planPush({
+    ...emptyPlan,
+    touches: [alert({ key: 'sonarr:import:1', source: 'import' })],
+  }, new Map([[row.key, row]]), NOW);
+  assert.deepEqual(toPush, []);
 });

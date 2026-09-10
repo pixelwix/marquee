@@ -10,7 +10,6 @@ const auditLog = require('../lib/auditLog');
 const dbBackup = require('../lib/dbBackup');
 const mediaCache = require('../lib/mediaCache');
 const diskSpaceHistory = require('../lib/diskSpaceHistory');
-const cleanupCandidates = require('../lib/cleanupCandidates');
 const { annotateAndSort } = require('../lib/stuckRequests');
 const { fetchMissingMovies, searchMissingMovies } = require('../lib/radarrClient');
 const { fetchMissingEpisodes, searchMissingEpisodes } = require('../lib/sonarrClient');
@@ -177,18 +176,6 @@ router.get('/diskspace', requireAuth, requireOwner, async (req, res) => {
 // above instead of a second copy.
 router.get('/diskspace/history', requireAuth, requireOwner, async (req, res) => {
   res.json(await diskSpaceHistory.getHistoryWithProjection());
-});
-
-// Movies sitting on disk that are quietly never (or barely) watched — see
-// lib/cleanupCandidates.js for exactly what qualifies and why this is
-// movies-only for now.
-router.get('/cleanup-candidates', requireAuth, requireOwner, async (req, res) => {
-  try {
-    res.json(await cleanupCandidates.getCandidates());
-  } catch (err) {
-    console.error('cleanup candidates error:', err.message);
-    res.status(502).json({ error: 'Could not check for cleanup candidates' });
-  }
 });
 
 module.exports = router;

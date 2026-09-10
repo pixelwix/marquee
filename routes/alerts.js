@@ -1,11 +1,13 @@
 const crypto = require('node:crypto');
 const express = require('express');
+const axios = require('axios');
 const requireAuth = require('./requireAuth');
 const requireOwner = require('./requireOwner');
 const alerts = require('../lib/alerts');
 const cliproxyClient = require('../lib/cliproxyClient');
 const downloadClientTest = require('../lib/downloadClientTest');
 const qbittorrent = require('../lib/qbittorrent');
+const arrForceImport = require('../lib/arrForceImport');
 const rateLimit = require('../lib/rateLimit');
 const router = express.Router();
 
@@ -214,6 +216,54 @@ router.post('/:key/actions/qbit-remove-torrents', requireAuth, requireOwner, asy
   } catch (err) {
     console.error('alerts qbit-remove-torrents error', err.message);
     res.status(502).json({ error: 'Could not remove the torrent(s) right now' });
+  }
+});
+
+// Prowlarr auto-disables an indexer after repeated failures and re-enables it
+// on a later passing test — this just forces that re-test now instead of
+// waiting out the backoff. Gated to prowlarr health alerts, re-checked from
+// the alert itself; a forged call can still only ever poke the owner's own
+// Prowlarr /indexer/testall, nothing else.
+router.post('/:key/actions/prowlarr-test-indexers', requireAuth, requireOwner, suggestFixLimiter, async (req, res) => {
+  try {
+    const alert = await alerts.getByKey(req.params.key);
+    if (!alert || alert.app !== 'prowlarr' || alert.source !== 'health') {
+      return res.status(400).json({ error: 'Not a Prowlarr health alert' });
+    }
+    await axios.post(`${process.env.PROWLARR_URL}/api/v1/indexer/testall`, {}, {
+      headers: { 'X-Api-Key': process.env.PROWLARR_API_KEY },
+      timeout: 90000,
+    });
+    // The real signal is the health alert clearing on the watchdog's next run
+    // once Prowlarr re-enables whatever passed — testall itself just kicks it.
+    res.json({ status: 'ok' });
+  } catch (err) {
+    console.error('alerts prowlarr-test-indexers error', err.response?.status || err.message);
+    res.status(502).json({ error: 'Could not re-test the indexers right now' });
+  }
+});
+
+// Force a stuck Sonarr/Radarr import through — see lib/arrForceImport.js. The
+// downloadId comes from the alert's OWN server-stored action_data (set by
+// lib/issueWatchdog.js), never anything the caller supplies.
+router.post('/:key/actions/arr-force-import', requireAuth, requireOwner, suggestFixLimiter, async (req, res) => {
+  try {
+    const alert = await alerts.getByKey(req.params.key);
+    const ad = alert?.actionData;
+    if (!alert || ad?.type !== 'arr-force-import' || !['sonarr', 'radarr'].includes(ad.app) || !ad.downloadId) {
+      return res.status(400).json({ error: 'No force-import action available for this alert' });
+    }
+    const result = await arrForceImport.run(ad.app, ad.downloadId);
+    if (!result.imported) {
+      return res.json({ status: 'no-candidates', message: result.message });
+    }
+    // Acknowledge (hide) it — the import command is queued; the next
+    // issueWatchdog run reopens it on its own if it's somehow still stuck.
+    await alerts.acknowledge(req.params.key);
+    res.json({ status: 'importing', imported: result.imported });
+  } catch (err) {
+    console.error('alerts arr-force-import error', err.message);
+    res.status(502).json({ error: 'Could not force the import right now' });
   }
 });
 

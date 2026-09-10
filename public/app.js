@@ -1264,7 +1264,65 @@ function openInfo({ poster, title, badge, meta, overview, stream, ratingKey, req
   resetReportForm();
   document.getElementById('info-report-section').classList.toggle('hidden', !ratingKey);
 
+  loadPlayedBy(ratingKey);
+
   infoModal.classList.remove('hidden');
+}
+
+// Cycles through the app's existing accent/medal tokens for a user with no
+// avatar (see .played-by-chip.fill-* in style.css) — deterministic per name
+// so the same person gets the same color across popups, not a fresh random
+// one every time the section re-renders.
+const PLAYED_BY_FILLS = ['teal', 'amber', 'gold', 'bronze', 'silver'];
+function playedByFill(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return PLAYED_BY_FILLS[Math.abs(hash) % PLAYED_BY_FILLS.length];
+}
+
+// A user with no avatar (an anonymized entry, or a real Plex account that
+// never set one) falls back to an initial-letter chip; a user WITH an
+// avatar falls back the same way if that image URL 404s, via this handler
+// (mirrors info-poster's own onerror convention elsewhere in this file,
+// just swapping to a visible fallback instead of hiding).
+function handlePlayedByImgError(img) {
+  const chip = img.parentElement;
+  chip.classList.add(`fill-${playedByFill(chip.dataset.name)}`);
+  chip.textContent = chip.dataset.name.trim().charAt(0).toUpperCase() || '?';
+}
+
+function renderPlayedBy(players) {
+  return players.map(p => {
+    const title = `${p.name} · ${p.plays} play${p.plays === 1 ? '' : 's'}`;
+    const nameAttr = escapeHtml(p.name);
+    if (p.avatar) {
+      return `<div class="played-by-chip" data-name="${nameAttr}" title="${escapeHtml(title)}"><img src="${p.avatar}" loading="lazy" alt="${nameAttr}" onerror="handlePlayedByImgError(this)"></div>`;
+    }
+    const initial = escapeHtml(p.name.trim().charAt(0).toUpperCase() || '?');
+    return `<div class="played-by-chip fill-${playedByFill(p.name)}" title="${escapeHtml(title)}">${initial}</div>`;
+  }).join('');
+}
+
+let playedByRequest = 0; // guards against a slower earlier fetch overwriting a later click, same pattern as recentlyWatchedInfoRequest above
+
+async function loadPlayedBy(ratingKey) {
+  const section = document.getElementById('info-played-by');
+  const chipsEl = document.getElementById('info-played-by-chips');
+  section.classList.add('hidden');
+  chipsEl.innerHTML = '';
+  if (!ratingKey) return;
+
+  const requestId = ++playedByRequest;
+  try {
+    const { players } = await api(`/api/tautulli/played-by/${ratingKey}`);
+    if (requestId !== playedByRequest) return; // a newer click already superseded this one
+    if (!players || !players.length) return;
+    chipsEl.innerHTML = renderPlayedBy(players);
+    section.classList.remove('hidden');
+  } catch (e) {
+    // Quiet failure — Played By is a nice-to-have on top of the info modal,
+    // not something worth surfacing an error state for.
+  }
 }
 
 document.getElementById('info-request-btn').addEventListener('click', async () => {

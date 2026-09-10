@@ -38,7 +38,6 @@
   setInterval(loadDiskSpace, 60000);
   loadSeeding();
   setInterval(loadSeeding, 60000);
-  loadCleanupCandidates();
   loadDownloadIssues();
   setInterval(loadDownloadIssues, 15000);
   loadImportIssues();
@@ -494,7 +493,24 @@ function alertSourceLabel(source) {
 // exactly which torrents are dead). See routes/alerts.js's qbit-remove-torrents
 // route for why this is safe to expose as a single button.
 function autofixAction(a) {
-  return a.actionData?.type === 'qbit-remove-torrents' && a.actionData.hashes?.length ? a.actionData : null;
+  if (a.actionData?.type === 'qbit-remove-torrents' && a.actionData.hashes?.length) {
+    const n = a.actionData.hashes.length;
+    return {
+      kind: 'qbit-remove-torrents', endpoint: 'qbit-remove-torrents',
+      label: `Remove ${n} dead torrent${n === 1 ? '' : 's'}`, busyLabel: 'Removing…',
+      confirm: `Remove ${n} dead torrent${n === 1 ? '' : 's'}? Their downloaded files (already unreachable — that's why they're flagged) are removed along with them.`,
+    };
+  }
+  if (a.actionData?.type === 'arr-force-import') {
+    return {
+      kind: 'arr-force-import', endpoint: 'arr-force-import', label: 'Force import', busyLabel: 'Importing…',
+      confirm: 'Force this import through despite the rejection? It re-affirms the match Sonarr/Radarr already found — no blocklist, no file deletion.',
+    };
+  }
+  if (a.app === 'prowlarr' && a.source === 'health') {
+    return { kind: 'prowlarr-test-indexers', endpoint: 'prowlarr-test-indexers', label: 'Re-test indexers', busyLabel: 'Testing…', confirm: null };
+  }
+  return null;
 }
 
 // Suggest-fix is only offered for alert sources with enough specific context to
@@ -617,8 +633,11 @@ function updateAlertRow(row, a) {
   const autofixBtn = row.querySelector('.autofix-btn');
   autofixBtn.classList.toggle('hidden', !autofix);
   if (autofix) {
-    const n = autofix.hashes.length;
-    autofixBtn.querySelector('.btn-label').textContent = `Remove ${n} dead torrent${n === 1 ? '' : 's'}`;
+    autofixBtn.querySelector('.btn-label').textContent = autofix.label;
+    autofixBtn.dataset.kind = autofix.kind;
+    autofixBtn.dataset.endpoint = autofix.endpoint;
+    autofixBtn.dataset.busyLabel = autofix.busyLabel;
+    autofixBtn.dataset.confirm = autofix.confirm || '';
   }
 
   // This panel polls every 30s (see loadAlerts) — re-populate the list content every
@@ -991,14 +1010,22 @@ document.getElementById('alerts-body').addEventListener('click', async e => {
     const row = autofixBtn.closest('.pending-row');
     const label = autofixBtn.querySelector('.btn-label');
     const prevLabel = label.textContent;
-    if (!await confirmDialog(`${prevLabel}? Their downloaded files (already unreachable — that's why they're flagged) are removed along with them.`)) return;
+    const { endpoint, kind, busyLabel, confirm } = autofixBtn.dataset;
+    if (confirm && !await confirmDialog(confirm)) return;
     autofixBtn.disabled = true;
-    label.textContent = 'Removing…';
+    label.textContent = busyLabel || 'Working…';
     try {
-      const result = await api(`/api/alerts/${encodeURIComponent(row.dataset.key)}/actions/qbit-remove-torrents`, { method: 'POST' });
-      if (result.failed) {
+      const result = await api(`/api/alerts/${encodeURIComponent(row.dataset.key)}/actions/${endpoint}`, { method: 'POST' });
+      if (kind === 'qbit-remove-torrents' && result.failed) {
         label.textContent = `${result.removed} removed, ${result.failed} failed`;
         autofixBtn.disabled = false;
+      } else if (kind === 'arr-force-import' && result.status === 'no-candidates') {
+        label.textContent = 'Nothing to import';
+        autofixBtn.title = result.message || '';
+        setTimeout(() => { label.textContent = prevLabel; autofixBtn.disabled = false; }, 2500);
+      } else if (kind === 'prowlarr-test-indexers') {
+        label.textContent = 'Re-test sent ✓';
+        setTimeout(() => { label.textContent = prevLabel; autofixBtn.disabled = false; }, 2500);
       } else {
         row.remove();
         if (!document.getElementById('alerts-body').children.length) {
@@ -1789,59 +1816,6 @@ async function loadSeeding() {
     body.innerHTML = '<p class="empty-state">Could not load seeding stats.</p>';
   }
 }
-
-// ---------- Stack: Cleanup Candidates ----------
-// A slow-moving report (watch history/file sizes don't shift minute to
-// minute), unlike Seeding/Disk Space above — loaded once on page load with
-// no recurring poll, rather than re-scanning Tautulli's whole movie library
-// (thousands of rows) every 60s indefinitely. See lib/cleanupCandidates.js
-// for exactly what qualifies; this is read-only by design — no delete
-// action wired up, just a ranked report of where space could be reclaimed.
-//
-// The full ranked list lives in a modal (openCleanupModal below), not
-// inline — a library-wide report can run into the thousands of rows (this
-// deployment's own: 3,810), which would make the admin page itself
-// unreasonably long. The card only ever shows a one-line summary + a
-// button.
-let cleanupCandidatesCache = [];
-
-async function loadCleanupCandidates() {
-  const body = document.getElementById('cleanup-body');
-  const viewBtn = document.getElementById('view-cleanup-btn');
-  try {
-    cleanupCandidatesCache = await api('/api/owner/cleanup-candidates');
-    if (!cleanupCandidatesCache.length) {
-      body.innerHTML = '<p class="empty-state">Nothing flagged — Movies library configured?</p>';
-      viewBtn.classList.add('hidden');
-      return;
-    }
-    const totalBytes = cleanupCandidatesCache.reduce((sum, c) => sum + c.sizeBytes, 0);
-    body.innerHTML = `<p class="now-meta">${cleanupCandidatesCache.length} movie${cleanupCandidatesCache.length === 1 ? '' : 's'} · ${formatBytes(totalBytes)} reclaimable</p>`;
-    viewBtn.classList.remove('hidden');
-  } catch (e) {
-    body.innerHTML = '<p class="empty-state">Could not check cleanup candidates.</p>';
-    viewBtn.classList.add('hidden');
-  }
-}
-
-function openCleanupModal() {
-  const modal = document.getElementById('cleanup-modal');
-  const listEl = document.getElementById('cleanup-list');
-  listEl.innerHTML = cleanupCandidatesCache.map(c => `
-    <div class="dl-row">
-      <div class="dl-row-body">
-        <div class="now-title">${escapeHtml(c.title)}${c.year ? ` (${c.year})` : ''}</div>
-        <div class="now-meta">${formatBytes(c.sizeBytes)} · ${escapeHtml(c.reason)}</div>
-      </div>
-    </div>
-  `).join('');
-  modal.classList.remove('hidden');
-}
-
-document.getElementById('view-cleanup-btn').addEventListener('click', openCleanupModal);
-document.getElementById('close-cleanup-modal-btn').addEventListener('click', () => {
-  document.getElementById('cleanup-modal').classList.add('hidden');
-});
 
 // ---------- Stack: Download Issues ----------
 // Not actively downloading and not seeding/complete — i.e. actually stuck or

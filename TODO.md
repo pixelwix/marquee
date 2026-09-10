@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
-v1.57.4.**
+ v1.58.3.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -738,5 +738,26 @@ gets versioned as it ships, not reconstructed later.
 - [x] **Fix**: a user reported their recap arriving with all styling stripped, stats stacked as plain unlabeled text — Gmail clips any message over ~102KB and renders a stripped fallback. Measured the real email: 625KB total, 98% of it one embedded headliner image. Tautulli's `pms_image_proxy` resizes the image but doesn't normalize format, and had handed back a PNG straight from Plex's own stored art file for this title — PNG's lossless compression on photographic backdrop art runs 5-7x larger than the equivalent JPEG at the same pixel dimensions (measured: 472KB as PNG, 66-95KB as JPEG at quality 70-85 for the same image)
 - [x] `fetchHeadlinerImage` now always re-encodes to JPEG via `sharp` (already a dependency) regardless of what format Tautulli hands back, trying a quality ladder (75/60/45/30) and capping the final base64-encoded size at 75KB — comfortably under Gmail's threshold alongside the rest of the template's own ~11-20KB. Still oversized at the lowest quality, or an outright fetch failure, both degrade to the existing plain-gradient header rather than ever risking another clipped email
 - [x] Verified live across 6 real recipients' actual August recaps (previously up to 625KB) — all now land between 10.8KB and 85.9KB, most keeping a real header image
+
+## v1.58.0 — "Played By": who's watched this title, in the media info popup
+
+- [x] The media info modal (Now Playing / Recently Watched — the two entry points that carry a real Plex rating key) now shows a row of circular avatar chips under the stream details: everyone in the household who's watched this exact title, with their play count on hover. A TV rating key resolves up to the show (`grandparent_rating_key`) before querying, the same grouping `computeHeadliner` (lib/monthlyRecap.js) uses — Tautulli's `get_item_user_stats` only counts plays of the *exact* key it's given, and "played by" for a show should mean "has watched this show," not "has watched this specific episode"
+- [x] New route: `GET /api/tautulli/played-by/:ratingKey`, backed by Tautulli's `get_item_user_stats` (verified live against real data first — same field shape as Top of the Month's leaderboard: `friendly_name`/`user_thumb`/`total_plays`). Reuses the existing `statsLeaderboard` privacy setting (lib/privacy.js) rather than adding a new toggle — this is the same category of exposure as that leaderboard, who watched what and how often
+- [x] A user with no avatar (an anonymized privacy entry, or a real account that never set one, or a broken image URL) falls back to a colored initial-letter chip instead of a blank/broken image — color picked deterministically per name from the app's existing accent/medal tokens (teal/amber/gold/bronze/silver), not a new palette
+
+## v1.58.1 - Fix: stack-alert push notifications were too noisy
+
+- [x] Per-source push policy in `lib/alerts.js` (`planPush`, tested). Reconciliation and the /admin Alerts panel are unchanged - this only governs whether a *push* fires. `downloads:attention` and Sonarr/Radarr `wanted` are now **silent** (ongoing status, not incidents - a torrent parked 20 min or an episode the internet does not have yet should not page; genuinely broken downloads are still caught by qbit-error-torrents / qbit-disk-guard). Sonarr/Radarr `import` is **persist-gated**: only pushes once the same stuck import has stayed open >=10 min, so transient grab races clear silently. Everything else (health, log-triage, proxmox cluster, disk-guard, error-torrents, overseerr issues, uptime-kuma, sabnzbd cleanup) pushes on first sight as before.
+- [x] New `pushed_at` column on the alerts table (CREATE + idempotent ALTER, same pattern as `action_data`) so a persist-gated alert cannot re-push on every subsequent touch; cleared on reopen so a resolved-then-recurring one re-qualifies.
+
+## v1.58.2 - Stack-alert noise filter + two new one-click fixes
+
+- [x] arr-health-watchdog.mjs: flappy /health entries (indexer + download-client availability) are now held until the same one shows up on two consecutive runs before alerting, and a "qBittorrent/SABnzbd unavailable" health entry is suppressed entirely while that container is inside its post-Watchtower-restart window (same restart-blip logic the log-triage path already used). "Could not reach <app>" is held one run too. New `classifyHealthEntry` pure fn + tests; state file gains `healthSeen` per app.
+- [x] Import alerts: new one-click **Force import** button (routes/alerts.js `/actions/arr-force-import` + lib/arrForceImport.js) - reuses the same manual-import candidate lookup + ManualImport command the admin manual-import UI already drives, fired for every matched candidate at once. No blocklist, no file deletion. issueWatchdog attaches the downloadId as the alert's `action_data`.
+- [x] Prowlarr health alerts: new one-click **Re-test indexers** button (`/actions/prowlarr-test-indexers` -> Prowlarr `/api/v1/indexer/testall`) so a disabled indexer re-enables now instead of waiting out its backoff.
+
+## v1.58.3 - Removed Cleanup Candidates (Stack panel)
+
+- [x] The movies-by-reclaimable-size report (v1.53.0) wasn't being used - removed entirely: `lib/cleanupCandidates.js`, its test, the `GET /api/owner/cleanup-candidates` route, the Stack-panel card + its modal (admin.html/admin.js), and `#cleanup-list` from the shared modal-list CSS rule.
 
 ## Ideas
