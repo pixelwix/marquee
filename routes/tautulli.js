@@ -343,9 +343,13 @@ router.get('/top-of-month', requireAuth, async (req, res) => {
         // Already a public plex.tv avatar URL — no proxying needed.
         avatar: u.user_thumb || null
       })), req.session.user, privacyConfig),
-      movie: topMovies.map(m => ({ title: m.title, plays: m.total_plays, thumb: imageUrl(m.thumb) })),
-      tv: topTv.map(t => ({ title: t.title, plays: t.total_plays, thumb: imageUrl(t.thumb) })),
-      anime: topAnime.map(t => ({ title: t.title, plays: t.total_plays, thumb: imageUrl(t.thumb) }))
+      // ratingKey: movie rows carry their own rating_key (grandparent is
+      // blank); tv/anime home-stats rows are already resolved to the show, so
+      // rating_key === grandparent_rating_key there. Powers the same click →
+      // info modal + Played By as My Stats' Most Watched list.
+      movie: topMovies.map(m => ({ title: m.title, plays: m.total_plays, thumb: imageUrl(m.thumb), ratingKey: m.grandparent_rating_key || m.rating_key || null })),
+      tv: topTv.map(t => ({ title: t.title, plays: t.total_plays, thumb: imageUrl(t.thumb), ratingKey: t.grandparent_rating_key || t.rating_key || null })),
+      anime: topAnime.map(t => ({ title: t.title, plays: t.total_plays, thumb: imageUrl(t.thumb), ratingKey: t.grandparent_rating_key || t.rating_key || null }))
     });
   } catch (err) {
     console.error('tautulli top-of-month error:', err.code || err.response?.status, err.message);

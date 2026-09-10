@@ -760,24 +760,29 @@ document.getElementById('close-torrent-btn').addEventListener('click', () => tor
 torrentModal.addEventListener('click', e => { if (e.target === torrentModal) torrentModal.classList.add('hidden'); });
 
 // ---------- Top of the Month ----------
+let topOfMonthData = {}; // { movie:[...], tv:[...], anime:[...] } — click handler reads ratingKey/title/plays by section + rank
+
 async function loadTopOfMonth() {
   const body = document.getElementById('top-month-body');
   try {
     const data = await api('/api/tautulli/top-of-month');
+    topOfMonthData = data;
     const sections = [
-      { label: 'Top Viewer', items: data.user, isUser: true },
-      { label: 'Top Movie', items: data.movie },
-      { label: 'Top TV Show', items: data.tv },
-      { label: 'Top Anime', items: data.anime }
+      { label: 'Top Viewer', items: data.user, isUser: true, key: 'user' },
+      { label: 'Top Movie', items: data.movie, key: 'movie' },
+      { label: 'Top TV Show', items: data.tv, key: 'tv' },
+      { label: 'Top Anime', items: data.anime, key: 'anime' }
     ];
-    body.innerHTML = sections.map(s => renderTopMonthTile(s.label, s.items, s.isUser)).join('');
+    body.innerHTML = sections.map(s => renderTopMonthTile(s.label, s.items, s.isUser, s.key)).join('');
   } catch (e) {
     body.innerHTML = '<p class="empty-state">Could not reach Tautulli.</p>';
   }
 }
 
-// #1 gets the big medal frame; #2/#3 render as compact silver/bronze rows below it.
-function renderTopMonthTile(label, items, isUser) {
+// #1 gets the big medal frame; #2/#3 render as compact silver/bronze rows below
+// it. For the title sections (not Top Viewer) every rank that carries a Plex
+// ratingKey is a tap target — same info modal + Played By as My Stats.
+function renderTopMonthTile(label, items, isUser, section) {
   if (!items || !items.length) {
     return `
       <div class="top-month-tile ${isUser ? 'user' : ''}">
@@ -788,27 +793,67 @@ function renderTopMonthTile(label, items, isUser) {
     `;
   }
   const [first, second, third] = items;
+  const canTap = item => !isUser && item && item.ratingKey;
   // Silver and bronze are flat children of one .medal-rows grid (not two nested
   // rows) so their badge/name/plays columns are sized together and actually align.
-  const medalCells = (item, medal, cls) => item ? `
+  // A tappable runner-up keeps the same grid slot — only the name span gets the
+  // link affordance + data attrs — so alignment is untouched.
+  const medalCells = (item, medal, cls, rank) => item ? `
     <span class="medal-badge">${medal}</span>
-    <span class="medal-name ${cls}">${escapeHtml(item.name || item.title)}</span>
+    <span class="medal-name ${cls}${canTap(item) ? ' tm-link' : ''}"${canTap(item) ? ` data-section="${section}" data-rank="${rank}" role="button" tabindex="0"` : ''}>${escapeHtml(item.name || item.title)}</span>
     <span class="medal-plays">${item.plays}</span>
   ` : '';
+  const firstInner = `
+    <div class="top-month-frame"><img class="top-month-img" src="${(isUser ? first.avatar : first.thumb) || ''}" loading="lazy" onerror="this.style.visibility='hidden'"></div>
+    <div class="top-month-label">${label}</div>
+    <div class="top-month-title">${escapeHtml(first.name || first.title)}</div>
+    <div class="top-month-plays">${first.plays} play${first.plays === 1 ? '' : 's'}</div>`;
   return `
     <div class="top-month-tile ${isUser ? 'user' : ''}">
       <span class="top-month-medal">🥇</span>
-      <div class="top-month-frame"><img class="top-month-img" src="${(isUser ? first.avatar : first.thumb) || ''}" loading="lazy" onerror="this.style.visibility='hidden'"></div>
-      <div class="top-month-label">${label}</div>
-      <div class="top-month-title">${escapeHtml(first.name || first.title)}</div>
-      <div class="top-month-plays">${first.plays} play${first.plays === 1 ? '' : 's'}</div>
+      ${canTap(first)
+        ? `<button class="tm-hit" data-section="${section}" data-rank="0">${firstInner}</button>`
+        : firstInner}
       <div class="medal-rows">
-        ${medalCells(second, '🥈', 'silver')}
-        ${medalCells(third, '🥉', 'bronze')}
+        ${medalCells(second, '🥈', 'silver', 1)}
+        ${medalCells(third, '🥉', 'bronze', 2)}
       </div>
     </div>
   `;
 }
+
+// Shared by My Stats' Most Watched and Top of the Month: open the info modal
+// for a { title, plays, ratingKey } item and lazily fill poster/synopsis from
+// get_metadata. `haveThumb` skips the poster swap when the caller already set
+// one (Top of the Month has the artwork in hand; My Stats doesn't).
+let titleInfoRequest = 0; // guards a slower metadata fetch from overwriting a newer click
+async function openTitleInfo(item, { badge, period, haveThumb }) {
+  if (!item || !item.ratingKey) return;
+  const playsLabel = `${item.plays} play${item.plays === 1 ? '' : 's'} ${period}`;
+  openInfo({ poster: haveThumb ? item.thumb : undefined, title: item.title, badge, meta: playsLabel, ratingKey: String(item.ratingKey) });
+  const requestId = ++titleInfoRequest;
+  try {
+    const m = await api(`/api/tautulli/metadata/${item.ratingKey}`);
+    if (requestId !== titleInfoRequest) return; // a newer click already superseded this one
+    const posterEl = document.getElementById('info-poster');
+    if (m.thumb && !haveThumb) { posterEl.style.visibility = ''; posterEl.src = m.thumb; }
+    document.getElementById('info-overview').textContent = m.overview || 'No synopsis available.';
+    document.getElementById('info-meta').textContent = m.year ? `${m.year} · ${playsLabel}` : playsLabel;
+  } catch (err) {
+    // Poster/synopsis are a nice-to-have — the modal still shows title + Played By.
+  }
+}
+
+document.getElementById('top-month-body').addEventListener('click', e => {
+  const el = e.target.closest('.tm-hit, .tm-link');
+  if (!el) return;
+  const list = topOfMonthData[el.dataset.section];
+  const badge = `TOP ${el.dataset.section === 'tv' ? 'TV SHOW' : el.dataset.section.toUpperCase()} · THIS MONTH`;
+  openTitleInfo(list && list[Number(el.dataset.rank)], { badge, period: 'this month', haveThumb: true });
+});
+document.getElementById('top-month-body').addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('tm-link')) { e.preventDefault(); e.target.click(); }
+});
 
 // ---------- My Stats ----------
 // Personal, per-signed-in-user numbers behind the request modal's fourth
@@ -888,7 +933,6 @@ function renderTypeSplit(split) {
 }
 
 let myStatsTopWatched = []; // stashed so the Most Watched click handler can read ratingKey/title/plays by index
-let myStatsInfoRequest = 0; // guards a slower metadata fetch from overwriting a newer click (same pattern as recentlyWatchedInfoRequest)
 
 async function loadMyStats() {
   const body = document.getElementById('mystats-body');
@@ -1839,27 +1883,11 @@ document.getElementById('recently-watched-body').addEventListener('click', async
 });
 
 // My Stats → Most Watched: open the info modal (poster + synopsis + Played By)
-// for the tapped show/movie. Poster and synopsis come from a get_metadata
-// fetch made only now; the "Played By" chips load off the ratingKey inside
-// openInfo, same as Recently Watched.
-document.getElementById('mystats-body').addEventListener('click', async e => {
+// for the tapped show/movie, via the shared openTitleInfo above.
+document.getElementById('mystats-body').addEventListener('click', e => {
   const row = e.target.closest('.mw-row');
   if (!row || row.disabled) return;
-  const item = myStatsTopWatched[Number(row.dataset.idx)];
-  if (!item || !item.ratingKey) return;
-  const playsLabel = `${item.plays} play${item.plays === 1 ? '' : 's'} this year`;
-  openInfo({ title: item.title, badge: 'MOST WATCHED', meta: playsLabel, ratingKey: String(item.ratingKey) });
-  const requestId = ++myStatsInfoRequest;
-  try {
-    const m = await api(`/api/tautulli/metadata/${item.ratingKey}`);
-    if (requestId !== myStatsInfoRequest) return; // a newer click already superseded this one
-    const posterEl = document.getElementById('info-poster');
-    if (m.thumb) { posterEl.style.visibility = ''; posterEl.src = m.thumb; }
-    document.getElementById('info-overview').textContent = m.overview || 'No synopsis available.';
-    document.getElementById('info-meta').textContent = m.year ? `${m.year} · ${playsLabel}` : playsLabel;
-  } catch (err) {
-    // Poster/synopsis are a nice-to-have — the modal still shows the title and Played By.
-  }
+  openTitleInfo(myStatsTopWatched[Number(row.dataset.idx)], { badge: 'MOST WATCHED', period: 'this year', haveThumb: false });
 });
 
 document.getElementById('recently-added-body').addEventListener('click', e => {

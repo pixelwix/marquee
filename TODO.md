@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
- v1.59.3.**
+ v1.59.4.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -781,5 +781,9 @@ gets versioned as it ships, not reconstructed later.
 ## v1.59.3 — My Stats: Most Watched rows are tappable (poster, synopsis, Played By)
 
 - [x] The top-3 Most Watched list was dead text. Each row is now a tap target that opens the existing info modal — poster + synopsis + the "Played By" chips (v1.58.0: who in the household has watched it, per-person play counts). `computeTopWatched` now carries `ratingKey` (grandparent/show key for episodes, movie key otherwise); `GET /api/tautulli/metadata/:ratingKey` now also returns `thumb`/`year`/`title`/`mediaType` for the poster + meta line, fetched only on click. Own `.mw-*` markup/CSS replacing the shared `.medal-rows` grid so rows are real buttons with proper tap targets; `computeTopWatched` test updated + one added (273 tests).
+
+## v1.59.4 — Top of the Month: title tiles open the same info modal
+
+- [x] Top Movie / TV Show / Anime — the #1 tile (a `.tm-hit` button wrapping poster + title + plays) and the silver/bronze runner-up names (`.medal-name.tm-link`, keyboard-activatable) now open the info modal + Played By, same as My Stats' Most Watched. Top Viewer is untouched (it's a person). `/top-of-month` movie/tv/anime entries gained `ratingKey` (`grandparent_rating_key || rating_key` — home-stats rows already resolve tv/anime to the show). Shared `openTitleInfo({ badge, period, haveThumb })` helper — Top of the Month passes its artwork straight through, no blank-poster flash; My Stats' handler refactored onto it too.
 
 ## Ideas

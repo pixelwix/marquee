@@ -546,6 +546,20 @@ body {
 .medal-name.silver { color: var(--silver); }
 .medal-name.bronze { color: var(--bronze); }
 
+/* #1 as a tap target (opens the info modal + Played By). Button reset only —
+   keeps the tile's own column layout so alignment across the four tiles is
+   unchanged. */
+.tm-hit {
+  display: flex; flex-direction: column; align-items: stretch; width: 100%;
+  background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit;
+  cursor: pointer; border-radius: 12px;
+}
+.tm-hit:hover .top-month-title { color: var(--gold); }
+.tm-hit:hover .top-month-img { filter: brightness(1.05); }
+.tm-hit:focus-visible, .medal-name.tm-link:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.medal-name.tm-link { cursor: pointer; }
+.medal-name.tm-link:hover { text-decoration: underline; }
+
 @media (max-width: 900px) {
   .top-month-grid { grid-template-columns: repeat(2, 1fr); row-gap: 1.5rem; }
 }
