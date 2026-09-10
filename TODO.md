@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
- v1.59.2.**
+ v1.59.3.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -777,5 +777,9 @@ gets versioned as it ships, not reconstructed later.
 ## v1.59.2 — My Stats: heatmap → 14-day bar strip (mobile is the primary surface)
 
 - [x] The 12-week heatmap put all its per-day detail in hover tooltips, which don't exist on touch — decorative texture on a phone, where most of the traffic is. Replaced with a compact 14-day strip: one bar per day, height = hours watched (scaled to the busiest day), weekday initial under each, today rightmost. `renderHeatmap` → `renderDayBars`; `computeDailyActivity` window 84 → 14 days (same pure fn, no test change); `.heat-*` CSS → `.day-strip`/`.day-bar*`. Section label "Viewing heatmap" → "Recent activity".
+
+## v1.59.3 — My Stats: Most Watched rows are tappable (poster, synopsis, Played By)
+
+- [x] The top-3 Most Watched list was dead text. Each row is now a tap target that opens the existing info modal — poster + synopsis + the "Played By" chips (v1.58.0: who in the household has watched it, per-person play counts). `computeTopWatched` now carries `ratingKey` (grandparent/show key for episodes, movie key otherwise); `GET /api/tautulli/metadata/:ratingKey` now also returns `thumb`/`year`/`title`/`mediaType` for the poster + meta line, fetched only on click. Own `.mw-*` markup/CSS replacing the shared `.medal-rows` grid so rows are real buttons with proper tap targets; `computeTopWatched` test updated + one added (273 tests).
 
 ## Ideas

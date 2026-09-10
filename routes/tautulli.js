@@ -251,15 +251,22 @@ router.get('/metadata/:ratingKey', requireAuth, async (req, res) => {
     const { data } = await axios.get(`${process.env.TAUTULLI_URL}/api/v2`, {
       params: { apikey: process.env.TAUTULLI_API_KEY, cmd: 'get_metadata', rating_key: req.params.ratingKey }
     });
-    res.json({ overview: data.response.data?.summary || '' });
+    const d = data.response.data || {};
+    res.json({
+      overview: d.summary || '',
+      thumb: imageUrl(d.thumb || d.grandparent_thumb || d.parent_thumb || ''),
+      year: d.year || null,
+      title: d.grandparent_title || d.title || '',
+      mediaType: d.media_type || ''
+    });
   } catch (err) {
     console.error('tautulli metadata error:', err.code || err.response?.status, err.message);
     res.status(502).json({ error: 'Could not reach Tautulli' });
   }
 });
 
-// Powers the info modal's "Played By" row (Now Playing / Recently Watched
-// only — those are the two openInfo() callers that pass a ratingKey at all).
+// Powers the info modal's "Played By" row (Now Playing, Recently Watched,
+// and My Stats' Most Watched — the openInfo() callers that pass a ratingKey).
 // A TV rating key is the specific episode that was clicked, but "played by"
 // for a show should mean "has watched this show", not "has watched this
 // exact episode" — get_item_user_stats only counts plays of the *exact* key

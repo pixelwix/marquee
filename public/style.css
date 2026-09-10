@@ -615,13 +615,26 @@ body {
 .type-legend .dot.anime { background: #8b7cd8; }
 .type-legend b { color: var(--text); font-weight: 600; }
 
-/* Most Watched — text-only, all three ranks in one .medal-rows grid (reusing
-   Top of the Month's own gold/silver/bronze styling above) instead of a big
-   poster tile for #1. medal-rows-full just gives the standalone list a touch
-   more room than the compact runner-up-only version Top of the Month uses. */
-.medal-rows-full { row-gap: 0.65rem; font-size: 0.85rem; padding: 0.2rem 0 0.3rem; }
-.medal-rows-full .medal-badge { font-size: 1.05rem; }
-.medal-name.gold { color: var(--gold); font-weight: 600; }
+/* Most Watched — tap-target rows (open the info modal + Played By). Gold /
+   silver / bronze name colour mirrors Top of the Month's medal styling. */
+.mw-list { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.2rem 0 0.3rem; }
+.mw-row {
+  display: flex; align-items: center; gap: 0.55rem; width: 100%;
+  background: none; border: 0; border-radius: 8px; padding: 0.55rem 0.4rem;
+  font: inherit; color: var(--text); text-align: left; cursor: pointer;
+}
+.mw-row:hover:not([disabled]) { background: rgba(20,25,35,0.05); }
+.mw-row[disabled] { cursor: default; }
+.mw-badge { flex: none; font-size: 1.05rem; }
+.mw-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.85rem; font-weight: 500;
+}
+.mw-name.gold { color: var(--gold); font-weight: 600; }
+.mw-name.silver { color: var(--silver); }
+.mw-name.bronze { color: var(--bronze); }
+.mw-plays { flex: none; font-family: var(--mono); font-size: 0.7rem; color: var(--muted); }
+.mw-chev { flex: none; color: var(--muted); }
 
 /* Sub-caption under a My Stats section label (e.g. "Last 12 weeks") */
 .chart-sub { font-size: 0.74rem; color: var(--muted); margin: 0 0 0.7rem; }

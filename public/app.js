@@ -813,21 +813,27 @@ function renderTopMonthTile(label, items, isUser) {
 // ---------- My Stats ----------
 // Personal, per-signed-in-user numbers behind the request modal's fourth
 // tab — hero (hours watched YTD + pace), a this-week line, four stat tiles
-// with month-over-month deltas, personal records, a 12-week viewing heatmap,
+// with month-over-month deltas, personal records, a 14-day activity strip,
 // the Movies/TV/Anime library mix, and a top-3 most-watched list.
-// renderMostWatched reuses the same gold/silver/bronze medal markup Top of
-// the Month uses above, text-only (medal + title + plays), all three ranks
-// in one grid — no poster art, so no fetch-per-item metadata round trip.
+// renderMostWatched: medal + title + plays, gold/silver/bronze name colour
+// like Top of the Month. Each row is a tap target that opens the info modal
+// — poster, synopsis, and the "Played By" chips (who in the household has
+// watched it, with per-person play counts) — via a get_metadata round trip
+// made only on click, keyed by the show/movie ratingKey computeTopWatched
+// carries.
 function renderMostWatched(topWatched) {
   if (!topWatched || !topWatched.length) return '<p class="empty-state">Nothing watched yet this year.</p>';
   const medals = ['🥇', '🥈', '🥉'];
   const classes = ['gold', 'silver', 'bronze'];
-  const cells = topWatched.map((item, i) => `
-    <span class="medal-badge">${medals[i]}</span>
-    <span class="medal-name ${classes[i]}">${escapeHtml(item.title)}</span>
-    <span class="medal-plays">${item.plays} play${item.plays === 1 ? '' : 's'}</span>
+  const rows = topWatched.map((item, i) => `
+    <button class="mw-row" data-idx="${i}"${item.ratingKey ? '' : ' disabled'}>
+      <span class="mw-badge">${medals[i] || ''}</span>
+      <span class="mw-name ${classes[i] || ''}">${escapeHtml(item.title)}</span>
+      <span class="mw-plays">${item.plays} play${item.plays === 1 ? '' : 's'}</span>
+      ${item.ratingKey ? '<span class="mw-chev">›</span>' : ''}
+    </button>
   `).join('');
-  return `<div class="medal-rows medal-rows-full">${cells}</div>`;
+  return `<div class="mw-list">${rows}</div>`;
 }
 
 // A ▲/▼ change chip vs last month. null (last month had no activity) renders
@@ -881,10 +887,14 @@ function renderTypeSplit(split) {
     <div class="type-legend">${legend}</div>`;
 }
 
+let myStatsTopWatched = []; // stashed so the Most Watched click handler can read ratingKey/title/plays by index
+let myStatsInfoRequest = 0; // guards a slower metadata fetch from overwriting a newer click (same pattern as recentlyWatchedInfoRequest)
+
 async function loadMyStats() {
   const body = document.getElementById('mystats-body');
   try {
     const s = await api('/api/tautulli/my-stats');
+    myStatsTopWatched = s.topWatched || [];
     const d = s.deltas || { plays: {}, hours: {} };
     const tiles = [
       { val: s.rank ? `#${s.rank.position}` : '—', lbl: 'Family Rank', cls: 'teal' },
@@ -1825,6 +1835,30 @@ document.getElementById('recently-watched-body').addEventListener('click', async
     } catch (e) {
       i.overview = '';
     }
+  }
+});
+
+// My Stats → Most Watched: open the info modal (poster + synopsis + Played By)
+// for the tapped show/movie. Poster and synopsis come from a get_metadata
+// fetch made only now; the "Played By" chips load off the ratingKey inside
+// openInfo, same as Recently Watched.
+document.getElementById('mystats-body').addEventListener('click', async e => {
+  const row = e.target.closest('.mw-row');
+  if (!row || row.disabled) return;
+  const item = myStatsTopWatched[Number(row.dataset.idx)];
+  if (!item || !item.ratingKey) return;
+  const playsLabel = `${item.plays} play${item.plays === 1 ? '' : 's'} this year`;
+  openInfo({ title: item.title, badge: 'MOST WATCHED', meta: playsLabel, ratingKey: String(item.ratingKey) });
+  const requestId = ++myStatsInfoRequest;
+  try {
+    const m = await api(`/api/tautulli/metadata/${item.ratingKey}`);
+    if (requestId !== myStatsInfoRequest) return; // a newer click already superseded this one
+    const posterEl = document.getElementById('info-poster');
+    if (m.thumb) { posterEl.style.visibility = ''; posterEl.src = m.thumb; }
+    document.getElementById('info-overview').textContent = m.overview || 'No synopsis available.';
+    document.getElementById('info-meta').textContent = m.year ? `${m.year} · ${playsLabel}` : playsLabel;
+  } catch (err) {
+    // Poster/synopsis are a nice-to-have — the modal still shows the title and Played By.
   }
 });
 

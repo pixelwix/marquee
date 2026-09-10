@@ -42,9 +42,17 @@ test('computeTopWatched groups episodes under their show and counts each play', 
   ];
   const result = computeTopWatched(rows);
   assert.deepEqual(result, [
-    { title: 'Hana-Kimi', plays: 2 },
-    { title: 'Supergirl', plays: 1 }
+    { title: 'Hana-Kimi', plays: 2, ratingKey: 10 },
+    { title: 'Supergirl', plays: 1, ratingKey: 20 }
   ]);
+});
+
+test('computeTopWatched carries the show key for episodes and the movie key otherwise', () => {
+  const rows = [
+    { grandparent_rating_key: 55, rating_key: 999, grandparent_title: 'The Bear', title: 'Braciole' },
+    { rating_key: 77, title: 'Nickel Boys' }
+  ];
+  assert.deepEqual(computeTopWatched(rows).map(r => r.ratingKey), [55, 77]);
 });
 
 test('computeTopWatched sorts by plays descending and respects the limit', () => {
