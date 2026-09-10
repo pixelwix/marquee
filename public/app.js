@@ -838,20 +838,24 @@ function renderStatDelta(deltaPct) {
   return `<span class="stat-delta ${up ? 'up' : 'down'}">${up ? '▲' : '▼'}${Math.abs(deltaPct)}%</span>`;
 }
 
-// 12-week viewing heatmap: one cell per day, oldest on the left, shaded in
-// five steps by hours watched that day. Rendered column-major — each column
-// is a consecutive 7-day block (not calendar-week aligned), 84 cells into
-// 7 rows. dailyActivity is already zero-filled to a fixed length by the
-// server.
-function renderHeatmap(days) {
+// Compact 14-day activity strip — one bar per day, height = hours watched
+// that day, scaled to the busiest day in the window. Replaces the old
+// hover-only heatmap with something that reads on a phone: weekday initial
+// under each bar, today rightmost. dailyActivity is zero-filled server-side.
+function renderDayBars(days) {
   if (!days || !days.length) return '';
-  const level = h => (h <= 0 ? 0 : h < 0.5 ? 1 : h < 1.5 ? 2 : h < 3 ? 3 : 4);
-  const cells = days.map(d => {
+  const max = Math.max(0.5, ...days.map(d => d.hours));
+  const bars = days.map(d => {
+    const pct = d.hours > 0 ? Math.max(6, Math.round((d.hours / max) * 100)) : 0;
+    const wd = new Date(d.date).toLocaleDateString(undefined, { weekday: 'narrow' });
     const label = new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     const title = d.plays ? `${label} — ${d.plays} play${d.plays === 1 ? '' : 's'}, ${d.hours}h` : `${label} — nothing`;
-    return `<div class="heat-cell heat-l${level(d.hours)}" title="${escapeHtml(title)}"></div>`;
+    return `<div class="day-bar" title="${escapeHtml(title)}">
+      <div class="day-bar-track">${pct ? `<div class="day-bar-fill" style="height:${pct}%"></div>` : ''}</div>
+      <span class="day-bar-lbl">${wd}</span>
+    </div>`;
   }).join('');
-  return `<div class="heat-grid">${cells}</div>`;
+  return `<div class="day-strip">${bars}</div>`;
 }
 
 // Movies / TV / Anime play-count split for the year as one stacked bar plus a
@@ -915,9 +919,9 @@ async function loadMyStats() {
         </div>
       ` : ''}
       ${s.dailyActivity?.length ? `
-        <div class="card-label" style="margin-top: 1.3rem;">Viewing heatmap</div>
-        <div class="chart-sub">Last 12 weeks</div>
-        ${renderHeatmap(s.dailyActivity)}
+        <div class="card-label" style="margin-top: 1.3rem;">Recent activity</div>
+        <div class="chart-sub">Last 14 days · hours per day</div>
+        ${renderDayBars(s.dailyActivity)}
       ` : ''}
       ${renderTypeSplit(s.typeSplit)}
       <div class="card-label" style="margin-top: 1.3rem;">Most Watched</div>

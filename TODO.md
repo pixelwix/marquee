@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
- v1.59.1.**
+ v1.59.2.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -773,5 +773,9 @@ gets versioned as it ships, not reconstructed later.
 ## v1.59.1 — My Stats: drop the "Watch Activity" (last 30 days) charts
 
 - [x] The by-day-of-week and by-hour-of-day duration bar charts were redundant next to the new 12-week heatmap and added little. Removed the section, the two `get_plays_by_dayofweek`/`get_plays_by_hourofday` calls, the `activity` response field, `renderActivityBars` (app.js), `parseActivitySeries` + its 2 tests (lib/myStats.js), and the `.chart-legend`/`.chart-title`/`.dow-*`/`.hod-*` CSS. `.chart-sub` stays — the heatmap and library-mix captions use it.
+
+## v1.59.2 — My Stats: heatmap → 14-day bar strip (mobile is the primary surface)
+
+- [x] The 12-week heatmap put all its per-day detail in hover tooltips, which don't exist on touch — decorative texture on a phone, where most of the traffic is. Replaced with a compact 14-day strip: one bar per day, height = hours watched (scaled to the busiest day), weekday initial under each, today rightmost. `renderHeatmap` → `renderDayBars`; `computeDailyActivity` window 84 → 14 days (same pure fn, no test change); `.heat-*` CSS → `.day-strip`/`.day-bar*`. Section label "Viewing heatmap" → "Recent activity".
 
 ## Ideas

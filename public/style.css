@@ -589,17 +589,15 @@ body {
 .stat-record-val { font-family: var(--display); font-weight: 600; font-size: 1rem; color: var(--gold); }
 .stat-record-lbl { font-family: var(--mono); font-size: 0.56rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 0.25rem; line-height: 1.3; }
 
-/* 12-week viewing heatmap — 84 day-cells, column-major into 7 rows */
-.heat-grid {
-  display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 1fr);
-  gap: 3px; margin-top: 0.2rem;
+/* 14-day activity strip — one bar per day, height = hours watched */
+.day-strip { display: flex; gap: 4px; align-items: flex-end; margin-top: 0.2rem; }
+.day-bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+.day-bar-track {
+  width: 100%; height: 68px; display: flex; align-items: flex-end;
+  background: rgba(20,25,35,0.05); border-radius: 4px; overflow: hidden;
 }
-.heat-cell { aspect-ratio: 1; border-radius: 3px; background: var(--teal); }
-.heat-cell.heat-l0 { background: rgba(20,25,35,0.06); }
-.heat-cell.heat-l1 { opacity: 0.28; }
-.heat-cell.heat-l2 { opacity: 0.5; }
-.heat-cell.heat-l3 { opacity: 0.75; }
-.heat-cell.heat-l4 { opacity: 1; }
+.day-bar-fill { width: 100%; background: var(--teal); border-radius: 4px 4px 0 0; }
+.day-bar-lbl { font-family: var(--mono); font-size: 0.56rem; color: var(--muted); }
 
 /* Library mix — one stacked bar + counted legend */
 .type-split { display: flex; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 0.2rem; }

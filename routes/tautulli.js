@@ -359,7 +359,7 @@ router.get('/top-of-month', requireAuth, async (req, res) => {
 // Watched uses — a streak spanning Dec 31 into January would otherwise look
 // truncated for the first few days of a new year, since there'd be no
 // prior-year data in a Jan-1-onward window to see it continuing. That same
-// rolling window also feeds the 12-week heatmap (dailyActivity), the
+// rolling window also feeds the 14-day activity strip (dailyActivity), the
 // this-week line, and the month-over-month deltas.
 //
 // hoursPace is a naive straight-line extrapolation of the YTD hours to a
@@ -441,7 +441,7 @@ router.get('/my-stats', requireAuth, async (req, res) => {
       deltas: computeMonthDeltas(recentRows, nowMs),
       records: computeRecords(yearRows),
       thisWeek: computeThisWeek(recentRows, nowMs),
-      dailyActivity: computeDailyActivity(recentRows, { now: nowMs, days: 84 }),
+      dailyActivity: computeDailyActivity(recentRows, { now: nowMs, days: 14 }),
       typeSplit
     });
   } catch (err) {
