@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
- v1.59.4.**
+ v1.60.0.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -40,6 +40,7 @@ gets versioned as it ships, not reconstructed later.
   unsubscribe, VAPID)
 - **v1.5.1** — fix: Download Queue/Download Issues poster-blink-class DOM
   churn on every poll
+- **v1.60.0** — Alerts now also relay to WhatsApp via OpenClaw
 
 ---
 
@@ -785,5 +786,10 @@ gets versioned as it ships, not reconstructed later.
 ## v1.59.4 — Top of the Month: title tiles open the same info modal
 
 - [x] Top Movie / TV Show / Anime — the #1 tile (a `.tm-hit` button wrapping poster + title + plays) and the silver/bronze runner-up names (`.medal-name.tm-link`, keyboard-activatable) now open the info modal + Played By, same as My Stats' Most Watched. Top Viewer is untouched (it's a person). `/top-of-month` movie/tv/anime entries gained `ratingKey` (`grandparent_rating_key || rating_key` — home-stats rows already resolve tv/anime to the show). Shared `openTitleInfo({ badge, period, haveThumb })` helper — Top of the Month passes its artwork straight through, no blank-poster flash; My Stats' handler refactored onto it too.
+
+## v1.60.0 — Alerts now also relay to WhatsApp via OpenClaw
+
+- [x] `lib/alerts.js`'s existing push-worthy-alert gate (`planPush` — same dedup/batching/silent-source rules as the web-push path, see v1.58.1) now also fires a WhatsApp message through OpenClaw's Gateway HTTP API (`POST /tools/invoke`, tool `message`/`send`), a second delivery channel alongside `pushNotify.notifyOwners()`, not a replacement. New `lib/openclawRelay.js`, wrapped in the same try/catch pattern as the existing push-notify call so a relay failure can never break alert reconciliation.
+- [x] Configured via three new env vars (`OPENCLAW_GATEWAY_URL`, `OPENCLAW_GATEWAY_TOKEN`, `OPENCLAW_ALERT_TARGET`) — all optional; the relay silently no-ops if any are unset, so this ships with no effect on any other Marquee deployment.
 
 ## Ideas
