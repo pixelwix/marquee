@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
- v1.60.0.**
+ v1.60.1.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -41,6 +41,7 @@ gets versioned as it ships, not reconstructed later.
 - **v1.5.1** — fix: Download Queue/Download Issues poster-blink-class DOM
   churn on every poll
 - **v1.60.0** — Alerts now also relay to WhatsApp via OpenClaw
+- **v1.60.1** — fix: admin season-approval modal missed every freshly-made TV request
 
 ---
 
@@ -786,6 +787,12 @@ gets versioned as it ships, not reconstructed later.
 ## v1.59.4 — Top of the Month: title tiles open the same info modal
 
 - [x] Top Movie / TV Show / Anime — the #1 tile (a `.tm-hit` button wrapping poster + title + plays) and the silver/bronze runner-up names (`.medal-name.tm-link`, keyboard-activatable) now open the info modal + Played By, same as My Stats' Most Watched. Top Viewer is untouched (it's a person). `/top-of-month` movie/tv/anime entries gained `ratingKey` (`grandparent_rating_key || rating_key` — home-stats rows already resolve tv/anime to the show). Shared `openTitleInfo({ badge, period, haveThumb })` helper — Top of the Month passes its artwork straight through, no blank-poster flash; My Stats' handler refactored onto it too.
+
+## v1.60.1 — Fix: admin season-approval modal missed every freshly-made TV request
+
+- [x] **Fix**: real bug, live — the "Approve Selected" season modal for a TV request said "No pending seasons found" for a request that Overseerr itself correctly showed as a real, actionable Pending Season 1 request. `routes/overseerr.js`'s `/tv/:id` handler derived per-season requested/available status only from Overseerr's `mediaInfo.seasons[]` — which stays an empty array for a freshly-made request until Overseerr/Sonarr actually starts processing it. The real season-level pending status for an unapproved request lives in `mediaInfo.requests[].seasons[]`, gated by the *request's* own status (1 = pending) — a separate status enum from the media-level one (2 = pending, 3 = processing, 4 = partially available, 5 = available) the code already checked.
+- [x] Extracted the derivation into new `lib/overseerrSeasons.js` (`mapTvSeasons`), now checking both sources — `mediaInfo.seasons[]` for a season already being tracked, or a matching entry in any `status === 1` (pending) request — so a brand-new request is caught immediately, not just once it progresses further. 7 new tests in `test/overseerrSeasons.test.js`, including the exact real scenario as a regression test.
+- [x] Verified live against the real request that surfaced this: `mapTvSeasons` now correctly returns `requested: true` for Season 1 of the actual affected show, using real data pulled straight from Overseerr's API — not just synthetic test fixtures. Full suite 280/280 passing (278 pre-existing + 7 new, 2 pre-existing skips unrelated to this).
 
 ## v1.60.0 — Alerts now also relay to WhatsApp via OpenClaw
 

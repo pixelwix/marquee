@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const express = require('express');
 const axios = require('axios');
+const { mapTvSeasons } = require('../lib/overseerrSeasons');
 const requireAuth = require('./requireAuth');
 const requireOwner = require('./requireOwner');
 const overseerrSession = require('../lib/overseerrSession');
@@ -152,10 +153,12 @@ router.get('/recommendations', requireAuth, recommendationsLimiter, async (req, 
 });
 
 // Season list for a TV show, so the request UI can offer specific seasons
-// instead of defaulting to the whole series. mediaInfo.seasons (present once
-// Overseerr knows about the title at all) tells us what's already
-// available/requested so those can be shown as already-handled rather than
-// offered again.
+// instead of defaulting to the whole series, and so the admin approval modal
+// can show which seasons are actually pending. Season-level status derivation
+// lives in lib/overseerrSeasons.js (mapTvSeasons) — see its own comment for a
+// real bug this used to have: mediaInfo.seasons stays empty for a freshly-made
+// request that hasn't been approved/processed yet, so a naive read of only
+// that field misses every brand-new pending request entirely.
 router.get('/tv/:id', requireAuth, async (req, res) => {
   // TMDB ids are always numeric — reject anything else before it reaches the URL.
   // Without this, a value like "..%2fsettings%2fmain" decodes to a literal "/" in
@@ -170,16 +173,7 @@ router.get('/tv/:id', requireAuth, async (req, res) => {
   }
   try {
     const { data } = await adminClient.get(`/tv/${req.params.id}`);
-    const seasons = (data.seasons || [])
-      .filter(s => s.seasonNumber > 0) // skip "Specials"
-      .map(s => {
-        const info = data.mediaInfo?.seasons?.find(ms => ms.seasonNumber === s.seasonNumber);
-        // Overseerr media status: 4 = partially available, 5 = available
-        const available = info?.status === 4 || info?.status === 5;
-        // 2 = pending, 3 = processing
-        const requested = info?.status === 2 || info?.status === 3;
-        return { seasonNumber: s.seasonNumber, name: s.name, episodeCount: s.episodeCount, available, requested };
-      });
+    const seasons = mapTvSeasons(data);
     res.json({ title: data.name, seasons });
   } catch (err) {
     console.error('overseerr tv details error', err.code || err.response?.status, err.message);
