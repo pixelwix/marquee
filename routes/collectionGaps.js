@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const requireAuth = require('./requireAuth');
 const requireOwner = require('./requireOwner');
-const { parseFranchiseCollections, computeAllGaps } = require('../lib/collectionGaps');
+const { parseFranchiseCollections, computeAllGaps, partitionByReleaseStatus } = require('../lib/collectionGaps');
 const router = express.Router();
 
 // Same bind-mount destination lib/notice.js already reads Kometa's config
@@ -59,7 +59,7 @@ async function computeGaps() {
 
   for (const gap of gaps) {
     if (gap.unknown) continue;
-    gap.missing = await Promise.all(gap.missingTmdbIds.map(async tmdbId => {
+    const enriched = await Promise.all(gap.missingTmdbIds.map(async tmdbId => {
       const inLibrary = libraryByTmdbId.get(tmdbId);
       if (inLibrary) {
         return {
@@ -71,7 +71,7 @@ async function computeGaps() {
           // try/catch, it silently leaves the panel stuck on "Loading..."
           // forever — a real bug this shipped with and user-reported.
           mediaType: 'movie', tmdbId, title: inLibrary.title, year: inLibrary.year != null ? String(inLibrary.year) : null,
-          poster: posterFrom(inLibrary.images), tracked: true
+          poster: posterFrom(inLibrary.images), tracked: true, status: inLibrary.status
         };
       }
       const found = await lookupUntracked(tmdbId);
@@ -81,12 +81,21 @@ async function computeGaps() {
         year: found?.year != null ? String(found.year) : null,
         poster: found ? posterFrom(found.images) : null,
         overview: found?.overview || null,
-        tracked: false
+        tracked: false, status: found?.status || null
       };
     }));
+    // See partitionByReleaseStatus — an unreleased member (an announced
+    // sequel with no real file to grab) is dropped from both the visible
+    // list and the "X/Y owned" denominator, so a collection whose only
+    // "gap" was an unreleased sequel now reads as complete rather than
+    // incomplete.
+    const { released, unreleased } = partitionByReleaseStatus(enriched);
+    gap.missing = released;
+    gap.totalCount -= unreleased.length;
+    gap.missing.forEach(item => { delete item.status; });
     delete gap.missingTmdbIds;
   }
-  return gaps;
+  return gaps.filter(gap => gap.unknown || gap.missing.length > 0);
 }
 
 async function getGaps(forceRefresh) {

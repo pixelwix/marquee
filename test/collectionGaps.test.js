@@ -114,3 +114,32 @@ test('computeAllGaps drops fully-owned collections and sorts biggest-gap-first, 
   const result = computeAllGaps(defs, radarrCollections, library);
   assert.deepEqual(result.map(r => r.name), ['Four Short', 'One Short', 'Cant Check']);
 });
+
+test('partitionByReleaseStatus separates a released movie from an announced-but-unreleased one (real case: "Untitled Alien: Romulus Sequel")', () => {
+  const { partitionByReleaseStatus } = require('../lib/collectionGaps');
+  const items = [
+    { tmdbId: 8077, title: 'Alien³', status: 'released' },
+    { tmdbId: 1434936, title: 'Untitled Alien: Romulus Sequel', status: 'announced' }
+  ];
+  const { released, unreleased } = partitionByReleaseStatus(items);
+  assert.deepEqual(released.map(i => i.title), ['Alien³']);
+  assert.deepEqual(unreleased.map(i => i.title), ['Untitled Alien: Romulus Sequel']);
+});
+
+test('partitionByReleaseStatus treats a null status (lookup failed) as unreleased rather than assuming it is fine to request', () => {
+  const { partitionByReleaseStatus } = require('../lib/collectionGaps');
+  const { released, unreleased } = partitionByReleaseStatus([{ tmdbId: 1, status: null }]);
+  assert.equal(released.length, 0);
+  assert.equal(unreleased.length, 1);
+});
+
+test('partitionByReleaseStatus treats inCinemas/tba the same as announced — only a real "released" status counts', () => {
+  const { partitionByReleaseStatus } = require('../lib/collectionGaps');
+  const { released, unreleased } = partitionByReleaseStatus([
+    { tmdbId: 1, status: 'tba' },
+    { tmdbId: 2, status: 'inCinemas' },
+    { tmdbId: 3, status: 'released' }
+  ]);
+  assert.equal(released.length, 1);
+  assert.equal(unreleased.length, 2);
+});

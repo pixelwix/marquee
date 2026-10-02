@@ -844,4 +844,11 @@ gets versioned as it ships, not reconstructed later.
 - [x] Fixed at both ends: `routes/collectionGaps.js` now always sends `year` as a string (matching Scene Releases' item shape, the one other place admin.js renders a release card), and the renderer wraps it in `String(...)` regardless.
 - [x] **Collapsible by default**: 27 collections times several missing movies each read as one very long scroll. Each collection header is now a toggle button (chevron rotates, `aria-expanded` kept in sync) collapsing its movie list; state is tracked client-side by collection name so a Refresh doesn't collapse whatever the owner already had open.
 
+## v1.63.2 - Fix: an unreleased sequel was counted as a missing collection movie
+
+- [x] **Real bug, user-caught**: "if a movie isn't released yet, how is it counting as incomplete?" — collections were being flagged incomplete over announced-but-unreleased future installments (Avatar 4/5, Shrek 5, Top Gun 3, Creed IV, Scream 8, an "Untitled Alien: Romulus Sequel" placeholder, Horizon: An American Saga's still-unreleased later chapters, etc.) that can never have a real file to grab.
+- [x] `lib/collectionGaps.js`: new pure `partitionByReleaseStatus(items)`, splitting the route's already-enriched missing-movie list (each carrying Radarr's own `status` field — 'released' vs 'tba'/'announced'/'inCinemas') into released vs not. `routes/collectionGaps.js` drops the unreleased ones from both the visible list and the "X/Y owned" denominator, and a collection whose only "gap" was an unreleased sequel is now dropped from the panel entirely (correctly reads as complete).
+- [x] **Verified live against the real library**: 27 flagged collections dropped to 16 once announced-but-unreleased installments stopped counting against completeness — 14 collections had their phantom gap removed entirely (several now fully complete), and a null/failed status lookup is treated as unreleased (safer default than assuming it is fine to request).
+- [x] 3 new tests (`test/collectionGaps.test.js`, 12 total): the real Alien: Romulus case, a null-status lookup failure, and inCinemas/tba both counting the same as announced.
+
 ## Ideas
