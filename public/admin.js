@@ -1836,6 +1836,12 @@ async function fetchCollectionGaps() {
   renderCollectionGaps();
 }
 
+// Collapsed by default — 27 collections × several missing movies each reads
+// as one very long scroll otherwise. Expansion state is kept here (by
+// collection name) rather than in the data itself, so a Refresh re-render
+// doesn't collapse whatever the owner already had open.
+const expandedGapCollections = new Set();
+
 function renderCollectionGaps() {
   const body = document.getElementById('collection-gaps-body');
   if (!collectionGapsData.length) {
@@ -1852,29 +1858,40 @@ function renderCollectionGaps() {
           </div>
         </div>`;
     }
+    const expanded = expandedGapCollections.has(c.name);
     const rows = c.missing.map((item, idx) => `
       <div class="release-card gap-movie-card" data-collection="${escapeHtml(c.name)}" data-idx="${idx}">
         <img class="release-poster" src="${item.poster ? escapeHtml(item.poster) : ''}" alt="${escapeHtml(item.title)} poster" loading="lazy" onerror="this.style.visibility='hidden'">
         <div class="release-body">
           <div class="release-top">
             <span class="release-clean-title">${escapeHtml(item.title)}</span>
-            <span class="release-year">${escapeHtml(item.year || '')}</span>
+            <span class="release-year">${escapeHtml(String(item.year || ''))}</span>
           </div>
         </div>
         <button class="pill-btn gap-action-btn"><span class="state-dot"></span><span class="btn-label">${item.tracked ? 'Search Radarr' : 'Request'}</span></button>
       </div>`).join('');
     return `
       <div class="gap-collection">
-        <div class="gap-collection-head">
+        <button class="gap-collection-head gap-collection-toggle" data-collection="${escapeHtml(c.name)}" aria-expanded="${expanded}">
+          <span class="gap-chevron">&#9656;</span>
           <span class="gap-collection-name">${escapeHtml(c.name)}</span>
           <span class="gap-collection-count">${c.ownedCount}/${c.totalCount} owned</span>
-        </div>
-        ${rows}
+        </button>
+        <div class="gap-movies${expanded ? '' : ' hidden'}">${rows}</div>
       </div>`;
   }).join('');
 }
 
 document.getElementById('collection-gaps-body').addEventListener('click', e => {
+  const toggle = e.target.closest('.gap-collection-toggle');
+  if (toggle) {
+    const name = toggle.dataset.collection;
+    if (expandedGapCollections.has(name)) expandedGapCollections.delete(name);
+    else expandedGapCollections.add(name);
+    toggle.setAttribute('aria-expanded', expandedGapCollections.has(name));
+    toggle.nextElementSibling.classList.toggle('hidden', !expandedGapCollections.has(name));
+    return;
+  }
   const card = e.target.closest('.gap-movie-card');
   if (!card || !e.target.closest('.gap-action-btn')) return;
   const collection = collectionGapsData.find(c => c.name === card.dataset.collection);

@@ -63,7 +63,14 @@ async function computeGaps() {
       const inLibrary = libraryByTmdbId.get(tmdbId);
       if (inLibrary) {
         return {
-          mediaType: 'movie', tmdbId, title: inLibrary.title, year: inLibrary.year,
+          // Radarr's own API returns year as a number — stringified here so
+          // this matches Scene Releases' item shape (year always a string),
+          // the one other place admin.js renders a release card. A raw
+          // number reaching escapeHtml() (which calls .replace() directly)
+          // throws, and since that throw happens outside fetchCollectionGaps'
+          // try/catch, it silently leaves the panel stuck on "Loading..."
+          // forever — a real bug this shipped with and user-reported.
+          mediaType: 'movie', tmdbId, title: inLibrary.title, year: inLibrary.year != null ? String(inLibrary.year) : null,
           poster: posterFrom(inLibrary.images), tracked: true
         };
       }
@@ -71,7 +78,7 @@ async function computeGaps() {
       return {
         mediaType: 'movie', tmdbId,
         title: found?.title || `TMDB #${tmdbId}`,
-        year: found?.year || null,
+        year: found?.year != null ? String(found.year) : null,
         poster: found ? posterFrom(found.images) : null,
         overview: found?.overview || null,
         tracked: false

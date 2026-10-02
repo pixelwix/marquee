@@ -838,4 +838,10 @@ gets versioned as it ships, not reconstructed later.
 - [x] **Verified live**: re-ran a real check against the actual feed and Radarr profiles — stored count dropped from 73 to 20, zero duplicate movies remaining, and the specific "Nirvanna The Band The Show The Movie" case (5 scene-group variants, including two 2160p UHD BluRay releases that don't match either real profile) collapsed correctly.
 - [x] 11 new tests (`test/sceneReleases.test.js`, 17 pre-existing + 11 new = 28): `buildAllowedQualitySet` against a fixture built from the owner's real two live profiles, the exact 2160p-BluRay-rejected-but-2160p-WEBDL-accepted case, the no-profiles-supplied (filter disabled) and no-resolution-detected edge cases, `dedupeByTitle`'s ranking/tie-break/guid-fallback behavior, and one true end-to-end `mergeIngested` test replicating the real screenshot scenario.
 
+## v1.63.1 - Fix: Collection Gaps panel stuck on "Loading..." forever + made it collapsible
+
+- [x] **Real bug, user-reported**: the panel never finished loading. Root cause: `escapeHtml()` calls `.replace()` directly, but Radarr's API returns `year` as a number, not a string - `escapeHtml(1973)` throws a TypeError. That throw happened synchronously inside `renderCollectionGaps()`'s `.map()`, outside `fetchCollectionGaps()`'s try/catch, so it silently aborted before `body.innerHTML` was ever reassigned - the server had already responded successfully (verified live: 4.3s, 27 collections, zero errors) but the page never showed it.
+- [x] Fixed at both ends: `routes/collectionGaps.js` now always sends `year` as a string (matching Scene Releases' item shape, the one other place admin.js renders a release card), and the renderer wraps it in `String(...)` regardless.
+- [x] **Collapsible by default**: 27 collections times several missing movies each read as one very long scroll. Each collection header is now a toggle button (chevron rotates, `aria-expanded` kept in sync) collapsing its movie list; state is tracked client-side by collection name so a Refresh doesn't collapse whatever the owner already had open.
+
 ## Ideas
