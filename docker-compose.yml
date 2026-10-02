@@ -1,7 +1,7 @@
 services:
   marquee:
     build: .
-    container_name: ${CONTAINER_NAME:-marquee}
+    container_name: skyn3t
     restart: unless-stopped
     # No env_file directive — server.js's own `require('dotenv').config()`
     # already reads /app/.env directly at startup (see the bind mount

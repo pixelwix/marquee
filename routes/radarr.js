@@ -301,6 +301,7 @@ router.get('/lookup', requireAuth, requireOwner, async (req, res) => {
       title: m.title,
       year: m.year,
       poster: m.images?.find(i => i.coverType === 'poster')?.remoteUrl || null,
+      overview: m.overview || null,
       tracked: !!m.id
     }));
     res.json(results);

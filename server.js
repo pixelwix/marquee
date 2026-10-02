@@ -139,6 +139,7 @@ require('./lib/nowPlaying').start();
 require('./lib/issueWatchdog').start();
 require('./lib/recapReminder').start();
 require('./lib/dbBackup').start();
+require('./lib/sceneReleases').start();
 require('./lib/mediaCache').start();
 require('./lib/diskSpaceHistory').start();
 require('./lib/streamOrigins').start();
@@ -165,6 +166,8 @@ app.use('/api/uptime-kuma', require('./routes/uptimeKuma'));
 app.use('/api/push', require('./routes/push'));
 app.use('/api/recap', require('./routes/recap'));
 app.use('/api/invite', require('./routes/invite'));
+app.use('/api/scene-releases', require('./routes/sceneReleases'));
+app.use('/api/collection-gaps', require('./routes/collectionGaps'));
 // Deliberately mounted outside /api — sw.js's fetch handler only skips
 // caching requests under /api/, so keeping this bare lets the existing
 // service worker start caching these client-side too, for free.

@@ -30,6 +30,12 @@
   }
   loadWanted();
   setInterval(loadWanted, 60000);
+  fetchSceneReleases();
+  setInterval(fetchSceneReleases, 60000);
+  // No setInterval here — results are cached server-side for 24h (collection
+  // membership/library state don't change minute to minute) and the panel's
+  // own Refresh button covers "I just added something, check again now".
+  fetchCollectionGaps();
   loadPendingRequests();
   setInterval(loadPendingRequests, 30000);
   loadAdminIssues();
@@ -1685,12 +1691,216 @@ document.getElementById('close-file-info-btn').addEventListener('click', () => {
   document.getElementById('file-info-modal').classList.add('hidden');
 });
 
+// ---------- Scene Releases (watches scnsrc.me/category/films — see lib/sceneReleases.js) ----------
+const SCENE_BADGE_CLASS = { res: 'badge-res', src: 'badge-src', audio: 'badge-audio', hdr: 'badge-hdr', video: 'badge-src' };
+let sceneReleaseItems = [];
+
+async function fetchSceneReleases() {
+  const body = document.getElementById('scene-releases-body');
+  try {
+    sceneReleaseItems = await api('/api/scene-releases');
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not load scene releases.</p>';
+    return;
+  }
+  renderSceneReleases();
+}
+
+function renderSceneReleases() {
+  const body = document.getElementById('scene-releases-body');
+  if (!sceneReleaseItems.length) {
+    body.innerHTML = '<p class="empty-state">No new releases since last check.</p>';
+    return;
+  }
+  body.innerHTML = sceneReleaseItems.map((item, idx) => {
+    const badges = (item.badges || [])
+      .map(b => `<span class="badge ${SCENE_BADGE_CLASS[b.type] || 'badge-src'}">${escapeHtml(b.text)}</span>`)
+      .join('');
+    return `
+      <div class="release-card" data-idx="${idx}">
+        <img class="release-poster" src="${item.poster ? escapeHtml(item.poster) : ''}" alt="${escapeHtml(item.cleanTitle)} poster" loading="lazy" onerror="this.style.visibility='hidden'">
+        <div class="release-body">
+          <div class="release-top">
+            <span class="release-clean-title">${escapeHtml(item.cleanTitle)}</span>
+            <span class="release-year">${escapeHtml(item.year || '')}</span>
+          </div>
+          <div class="release-raw" title="${escapeHtml(item.raw)}">${escapeHtml(item.raw)}</div>
+          <div class="release-badges">${badges}</div>
+        </div>
+        <div class="release-time">${timeAgo(new Date(item.pubDate).getTime())}</div>
+        <button class="pill-btn scene-search-btn"><span class="state-dot"></span><span class="btn-label">${item.tracked ? 'Search Radarr' : 'Request'}</span></button>
+      </div>`;
+  }).join('');
+}
+
+document.getElementById('scene-releases-body').addEventListener('click', e => {
+  const card = e.target.closest('.release-card');
+  if (!card) return;
+  const item = sceneReleaseItems[Number(card.dataset.idx)];
+  if (!item) return;
+
+  if (e.target.closest('.scene-search-btn')) {
+    searchRadarrForSceneRelease(e.target.closest('.scene-search-btn'), item);
+  } else if (e.target.closest('.release-poster')) {
+    openSynopsisModal(item);
+  }
+});
+
+// Resolves a parsed scene-release title against Radarr/TMDB once and caches
+// the match on the item itself — both the poster-tap synopsis and the
+// "Search Radarr" button need the same lookup, and a brand-new release is
+// often tapped for the synopsis right before searching for it.
+async function resolveSceneReleaseOnRadarr(item) {
+  if (item._lookup !== undefined) return item._lookup;
+  const term = item.year ? `${item.cleanTitle} ${item.year}` : item.cleanTitle;
+  const results = await api(`/api/radarr/lookup?term=${encodeURIComponent(term)}`);
+  item._lookup = results[0] || null;
+  return item._lookup;
+}
+
+async function searchRadarrForSceneRelease(btn, item) {
+  const label = btn.querySelector('.btn-label');
+  const original = label.textContent;
+  btn.disabled = true;
+  label.textContent = 'Looking up…';
+  try {
+    const match = await resolveSceneReleaseOnRadarr(item);
+    if (!match) {
+      label.textContent = 'Not found on Radarr';
+      setTimeout(() => { label.textContent = original; btn.disabled = false; }, 2500);
+      return;
+    }
+    label.textContent = original;
+    btn.disabled = false;
+    if (!match.tracked) { openAddMediaModal(match); return; }
+    openReleaseModal(match);
+  } catch (e) {
+    label.textContent = 'Search failed';
+    setTimeout(() => { label.textContent = original; btn.disabled = false; }, 2500);
+  }
+}
+
+async function openSynopsisModal(item) {
+  const posterEl = document.getElementById('synopsis-poster');
+  posterEl.style.visibility = '';
+  posterEl.src = item.poster || '';
+  document.getElementById('synopsis-title').textContent = item.cleanTitle;
+  document.getElementById('synopsis-subtitle').textContent = item.year || '';
+  document.getElementById('synopsis-overview').textContent = 'Loading synopsis…';
+  document.getElementById('synopsis-modal').classList.remove('hidden');
+
+  const searchBtn = document.getElementById('synopsis-search-btn');
+  searchBtn.querySelector('.btn-label').textContent = item.tracked ? 'Search Radarr' : 'Request';
+  searchBtn.disabled = false;
+  searchBtn.onclick = () => searchRadarrForSceneRelease(searchBtn, item);
+
+  try {
+    const match = await resolveSceneReleaseOnRadarr(item);
+    if (match) {
+      // Radarr's own TMDB match is the authoritative poster/overview once we
+      // have one — prefer it over the feed's own (sometimes lower-quality)
+      // poster image.
+      if (match.poster) posterEl.src = match.poster;
+      document.getElementById('synopsis-overview').textContent = match.overview || 'No synopsis available.';
+    } else {
+      document.getElementById('synopsis-overview').textContent = 'Could not find this movie on Radarr/TMDB.';
+    }
+  } catch (e) {
+    document.getElementById('synopsis-overview').textContent = 'Could not load synopsis.';
+  }
+}
+
+document.getElementById('close-synopsis-btn').addEventListener('click', () => {
+  document.getElementById('synopsis-modal').classList.add('hidden');
+});
+
 document.getElementById('library-browse-back').addEventListener('click', () => {
   openLibraryBrowseSeasons(libraryBrowseContext);
 });
 
 document.getElementById('close-library-browse-btn').addEventListener('click', () => {
   document.getElementById('library-browse-modal').classList.add('hidden');
+});
+
+// ---------- Collection Gaps (franchises.yml vs Radarr — see lib/collectionGaps.js) ----------
+let collectionGapsData = [];
+
+async function fetchCollectionGaps() {
+  const body = document.getElementById('collection-gaps-body');
+  try {
+    collectionGapsData = await api('/api/collection-gaps');
+  } catch (e) {
+    body.innerHTML = '<p class="empty-state">Could not check collections.</p>';
+    return;
+  }
+  renderCollectionGaps();
+}
+
+function renderCollectionGaps() {
+  const body = document.getElementById('collection-gaps-body');
+  if (!collectionGapsData.length) {
+    body.innerHTML = '<p class="empty-state">Every collection is complete.</p>';
+    return;
+  }
+  body.innerHTML = collectionGapsData.map(c => {
+    if (c.unknown) {
+      return `
+        <div class="gap-collection">
+          <div class="gap-collection-head">
+            <span class="gap-collection-name">${escapeHtml(c.name)}</span>
+            <span class="gap-collection-count">can't check — no movies from it tracked yet</span>
+          </div>
+        </div>`;
+    }
+    const rows = c.missing.map((item, idx) => `
+      <div class="release-card gap-movie-card" data-collection="${escapeHtml(c.name)}" data-idx="${idx}">
+        <img class="release-poster" src="${item.poster ? escapeHtml(item.poster) : ''}" alt="${escapeHtml(item.title)} poster" loading="lazy" onerror="this.style.visibility='hidden'">
+        <div class="release-body">
+          <div class="release-top">
+            <span class="release-clean-title">${escapeHtml(item.title)}</span>
+            <span class="release-year">${escapeHtml(item.year || '')}</span>
+          </div>
+        </div>
+        <button class="pill-btn gap-action-btn"><span class="state-dot"></span><span class="btn-label">${item.tracked ? 'Search Radarr' : 'Request'}</span></button>
+      </div>`).join('');
+    return `
+      <div class="gap-collection">
+        <div class="gap-collection-head">
+          <span class="gap-collection-name">${escapeHtml(c.name)}</span>
+          <span class="gap-collection-count">${c.ownedCount}/${c.totalCount} owned</span>
+        </div>
+        ${rows}
+      </div>`;
+  }).join('');
+}
+
+document.getElementById('collection-gaps-body').addEventListener('click', e => {
+  const card = e.target.closest('.gap-movie-card');
+  if (!card || !e.target.closest('.gap-action-btn')) return;
+  const collection = collectionGapsData.find(c => c.name === card.dataset.collection);
+  const item = collection?.missing?.[Number(card.dataset.idx)];
+  if (!item) return;
+  if (item.tracked) {
+    openReleaseModal(item);
+  } else {
+    openAddMediaModal(item);
+  }
+});
+
+document.getElementById('collection-gaps-refresh-btn').addEventListener('click', async e => {
+  const btn = e.currentTarget;
+  const label = btn.querySelector('.btn-label');
+  btn.disabled = true;
+  label.textContent = 'Checking…';
+  try {
+    collectionGapsData = await api('/api/collection-gaps/refresh', { method: 'POST' });
+    renderCollectionGaps();
+  } catch (err) {
+    document.getElementById('collection-gaps-body').innerHTML = '<p class="empty-state">Could not check collections.</p>';
+  } finally {
+    btn.disabled = false;
+    label.textContent = 'Refresh';
+  }
 });
 
 // ---------- Stack: Disk Space ----------

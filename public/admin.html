@@ -121,6 +121,21 @@
       <div id="indexers-body"><p class="empty-state">Loading…</p></div>
     </section>
 
+    <section class="card span4" id="panel-scene-releases">
+      <div class="card-label"><span class="chan">CH.12</span> Scene Releases</div>
+      <p class="panel-note">Watching <a href="https://www.scnsrc.me/category/films/" target="_blank" rel="noopener">scnsrc.me/category/films</a> — tap a poster for the synopsis, or search Radarr straight from a release.</p>
+      <div id="scene-releases-body"><p class="empty-state">Loading…</p></div>
+    </section>
+
+    <section class="card span4" id="panel-collection-gaps">
+      <div class="card-label">
+        <span class="chan">CH.13</span> Collection Gaps
+        <button id="collection-gaps-refresh-btn" class="pill-btn" style="margin-left:auto;"><span class="btn-label">Refresh</span></button>
+      </div>
+      <p class="panel-note">Kometa collections (<code>franchises.yml</code>) missing one or more movies, cross-checked live against Radarr.</p>
+      <div id="collection-gaps-body"><p class="empty-state">Loading…</p></div>
+    </section>
+
   </div>
   <div class="app-footer">{{SITE_NAME}} v{{APP_VERSION}}<span id="plex-uptime-footer"></span> &middot; &copy; {{COPYRIGHT_YEAR}}</div>
 </div>
@@ -165,6 +180,26 @@
         <div class="pending-actions">
           <button id="file-info-search-btn" class="search-release-btn pill-btn">
             <span class="state-dot"></span><span class="btn-label">Search for release</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCENE RELEASE SYNOPSIS MODAL (poster tap on the Scene Releases panel) -->
+<div id="synopsis-modal" class="modal hidden">
+  <div class="modal-card info-card">
+    <button id="close-synopsis-btn" class="pill-btn pill-btn-icon info-close">&#10005;</button>
+    <div class="info-layout">
+      <img id="synopsis-poster" class="info-poster" src="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div class="info-body">
+        <h3 id="synopsis-title"></h3>
+        <p id="synopsis-subtitle" class="info-meta"></p>
+        <p id="synopsis-overview" class="info-overview"></p>
+        <div class="pending-actions">
+          <button id="synopsis-search-btn" class="search-release-btn pill-btn">
+            <span class="state-dot"></span><span class="btn-label">Search Radarr</span>
           </button>
         </div>
       </div>
