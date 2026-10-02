@@ -167,3 +167,129 @@ test('mergeIngested purges CAM/TELESYNC items already sitting in storage from be
     assert.equal(merged.some((m) => m.guid === 'cam1'), false);
   });
 });
+
+// Real shape from GET /api/v3/qualityprofile against the owner's actual two
+// profiles (2026-10-02) — "1080p Balanced" (id 7) allows SDTV through
+// Bluray-1080p at 720p/1080p; "2160p Streaming" (id 8) allows ONLY
+// WEBDL-2160p, not Bluray/UHD/Remux at 2160p.
+const REAL_PROFILES_FIXTURE = [
+  {
+    id: 7, name: '1080p Balanced',
+    items: [
+      { quality: { resolution: 480, source: 'tv' }, allowed: true },
+      { name: 'WEB 720p-1080p', allowed: true, items: [
+        { quality: { resolution: 720, source: 'webdl' }, allowed: true },
+        { quality: { resolution: 1080, source: 'webdl' }, allowed: true },
+      ] },
+      { quality: { resolution: 720, source: 'tv' }, allowed: true },
+      { quality: { resolution: 1080, source: 'tv' }, allowed: true },
+      { quality: { resolution: 720, source: 'webrip' }, allowed: true },
+      { quality: { resolution: 720, source: 'bluray' }, allowed: true },
+      { quality: { resolution: 1080, source: 'bluray' }, allowed: true },
+      { quality: { resolution: 2160, source: 'bluray' }, allowed: false },
+    ],
+  },
+  {
+    id: 8, name: '2160p Streaming',
+    items: [
+      { quality: { resolution: 2160, source: 'webdl' }, allowed: true },
+      { quality: { resolution: 2160, source: 'bluray' }, allowed: false },
+    ],
+  },
+];
+
+test('buildAllowedQualitySet collects every allowed resolution+source across all profiles, from both plain and grouped items', () => {
+  const { buildAllowedQualitySet } = require('../lib/sceneReleases');
+  const set = buildAllowedQualitySet(REAL_PROFILES_FIXTURE);
+  assert.equal(set.has('1080-bluray'), true);
+  assert.equal(set.has('720-webdl'), true); // from inside the nested group
+  assert.equal(set.has('2160-webdl'), true);
+  assert.equal(set.has('2160-bluray'), false); // explicitly not allowed by either profile
+});
+
+test('matchesAllowedQuality rejects 2160p BluRay/UHD even though 2160p itself is allowed under a different source (the real bug this feature fixes)', () => {
+  const { buildAllowedQualitySet, matchesAllowedQuality } = require('../lib/sceneReleases');
+  const set = buildAllowedQualitySet(REAL_PROFILES_FIXTURE);
+  assert.equal(matchesAllowedQuality('2160p', 'BluRay', set), false);
+  assert.equal(matchesAllowedQuality('2160p', 'WEB-DL', set), true);
+});
+
+test('matchesAllowedQuality accepts 1080p and 720p BluRay (both allowed under "1080p Balanced")', () => {
+  const { buildAllowedQualitySet, matchesAllowedQuality } = require('../lib/sceneReleases');
+  const set = buildAllowedQualitySet(REAL_PROFILES_FIXTURE);
+  assert.equal(matchesAllowedQuality('1080p', 'BluRay', set), true);
+  assert.equal(matchesAllowedQuality('720p', 'BluRay', set), true);
+});
+
+test('matchesAllowedQuality falls back to resolution-only matching when the format tag was not recognized, rather than hiding the release', () => {
+  const { buildAllowedQualitySet, matchesAllowedQuality } = require('../lib/sceneReleases');
+  const set = buildAllowedQualitySet(REAL_PROFILES_FIXTURE);
+  assert.equal(matchesAllowedQuality('1080p', null, set), true); // 1080p is allowed under some source
+});
+
+test('matchesAllowedQuality returns true unconditionally when no profile set is supplied (filter disabled, e.g. a Radarr outage)', () => {
+  const { matchesAllowedQuality } = require('../lib/sceneReleases');
+  assert.equal(matchesAllowedQuality('2160p', 'BluRay', null), true);
+});
+
+test('matchesAllowedQuality rejects an item with no detected resolution once a real filter is active', () => {
+  const { buildAllowedQualitySet, matchesAllowedQuality } = require('../lib/sceneReleases');
+  const set = buildAllowedQualitySet(REAL_PROFILES_FIXTURE);
+  assert.equal(matchesAllowedQuality(null, 'BluRay', set), false);
+});
+
+test('dedupeByTitle keeps only the highest-resolution release of the real "Nirvanna" case (four posted variants, one kept)', () => {
+  const { dedupeByTitle } = require('../lib/sceneReleases');
+  const items = [
+    { guid: '1', cleanTitle: 'Nirvanna The Band The Show The Movie', year: '2025', res: '1080p', format: 'BluRay', pubDate: '2026-09-29T00:00:00Z' },
+    { guid: '2', cleanTitle: 'Nirvanna the Band the Show the Movie', year: '2025', res: '1080p', format: 'BluRay', pubDate: '2026-09-29T01:00:00Z' },
+    { guid: '3', cleanTitle: 'Nirvanna the Band the Show the Movie', year: '2025', res: '720p', format: 'BluRay', pubDate: '2026-09-29T02:00:00Z' },
+  ];
+  const result = dedupeByTitle(items);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].guid, '2'); // same 1080p score as guid 1, but posted later
+});
+
+test('dedupeByTitle treats a case/spacing difference in cleanTitle as the same movie (normalizeTitle-based key)', () => {
+  const { dedupeByTitle } = require('../lib/sceneReleases');
+  const items = [
+    { guid: '1', cleanTitle: "Virginia Woolf's Night and Day", year: '2026', res: '1080p', format: 'WEB-DL', pubDate: '2026-09-29T00:00:00Z' },
+    { guid: '2', cleanTitle: 'Virginia Woolfs Night and Day', year: '2026', res: '1080p', format: 'WEB-DL', pubDate: '2026-09-29T01:00:00Z' },
+  ];
+  assert.equal(dedupeByTitle(items).length, 1);
+});
+
+test('dedupeByTitle never collapses two different movies that happen to share a year', () => {
+  const { dedupeByTitle } = require('../lib/sceneReleases');
+  const items = [
+    { guid: '1', cleanTitle: 'Movie One', year: '2026', res: '1080p', format: 'BluRay', pubDate: new Date().toISOString() },
+    { guid: '2', cleanTitle: 'Movie Two', year: '2026', res: '1080p', format: 'BluRay', pubDate: new Date().toISOString() },
+  ];
+  assert.equal(dedupeByTitle(items).length, 2);
+});
+
+test('dedupeByTitle falls back to guid (never collapses) for items with no resolved cleanTitle, matching mergeIngested\'s own pre-parseSceneTitle test fixtures', () => {
+  const { dedupeByTitle } = require('../lib/sceneReleases');
+  const items = [
+    { guid: 'a', pubDate: new Date().toISOString() },
+    { guid: 'b', pubDate: new Date().toISOString() },
+  ];
+  assert.equal(dedupeByTitle(items).length, 2);
+});
+
+test('mergeIngested end to end: the real screenshot scenario -- two 2160p BluRay releases dropped entirely, three 1080p/720p BluRay releases of the same movie collapsed to one', () => {
+  withTempDataDir((lib) => {
+    const allowed = lib.buildAllowedQualitySet(REAL_PROFILES_FIXTURE);
+    const now = new Date().toISOString();
+    const incoming = [
+      { guid: '1', raw: 'Nirvanna The Band The Show The Movie 2025 2160p UHD BluRay X265-SNOW', cleanTitle: 'Nirvanna The Band The Show The Movie', year: '2025', res: '2160p', format: 'BluRay', pubDate: now },
+      { guid: '2', raw: 'Nirvanna The Band The Show The Movie 2025 2160p UHD BluRay H265-COCAIN', cleanTitle: 'Nirvanna The Band The Show The Movie', year: '2025', res: '2160p', format: 'BluRay', pubDate: now },
+      { guid: '3', raw: 'Nirvanna the Band the Show the Movie 2025 1080p BluRay H264-PRiSTiNE', cleanTitle: 'Nirvanna the Band the Show the Movie', year: '2025', res: '1080p', format: 'BluRay', pubDate: now },
+      { guid: '4', raw: 'Nirvanna the Band the Show the Movie 2025 1080p BluRay x264-SEGMENT', cleanTitle: 'Nirvanna the Band the Show the Movie', year: '2025', res: '1080p', format: 'BluRay', pubDate: now },
+      { guid: '5', raw: 'Nirvanna the Band the Show the Movie 2025 720p BluRay x264-SEGMENT', cleanTitle: 'Nirvanna the Band the Show the Movie', year: '2025', res: '720p', format: 'BluRay', pubDate: now },
+    ];
+    const merged = lib.mergeIngested(incoming, allowed);
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0].res, '1080p'); // best remaining after the 2160p BluRay pair is excluded
+  });
+});
