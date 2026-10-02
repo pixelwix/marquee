@@ -43,6 +43,16 @@ collections:
   assert.deepEqual(defs.map(d => d.name), ['Alien Collection']);
 });
 
+test('parseFranchiseCollections overrides "James Bond Collection" to just the Daniel Craig films, ignoring franchises.yml\'s own tmdb_collection (the full 27-film TMDB collection) — real user request 2026-10-02, only affects this gap check, not Kometa\'s actual Plex collection', () => {
+  const yamlText = `
+collections:
+  James Bond Collection:
+    tmdb_collection: 645
+`;
+  const defs = parseFranchiseCollections(yamlText);
+  assert.deepEqual(defs, [{ name: 'James Bond Collection', tmdbCollectionId: null, tmdbMovieIds: [36557, 10764, 37724, 206647, 370172] }]);
+});
+
 test('matchCollectionGaps finds the real one-film gap (Alien³ missing from an otherwise-complete Alien Collection)', () => {
   const def = { name: 'Alien Collection', tmdbCollectionId: 8091, tmdbMovieIds: null };
   const radarrCollections = new Map([[8091, {

@@ -851,4 +851,12 @@ gets versioned as it ships, not reconstructed later.
 - [x] **Verified live against the real library**: 27 flagged collections dropped to 16 once announced-but-unreleased installments stopped counting against completeness — 14 collections had their phantom gap removed entirely (several now fully complete), and a null/failed status lookup is treated as unreleased (safer default than assuming it is fine to request).
 - [x] 3 new tests (`test/collectionGaps.test.js`, 12 total): the real Alien: Romulus case, a null-status lookup failure, and inCinemas/tba both counting the same as announced.
 
+## v1.63.3 - James Bond Collection scoped to Daniel Craig + future films only
+
+- [x] Owner request: "i only care about the daniel craig collection, and future james bond movies" for completeness-checking — TMDB's own "James Bond Collection" is every film since 1962 (Connery through Brosnan), which was flagging 22 pre-Craig films as "missing" the owner has no interest in ever acquiring.
+- [x] New `COLLECTION_TMDB_MOVIE_OVERRIDES` map in `lib/collectionGaps.js` — narrows a named collection's membership for this gap check ONLY. `franchises.yml` itself, and so the actual Plex collection Kometa builds from it, is completely untouched (still shows all 27 Bond films grouped together in Plex, exactly as before) — this only changes what counts as missing in Marquee's own panel.
+- [x] James Bond → hand-maintained list of the 5 Craig-era tmdbIds (Casino Royale, Quantum of Solace, Skyfall, Spectre, No Time to Die). No Craig era sub-collection exists on TMDB to reference instead. A future Bond film needs its tmdbId added here once announced with its own TMDB entry — the existing unreleased-movie filter (v1.63.2) already keeps an announced-but-unreleased one from counting as a gap before then.
+- [x] **Verified live**: James Bond Collection now resolves to 5/5 owned and is correctly dropped from the gaps list entirely (was 5/27 before).
+- [x] 1 new test (`test/collectionGaps.test.js`, 13 total): the override takes effect even though the YAML entry still has its own `tmdb_collection: 645`.
+
 ## Ideas
