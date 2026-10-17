@@ -15,6 +15,7 @@
 
   initNotifyToggle();
   startPlexUptime();
+  initVersionFooter(true);
 
   // System Status and Recent Sign-ins now live under Settings tabs (see
   // below) — loaded lazily on first view rather than eagerly here.
@@ -1313,7 +1314,15 @@ async function runAutoFix(row) {
       return;
     }
     label.textContent = 'Grabbing…';
+    const grabbedAt = Date.now();
     await api(grabUrl, { method: 'POST', body: JSON.stringify({ guid: best.guid, indexerId: best.indexerId }) });
+    // The server keeps watching (and resolves the report) even if this page
+    // closes or the grab outlasts trackAutoFix's 5-minute live view.
+    const num = (v) => (v ? Number(v) : null);
+    api(`/api/overseerr/issues/${ctx.id}/track`, { method: 'POST', body: JSON.stringify({
+      mediaType: ctx.mediaType, tmdbId: num(ctx.tmdbId), tvdbId: num(ctx.tvdbId),
+      season: num(ctx.season), episode: num(ctx.episode), title: ctx.title, startedAt: grabbedAt
+    }) }).catch(() => {});
     trackAutoFix(row, ctx, isMovie, best.title);
   } catch (err) {
     row.dataset.autofixing = 'false';
@@ -1361,7 +1370,7 @@ function trackAutoFix(row, ctx, isMovie, releaseTitle) {
       // Transient network hiccup — just try again next tick.
     }
     if (Date.now() - startedAt > GRAB_TRACK_TIMEOUT_MS) {
-      row.querySelector('.track-meta').textContent = 'Taking a while — check Import Issues later.';
+      row.querySelector('.track-meta').textContent = 'Taking a while — Marquee keeps watching and resolves this when it lands.';
       return;
     }
     setTimeout(poll, GRAB_TRACK_INTERVAL_MS);
@@ -2288,6 +2297,7 @@ function createImportIssueRow(r) {
     <div class="result-info">
       <div class="result-title"></div>
       <div class="issue-message"></div>
+      <button class="msg-more hidden" type="button" aria-expanded="false">Show more</button>
     </div>
     <div class="pending-actions">
       <button class="force-import-btn pill-btn hidden"><span class="state-dot"></span><span class="btn-label">Force Import</span></button>
@@ -2308,8 +2318,15 @@ function updateImportIssueRow(row, r) {
   row.dataset.downloadId = r.downloadId || '';
   row.dataset.title = r.title || 'Unknown title';
   row.querySelector('.result-title').textContent = r.title || 'Unknown title';
-  row.querySelector('.issue-message').textContent = r.reason;
+  const msg = row.querySelector('.issue-message');
+  if (msg.textContent !== r.reason) msg.textContent = r.reason;   // keep a row the owner expanded expanded across refreshes
   row.querySelector('.force-import-btn').classList.toggle('hidden', !r.downloadId);
+  // Only offer Show more when the 3-line clamp actually hides something (measured after layout).
+  requestAnimationFrame(() => {
+    const more = row.querySelector('.msg-more');
+    const clipped = msg.scrollHeight > msg.clientHeight + 1;
+    more.classList.toggle('hidden', !clipped && !msg.classList.contains('expanded'));
+  });
 }
 
 async function loadImportIssues() {
@@ -2330,6 +2347,14 @@ async function loadImportIssues() {
 }
 
 document.getElementById('import-issues-body').addEventListener('click', async e => {
+  const moreBtn = e.target.closest('.msg-more');
+  if (moreBtn) {
+    const msg = moreBtn.closest('.result-info').querySelector('.issue-message');
+    const open = msg.classList.toggle('expanded');
+    moreBtn.textContent = open ? 'Show less' : 'Show more';
+    moreBtn.setAttribute('aria-expanded', String(open));
+    return;
+  }
   const importBtn = e.target.closest('.force-import-btn');
   if (importBtn) {
     const row = importBtn.closest('.pending-row');
@@ -2472,7 +2497,8 @@ const settingsTabs = [
   { btn: document.getElementById('tab-settings-newsletter-btn'), pane: document.getElementById('settings-newsletter-tab') },
   { btn: document.getElementById('tab-settings-invite-btn'), pane: document.getElementById('settings-invite-tab') },
   { btn: document.getElementById('tab-settings-audit-btn'), pane: document.getElementById('settings-audit-tab') },
-  { btn: document.getElementById('tab-settings-privacy-btn'), pane: document.getElementById('settings-privacy-tab') }
+  { btn: document.getElementById('tab-settings-privacy-btn'), pane: document.getElementById('settings-privacy-tab') },
+  { btn: document.getElementById('tab-settings-scripts-btn'), pane: document.getElementById('settings-scripts-tab') }
 ];
 function activateSettingsTab(btn) {
   for (const t of settingsTabs) {
@@ -2517,6 +2543,200 @@ settingsTabs[6].btn.addEventListener('click', () => {
 settingsTabs[7].btn.addEventListener('click', () => {
   activateSettingsTab(settingsTabs[7].btn);
   if (!privacySettingsLoaded) { privacySettingsLoaded = true; loadPrivacySettings(); }
+});
+let scriptsLoaded = false;
+settingsTabs[8].btn.addEventListener('click', () => {
+  activateSettingsTab(settingsTabs[8].btn);
+  if (!scriptsLoaded) { scriptsLoaded = true; loadScripts(); }
+});
+
+// ---- Settings > Scheduled Scripts (cron jobs in /mnt/docker/scripts on arr-stack, via scripts-agent) ----
+let scriptJobs = [];
+let scriptPollTimer = null;
+
+function describeCron(expr) {
+  // Mirrors lib/scriptsAgent.describeSchedule for the live preview in the edit popup.
+  const p = String(expr || '').trim().split(/\s+/);
+  if (p.length !== 5) return null;
+  const [min, hour, dom, mon, dow] = p, all = dom === '*' && mon === '*' && dow === '*', num = x => /^\d+$/.test(x);
+  const clock = (h, m) => `${Number(h) % 12 === 0 ? 12 : Number(h) % 12}:${String(m).padStart(2, '0')} ${Number(h) < 12 ? 'AM' : 'PM'}`;
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  let m;
+  if (all && min === '*' && hour === '*') return 'Every minute';
+  if (all && hour === '*' && (m = min.match(/^\*\/(\d+)$/))) return `Every ${m[1]} minutes`;
+  if (all && hour === '*' && num(min)) return `Hourly at :${min.padStart(2, '0')}`;
+  if (all && num(min) && (m = hour.match(/^\*\/(\d+)$/))) return `Every ${m[1]} hours at :${min.padStart(2, '0')}`;
+  if (all && num(min) && num(hour)) return `Daily at ${clock(hour, min)}`;
+  if (dom === '*' && mon === '*' && num(dow) && num(min) && num(hour) && Number(dow) <= 7) return `Weekly on ${days[Number(dow)]} at ${clock(hour, min)}`;
+  return null;
+}
+function shortTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso), today = new Date();
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return d.toDateString() === today.toDateString() ? time : `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${time}`;
+}
+function scriptBadge(j) {
+  if (j.running) return '<span class="service-badge online">Running</span>';
+  if (j.status === 'late') return '<span class="service-badge error" title="Hasn\'t run when expected">Late</span>';
+  if (j.logHasErrors) return '<span class="service-badge error" title="Recent log lines mention an error">Check log</span>';
+  if (j.status === 'never' || j.status === 'unknown') return '<span class="service-badge unconfigured">No runs yet</span>';
+  return '<span class="service-badge online">OK</span>';
+}
+
+async function loadScripts() {
+  const grid = document.getElementById('scripts-grid');
+  try {
+    const data = await api('/api/scripts');
+    scriptJobs = data.jobs || [];
+    renderScripts();
+  } catch (e) {
+    grid.innerHTML = `<p class="empty-state">${escapeHtml(e.message || 'Could not load scheduled scripts.')}</p>`;
+  }
+}
+
+function renderScripts() {
+  const grid = document.getElementById('scripts-grid');
+  if (!scriptJobs.length) { grid.innerHTML = '<p class="empty-state">No scheduled scripts found.</p>'; return; }
+  grid.innerHTML = scriptJobs.map(j => {
+    const last = j.lastRun
+      ? `${timeAgo(j.lastRun)}${j.lastRunSource === 'log' ? ' <span class="script-muted" title="From the log file\'s last write; cron\'s own record doesn\'t go back that far">(log)</span>' : ''}`
+      : 'never';
+    return `
+      <div class="service-card script-card">
+        <div class="service-card-head">
+          <span class="service-card-name" title="${escapeHtml(j.script)}">${escapeHtml(j.name)}</span>
+          ${scriptBadge(j)}
+        </div>
+        <div class="service-card-meta">${escapeHtml(j.scheduleText || j.schedule)} &middot; <span class="script-mono">${escapeHtml(j.schedule)}</span></div>
+        <p class="script-desc" title="${escapeHtml(j.description || '')}">${escapeHtml(j.description || 'No description yet.')}</p>
+        <div class="script-times">
+          <span>Last: ${last}</span>
+          <span>Next: ${escapeHtml(shortTime(j.nextRun))}</span>
+        </div>
+        <div class="service-card-foot">
+          <button class="pill-btn" data-script-run="${j.id}" ${j.running ? 'disabled' : ''}>${j.running ? 'Running…' : 'Run now &#9654;'}</button>
+          <button class="pill-btn" data-script-edit="${j.id}">Edit &#9998;</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function pollScriptsFor(ms) {
+  clearInterval(scriptPollTimer);
+  const until = Date.now() + ms;
+  scriptPollTimer = setInterval(() => {
+    if (Date.now() > until || document.getElementById('settings-scripts-tab').classList.contains('hidden')) { clearInterval(scriptPollTimer); return; }
+    loadScripts();
+  }, 5000);
+}
+
+document.getElementById('refresh-scripts-btn').addEventListener('click', loadScripts);
+
+document.getElementById('scripts-grid').addEventListener('click', async e => {
+  const runBtn = e.target.closest('[data-script-run]');
+  const editBtn = e.target.closest('[data-script-edit]');
+  if (editBtn) return openScriptEdit(editBtn.dataset.scriptEdit);
+  if (!runBtn) return;
+  const job = scriptJobs.find(j => j.id === runBtn.dataset.scriptRun);
+  if (!job) return;
+  // Scripts that remove or move files need a second click to confirm.
+  if (job.changesFiles && runBtn.dataset.armed !== '1') {
+    runBtn.dataset.armed = '1';
+    runBtn.textContent = 'Confirm run';
+    runBtn.classList.add('danger-armed');
+    setTimeout(() => { if (runBtn.isConnected && runBtn.dataset.armed === '1') { runBtn.dataset.armed = ''; runBtn.innerHTML = 'Run now &#9654;'; runBtn.classList.remove('danger-armed'); } }, 5000);
+    return;
+  }
+  runBtn.disabled = true;
+  runBtn.textContent = 'Starting…';
+  try {
+    await api(`/api/scripts/${job.id}/run`, { method: 'POST' });
+    runBtn.textContent = 'Started';
+    setTimeout(loadScripts, 1500);
+    pollScriptsFor(60000);
+  } catch (err) {
+    runBtn.disabled = false;
+    runBtn.innerHTML = 'Run now &#9654;';
+    runBtn.title = err.message;
+    alertScriptError(err.message);
+  }
+});
+
+function alertScriptError(msg) {
+  const grid = document.getElementById('scripts-grid');
+  const note = document.createElement('p');
+  note.className = 'settings-status error';
+  note.textContent = msg;
+  grid.parentElement.insertBefore(note, grid);
+  setTimeout(() => note.remove(), 8000);
+}
+
+// Edit popup
+let scriptEditing = null;
+function openScriptEdit(id) {
+  const job = scriptJobs.find(j => j.id === id);
+  if (!job) return;
+  scriptEditing = job;
+  document.getElementById('script-edit-title').textContent = job.name;
+  const sched = document.getElementById('script-edit-schedule');
+  const desc = document.getElementById('script-edit-desc');
+  sched.value = job.schedule;
+  desc.value = job.description || '';
+  document.getElementById('script-edit-changes-files').checked = !!job.changesFiles;
+  document.getElementById('script-edit-log').textContent = (job.logTail && job.logTail.length) ? job.logTail.join('\n') : 'No log output yet.';
+  const status = document.getElementById('script-edit-status');
+  status.className = 'settings-status hidden'; status.textContent = '';
+  updateScriptEditState();
+  document.getElementById('script-edit-modal').classList.remove('hidden');
+}
+function closeScriptEdit() { document.getElementById('script-edit-modal').classList.add('hidden'); scriptEditing = null; }
+function updateScriptEditState() {
+  if (!scriptEditing) return;
+  const sched = document.getElementById('script-edit-schedule').value.trim().replace(/\s+/g, ' ');
+  const desc = document.getElementById('script-edit-desc').value.trim();
+  const help = document.getElementById('script-edit-schedule-help');
+  const plain = describeCron(sched);
+  const fields = sched.split(' ').length;
+  help.textContent = fields !== 5 ? 'Cron format: minute hour day month weekday (e.g. */15 * * * * = every 15 minutes).'
+    : plain ? `Runs: ${plain}. Times are arr-stack's timezone (America/Chicago).`
+    : 'Custom schedule. It will be checked when you save.';
+  const flag = document.getElementById('script-edit-changes-files').checked;
+  const changed = sched !== scriptEditing.schedule || desc !== (scriptEditing.description || '') || flag !== !!scriptEditing.changesFiles;
+  document.getElementById('script-edit-save-btn').disabled = !changed || fields !== 5;
+}
+document.getElementById('script-edit-schedule').addEventListener('input', updateScriptEditState);
+document.getElementById('script-edit-desc').addEventListener('input', updateScriptEditState);
+document.getElementById('script-edit-changes-files').addEventListener('change', updateScriptEditState);
+document.querySelectorAll('.script-presets [data-cron]').forEach(b => b.addEventListener('click', () => {
+  document.getElementById('script-edit-schedule').value = b.dataset.cron;
+  updateScriptEditState();
+}));
+document.getElementById('close-script-edit-btn').addEventListener('click', closeScriptEdit);
+document.getElementById('script-edit-cancel-btn').addEventListener('click', closeScriptEdit);
+document.getElementById('script-edit-save-btn').addEventListener('click', async () => {
+  if (!scriptEditing) return;
+  const btn = document.getElementById('script-edit-save-btn');
+  const status = document.getElementById('script-edit-status');
+  const sched = document.getElementById('script-edit-schedule').value.trim().replace(/\s+/g, ' ');
+  const desc = document.getElementById('script-edit-desc').value.trim();
+  const body = {};
+  if (sched !== scriptEditing.schedule) body.schedule = sched;
+  if (desc !== (scriptEditing.description || '')) body.description = desc;
+  const flag = document.getElementById('script-edit-changes-files').checked;
+  if (flag !== !!scriptEditing.changesFiles) body.changesFiles = flag;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api(`/api/scripts/${scriptEditing.id}`, { method: 'PUT', body: JSON.stringify(body) });
+    status.className = 'settings-status ok'; status.textContent = 'Saved.';
+    await loadScripts();
+    setTimeout(closeScriptEdit, 700);
+  } catch (err) {
+    status.className = 'settings-status error'; status.textContent = err.message || 'Could not save.';
+    btn.disabled = false;
+  } finally {
+    btn.textContent = 'Save Changes';
+  }
 });
 
 async function openSettings() {

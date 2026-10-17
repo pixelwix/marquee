@@ -137,6 +137,7 @@ app.use((req, res, next) => {
 
 require('./lib/nowPlaying').start();
 require('./lib/issueWatchdog').start();
+require('./lib/issueFixSweep').start();
 require('./lib/recapReminder').start();
 require('./lib/dbBackup').start();
 require('./lib/sceneReleases').start();
@@ -168,6 +169,8 @@ app.use('/api/recap', require('./routes/recap'));
 app.use('/api/invite', require('./routes/invite'));
 app.use('/api/scene-releases', require('./routes/sceneReleases'));
 app.use('/api/collection-gaps', require('./routes/collectionGaps'));
+app.use('/api/changelog', require('./routes/changelog'));
+app.use('/api/scripts', require('./routes/scripts'));
 // Deliberately mounted outside /api — sw.js's fetch handler only skips
 // caching requests under /api/, so keeping this bare lets the existing
 // service worker start caching these client-side too, for free.
@@ -185,6 +188,13 @@ const taglinesJson = JSON.stringify(taglines).replace(/</g, '\\u003c');
 // Busting the query string on every process start (i.e. every deploy) instead
 // forces a real cache miss, since it's a URL Cloudflare has never cached before.
 const assetVersion = String(Date.now());
+// App icon set: public/icons/ by default, or public/icons/<SITE_ICON>/ for a deployment
+// with its own (e.g. SITE_ICON=skyn3t). Each set lives at its own URL, so switching sets
+// never gets stuck behind a cached copy of the other one (iOS keeps home-screen icons hard).
+const iconSet = /^[a-z0-9-]+$/i.test(process.env.SITE_ICON || '') &&
+  fs.existsSync(path.join(__dirname, 'public', 'icons', process.env.SITE_ICON, 'app-icon-512.png'))
+  ? process.env.SITE_ICON : '';
+const iconBase = '/icons/' + (iconSet ? iconSet + '/' : '');
 // Footer branding — package.json's version is the single source of truth
 // (bump it there, not here), year is computed once at startup rather than
 // per-request since this is a long-running process, not a static site build.
@@ -201,9 +211,14 @@ const renderedHtml = fs.readFileSync(path.join(__dirname, 'public', 'index.html'
   .replaceAll('{{ASSET_VERSION}}', assetVersion)
   .replaceAll('{{APP_VERSION}}', appVersion)
   .replaceAll('{{COPYRIGHT_YEAR}}', copyrightYear)
-  .replaceAll('{{VAPID_PUBLIC_KEY}}', process.env.VAPID_PUBLIC_KEY || '');
+  .replaceAll('{{VAPID_PUBLIC_KEY}}', process.env.VAPID_PUBLIC_KEY || '')
+  .replaceAll('{{ICON_BASE}}', iconBase);
 const renderedManifest = fs.readFileSync(path.join(__dirname, 'public', 'manifest.webmanifest'), 'utf8')
-  .replaceAll('{{SITE_NAME}}', siteName);
+  .replaceAll('{{SITE_NAME}}', siteName)
+  .replaceAll('{{ICON_BASE}}', iconBase);
+// sw.js only needs the icon path filled in (notification icon/badge).
+const renderedSw = fs.readFileSync(path.join(__dirname, 'public', 'sw.js'), 'utf8')
+  .replaceAll('{{ICON_BASE}}', iconBase);
 // Owner-only control center — a separate page (not just a hidden panel) so
 // it can grow without crowding the shared family dashboard. Actual access
 // control happens server-side on every /api/owner, /api/*/queue,
@@ -219,7 +234,8 @@ let renderedAdminHtml = fs.readFileSync(path.join(__dirname, 'public', 'admin.ht
   .replaceAll('{{ASSET_VERSION}}', assetVersion)
   .replaceAll('{{APP_VERSION}}', appVersion)
   .replaceAll('{{COPYRIGHT_YEAR}}', copyrightYear)
-  .replaceAll('{{VAPID_PUBLIC_KEY}}', process.env.VAPID_PUBLIC_KEY || '');
+  .replaceAll('{{VAPID_PUBLIC_KEY}}', process.env.VAPID_PUBLIC_KEY || '')
+  .replaceAll('{{ICON_BASE}}', iconBase);
 // Stream Origins (CH.11) is owner-configurable from Settings -> Privacy &
 // Visibility (PRIVACY_ORIGINS_ENABLED, default on) — stripped out of the page
 // entirely here rather than just hidden client-side, so a disabled deployment
@@ -249,6 +265,11 @@ app.get('/admin', (req, res) => {
 app.get('/manifest.webmanifest', (req, res) => {
   res.set('Cache-Control', 'no-cache');
   res.type('application/manifest+json').send(renderedManifest);
+});
+
+app.get('/sw.js', (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  res.type('application/javascript').send(renderedSw);
 });
 
 app.use(express.static(path.join(__dirname, 'public'), {

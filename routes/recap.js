@@ -3,7 +3,8 @@ const requireAuth = require('./requireAuth');
 const requireOwner = require('./requireOwner');
 const { verify, sign, buildUnsubscribeUrl } = require('../lib/recapUnsubscribe');
 const unsubscribes = require('../lib/recapUnsubscribes');
-const { previousMonthRange, listRecapCandidates, fetchUserRecapData, fetchAllUsers, MIN_MONTHLY_PLAYS } = require('../lib/monthlyRecap');
+const { previousMonthRange, listRecapCandidates, fetchUserRecapData, fetchAllUsers, fetchHeadlinerJpeg, MIN_MONTHLY_PLAYS } = require('../lib/monthlyRecap');
+const recapArt = require('../lib/recapArt');
 const { renderMonthlyRecapEmail } = require('../lib/monthlyRecapTemplate');
 const { sendEmail, sendEmailBatch } = require('../lib/mailer');
 const sendLog = require('../lib/recapSendLog');
@@ -34,6 +35,24 @@ function page(title, body) {
 <body><div class="card">${body}</div></body>
 </html>`;
 }
+
+// The recap email's header image. Public (mail clients and Gmail's image proxy fetch it without a session); the
+// signature from lib/recapArt.js is the authorization, so only rating keys a recap actually linked can be fetched.
+// Small in-memory cache: one batch of recaps shares a handful of top titles, and Gmail's proxy re-fetches rarely.
+const artCache = new Map();
+router.get('/art/:key.jpg', async (req, res) => {
+  const { key } = req.params;
+  if (!recapArt.verify(key, req.query.s)) return res.status(404).end();
+  let jpeg = artCache.get(key);
+  if (!jpeg) {
+    jpeg = await fetchHeadlinerJpeg(key);
+    if (!jpeg) return res.status(404).end();
+    artCache.set(key, jpeg);
+    if (artCache.size > 40) artCache.delete(artCache.keys().next().value);
+  }
+  res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=2592000, immutable' });
+  return res.send(jpeg);
+});
 
 router.get('/unsubscribe', async (req, res) => {
   const { user, token } = req.query;
@@ -236,6 +255,7 @@ router.post('/send', requireAuth, requireOwner, async (req, res) => {
           requestUrl: publicUrl,
           period,
           ...data,
+          headlinerImageUrl: data.headliner?.ratingKey ? recapArt.buildHeadlinerArtUrl(data.headliner.ratingKey, publicUrl) : null,
           uptime,
           unsubscribeUrl: buildUnsubscribeUrl(userId),
         });

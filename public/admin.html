@@ -6,8 +6,8 @@
 <title>{{SITE_NAME}} — Admin</title>
 <link rel="stylesheet" href="fonts.css?v={{ASSET_VERSION}}">
 <link rel="stylesheet" href="style.css?v={{ASSET_VERSION}}">
-<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
-<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="{{ICON_BASE}}app-icon.svg" type="image/svg+xml">
+<link rel="icon" href="{{ICON_BASE}}app-icon-32.png" sizes="32x32" type="image/png">
 <script>window.VAPID_PUBLIC_KEY = "{{VAPID_PUBLIC_KEY}}";</script>
 <script>
 (function() {
@@ -137,7 +137,7 @@
     </section>
 
   </div>
-  <div class="app-footer">{{SITE_NAME}} v{{APP_VERSION}}<span id="plex-uptime-footer"></span> &middot; &copy; {{COPYRIGHT_YEAR}}</div>
+  <div class="app-footer">{{SITE_NAME}} <span id="footer-ver" class="footer-ver">v{{APP_VERSION}}</span><span id="plex-uptime-footer"></span> &middot; &copy; {{COPYRIGHT_YEAR}}</div>
 </div>
 
 <!-- WANTED / MISSING LIST MODAL -->
@@ -266,6 +266,7 @@
       <button id="tab-settings-notice-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Notice Board</button>
       <button id="tab-settings-newsletter-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Newsletter</button>
       <button id="tab-settings-invite-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Invite to Plex</button>
+      <button id="tab-settings-scripts-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Scheduled Scripts</button>
       <button id="tab-settings-audit-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Audit Log</button>
       <button id="tab-settings-privacy-btn" class="modal-tab pill-btn"><span class="state-dot"></span>Privacy &amp; Visibility</button>
     </div>
@@ -393,6 +394,15 @@
       <div id="invite-shares-body"><p class="empty-state">Loading…</p></div>
     </div>
 
+    <div id="settings-scripts-tab" class="settings-body hidden">
+      <div class="settings-section-row">
+        <h4 class="admin-subhead">Scheduled Scripts &middot; arr-stack</h4>
+        <button id="refresh-scripts-btn" class="pill-btn"><span class="state-dot"></span>Refresh</button>
+      </div>
+      <p class="settings-field-block-desc">Every scheduled job in <code>/mnt/docker/scripts</code>: when it last ran, when it runs next, and what it does. Edit changes the schedule or description; Run now starts it immediately, the same way cron would. Schedule changes are backed up first and every action is recorded in the Audit Log.</p>
+      <div id="scripts-grid" class="service-grid"><p class="empty-state">Loading…</p></div>
+    </div>
+
     <div id="settings-audit-tab" class="settings-body hidden">
       <div class="settings-section-row">
         <h4 class="admin-subhead">Security &amp; Owner Actions</h4>
@@ -474,6 +484,50 @@
   </div>
 </div>
 
+<!-- SCHEDULED SCRIPT EDIT POPUP (Settings > Scheduled Scripts) -->
+<div id="script-edit-modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="script-edit-title">Scheduled Script</h3>
+      <button id="close-script-edit-btn" class="pill-btn pill-btn-icon">&#10005;</button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-field-block">
+        <label class="settings-field-block-label" for="script-edit-schedule">Schedule</label>
+        <input id="script-edit-schedule" class="settings-input-full script-mono" type="text" autocomplete="off" spellcheck="false">
+        <p id="script-edit-schedule-help" class="settings-field-block-desc"></p>
+        <div class="notice-preset-row script-presets">
+          <button type="button" class="pill-btn" data-cron="*/15 * * * *">Every 15 min</button>
+          <button type="button" class="pill-btn" data-cron="*/30 * * * *">Every 30 min</button>
+          <button type="button" class="pill-btn" data-cron="0 * * * *">Hourly</button>
+          <button type="button" class="pill-btn" data-cron="0 6 * * *">Daily 6 AM</button>
+          <button type="button" class="pill-btn" data-cron="30 4 * * 0">Weekly Sun</button>
+        </div>
+      </div>
+      <div class="settings-field-block">
+        <label class="settings-field-block-label" for="script-edit-desc">What it does</label>
+        <textarea id="script-edit-desc" class="settings-input-full" rows="4" maxlength="600"></textarea>
+      </div>
+      <div class="settings-field-block">
+        <label class="newsletter-resend-toggle">
+          <input id="script-edit-changes-files" type="checkbox">
+          Changes files (deletes, moves or removes downloads)
+        </label>
+        <p class="settings-field-block-desc">When ticked, Run now asks for a second click before starting this script.</p>
+      </div>
+      <div class="settings-field-block">
+        <label class="settings-field-block-label">Recent log</label>
+        <pre id="script-edit-log" class="script-log"></pre>
+      </div>
+    </div>
+    <p id="script-edit-status" class="settings-status hidden"></p>
+    <div class="settings-edit-actions">
+      <button id="script-edit-cancel-btn" class="pill-btn">Cancel</button>
+      <button id="script-edit-save-btn" class="btn-primary" disabled>Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- THEME PICKER (see MARQUEE_THEMES/getTheme/setTheme in shared.js, wired up in admin.js) -->
 <div id="theme-modal" class="modal hidden">
   <div class="modal-card theme-modal-card">
@@ -535,6 +589,16 @@
   </div>
 </div>
 
+<div id="changelog-modal" class="modal hidden">
+  <div class="modal-card changelog-card">
+    <div class="modal-head">
+      <h3>What&rsquo;s new</h3>
+      <button id="close-changelog-btn" class="pill-btn pill-btn-icon">&#10005;</button>
+    </div>
+    <p class="changelog-sub" id="changelog-sub"></p>
+    <div id="changelog-body"><p class="empty-state">Loading…</p></div>
+  </div>
+</div>
 <script src="shared.js?v={{ASSET_VERSION}}"></script>
 <script src="originsWorldPath.js?v={{ASSET_VERSION}}"></script>
 <script src="admin.js?v={{ASSET_VERSION}}"></script>

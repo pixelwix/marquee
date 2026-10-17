@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
- v1.60.1.**
+ v1.69.0.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -42,6 +42,17 @@ gets versioned as it ships, not reconstructed later.
   churn on every poll
 - **v1.60.0** — Alerts now also relay to WhatsApp via OpenClaw
 - **v1.60.1** — fix: admin season-approval modal missed every freshly-made TV request
+- **v1.64.0** — glass-style app icon + optional per-deployment icon set (`SITE_ICON`)
+- **v1.64.1** — fix: Top of the Month overflowed the card on phones with a long title
+- **v1.64.2** — Top of the Month shows full titles (wrapped) instead of one-line "…"
+- **v1.64.3** — fix: Import Issues rows ran off-screen / one word per line on phones
+- **v1.65.0** — footer version opens What's new (owner); per-version images + rollback.sh
+- **v1.65.1** — footer: no underline, no "What's new" label
+- **v1.66.0** — monthly recap email rebuilt email-safe (Gmail showed it as plain text); header image linked, not embedded
+- **v1.67.0** — Auto Fix keeps watching on the server for hours; fixed reports close themselves
+- **v1.68.0** — Settings > Scheduled Scripts: every arr-stack cron job with last/next run,
+  editable schedule and description, and Run now
+- **v1.69.0** — Scheduled Scripts: "Changes files" checkbox in Edit sets the Run now confirm
 
 ---
 
@@ -858,5 +869,57 @@ gets versioned as it ships, not reconstructed later.
 - [x] James Bond → hand-maintained list of the 5 Craig-era tmdbIds (Casino Royale, Quantum of Solace, Skyfall, Spectre, No Time to Die). No Craig era sub-collection exists on TMDB to reference instead. A future Bond film needs its tmdbId added here once announced with its own TMDB entry — the existing unreleased-movie filter (v1.63.2) already keeps an announced-but-unreleased one from counting as a gap before then.
 - [x] **Verified live**: James Bond Collection now resolves to 5/5 owned and is correctly dropped from the gaps list entirely (was 5/27 before).
 - [x] 1 new test (`test/collectionGaps.test.js`, 13 total): the override takes effect even though the YAML entry still has its own `tmdb_collection: 645`.
+
+## v1.64.0 - Glass-style app icon + per-deployment icon sets (SITE_ICON)
+
+- [x] New default icon in the iOS 27 layered-glass style: amber glass play button lit from above with a specular edge, glass teal "live" dot, charcoal ground. Full-bleed 1024 master (iOS applies its own mask); maskable variant shrunk to 80% so Android crops keep the whole glyph.
+- [x] New `SITE_ICON` setting (appears in Settings → Deployment): blank = default Marquee icon, or the name of a folder under `public/icons/` for a deployment's own set. Ships `skyn3t` (steel endoskeleton skull, red eyes) as the first alternate.
+- [x] Icon paths are templated (`{{ICON_BASE}}`) into index.html, admin.html, manifest.webmanifest and sw.js (notification icon/badge) — sw.js is now rendered once at startup like the other shells. Each set lives at its own URL and the files were renamed (`app-icon-*`), so neither iOS's home-screen icon cache nor the 7-day icon Cache-Control can serve a stale icon after a switch.
+
+## v1.64.1 - Fix: Top of the Month overflowed on phones with a long title
+
+- [x] Grid tracks were plain `1fr`, which can't shrink below their widest nowrap title — this month's "That Time I Got Reincarnated as a Slime" / "BAKI-DOU: The Invincible Samurai" stretched the anime column past the card edge on mobile (play counts cut off, left column squeezed to "The Pa…"). Now `minmax(0, 1fr)` + `min-width: 0` on the tile and its tap button, so long titles ellipsize as intended. Data-dependent, so it surfaced only once a long title reached the top three.
+
+## v1.64.2 - Top of the Month shows full titles
+
+- [x] Owner picked full wrapped titles over one-line truncation (mocked A/B/C against live data first): #1 titles and the silver/bronze names now wrap (balanced) instead of ending in "…". Runner-up rows still align across each row of tiles since they're pinned to the tile bottom.
+
+## v1.64.3 - Fix: Import Issues rows on phones
+
+- [x] Download paths/release names with no spaces ran off the right edge (page scrolled sideways, Remove pushed off-screen on rows without Force Import). Messages and titles now break anywhere.
+- [x] Rows with Force Import + Remove squeezed the text into a one-word-wide column (a single TOUGEN ANKI message was ~650px tall): on ≤900px the text now takes the full line beside the poster and the buttons drop below (also applied to Alerts/Open Issues, which had the same latent 0%-basis problem).
+- [x] Long messages clamp to 3 lines with a Show more / Show less toggle (only shown when something is actually hidden; expanded state survives the 30s refresh). Mocked against the real messages at 390px: list height 1211px → 648px, no horizontal scroll.
+
+## v1.65.0 - Footer What's new + per-version rollback
+
+- [x] Footer version (both pages) opens a What's new popup for the owner: every version's title and notes, newest first, current one marked. Built from this file by `lib/changelog.js` (parses `## vX.Y.Z - Title` sections; served by owner-only `GET /api/changelog`). Family members still just see the version number.
+- [x] `deploy.sh` now tags each build's image as `skyn3t-marquee:vX.Y.Z` (newest 20 kept). New `./rollback.sh vX.Y.Z` switches the container to that image without rebuilding; `./rollback.sh` lists what's available. Git can't do this since commits batch every 10 versions. v1.64.3 (running before this) was tagged by hand as the first rollback point.
+- [x] 4 new tests (`test/changelog.test.js`): both heading separators, semver ordering, markdown stripping, non-version sections ignored, wrapped bullets joined.
+
+## v1.65.1 - Footer: version only, no underline
+
+- [x] Owner asked: dropped the underline and the " · What's new" label. The version number alone (teal for the owner) still opens What's new.
+
+## v1.66.0 - Recap email that survives Gmail
+
+- [x] A guest forwarded his September recap: in Gmail it arrived as plain unstyled text. The template was built like a web page (classes + CSS variables + `color-mix()` + flex/grid in a `<style>` block, header image as a CSS background `data:` URI); Gmail supports none of that, and many apps drop `<style>` entirely. Rebuilt `lib/monthlyRecapTemplate.js` with inline styles and literal colors on every element, table layout, `bgcolor` fallbacks, and font fallback stacks (`@font-face` kept only as an enhancement for Apple Mail). Same design. Added an inbox preheader line.
+- [x] Header image is now a plain `<img>` linking to a new signed public route `GET /api/recap/art/<ratingKey>.jpg?s=…` (`lib/recapArt.js`, HMAC with SESSION_SECRET, so it can't be used to pull arbitrary Plex art). Gmail never showed `data:` images, and dropping the base64 also takes each recap far below Gmail's ~102KB clipping threshold (~12KB now). `fetchHeadlinerImage` (data URI) became `fetchHeadlinerJpeg` (buffer) behind that route, with a small in-memory cache.
+
+## v1.67.0 - Fixed reports close themselves
+
+- [x] Auto Fix only resolved a report if the replacement landed within 5 minutes, and for the manual button only while the admin page stayed open. WThors' Prometheus 3D report (Oct 8) stayed open though the new copy took 11 minutes. Tracking now runs on the server (`lib/autoFixIssue.js`, new owner route `POST /api/overseerr/issues/:id/track` called by the button after its grab). It checks every 4 s for 5 minutes, then every minute, for up to 6 hours.
+- [x] New `lib/issueFixSweep.js`: every 15 minutes, an open report whose movie or episode has a file added after the report gets a comment ("Fixed automatically: replaced with a new … copy on …") and is resolved. It covers grabs that outlast the tracker, restarts, and files replaced by hand or by upgrades. Whole-season and whole-series reports are skipped. Tests: `test/issueFixSweep.test.js`.
+
+## v1.68.0 - Scheduled Scripts tab
+
+- [x] New Settings > Scheduled Scripts tab: one card per cron job that runs `/mnt/docker/scripts/*` on arr-stack (19 jobs, from root's crontab and `/etc/cron.d`), with status (OK / Late / Check log / Running), last run, next run, the schedule in plain English and a description of what the script does.
+- [x] Edit changes a job's schedule (validated 5-field cron, presets, live plain-English preview) and its description; the popup also shows the job's last few log lines (keys, tokens and URLs redacted).
+- [x] Run now starts a job immediately, exactly as cron would; scripts that remove or move files need a second click, and a job that's already running won't be started twice.
+- [x] Backed by a small `scripts-agent` service on arr-stack (bearer token + allowlisted to hosted's IP); schedule edits back up the crontab first. Edits and manual runs are recorded in the Audit Log. New env: `SCRIPTS_AGENT_URL`, `SCRIPTS_AGENT_TOKEN`.
+
+## v1.69.0 - Changes-files flag in Scheduled Scripts
+
+- [x] Edit popup has a "Changes files" checkbox: ticked scripts need a second click on Run now. Saved in the scripts-agent catalog (new `PUT /jobs/:id/changes-files`), audit-logged.
+- [x] arr-stack scripts `AGENTS.md` now says every new scheduled script gets a catalog entry (description + changesFiles), so new jobs arrive described and flagged.
 
 ## Ideas

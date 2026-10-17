@@ -126,6 +126,38 @@ document.querySelectorAll('.modal').forEach(modal => {
   });
 });
 
+// ---------- Version footer → What's new (owner only) ----------
+// Everyone sees the version in the footer; for the owner it opens TODO.md's per-version
+// changelog (GET /api/changelog, owner-gated server-side) so a regression can be traced to
+// the version it started in — and rolled back with rollback.sh.
+function initVersionFooter(owner) {
+  const ver = document.getElementById('footer-ver');
+  if (!ver || !owner || ver.dataset.ready) return;
+  ver.dataset.ready = '1';
+  ver.classList.add('link');
+  ver.setAttribute('role', 'button');
+  ver.setAttribute('tabindex', '0');
+  ver.title = "What's new";
+  const open = async () => {
+    const modal = document.getElementById('changelog-modal'), body = document.getElementById('changelog-body');
+    modal.classList.remove('hidden');
+    try {
+      const { current, versions } = await api('/api/changelog');
+      document.getElementById('changelog-sub').textContent = `Running v${current} \u00b7 ${versions.length} versions. Something broken? Find the version it started in and roll back to the one before it.`;
+      body.innerHTML = versions.map(v => `
+        <div class="changelog-row${v.v === current ? ' current' : ''}">
+          <div class="changelog-head"><b>v${escapeHtml(v.v)}</b><span>${escapeHtml(v.title)}</span>${v.v === current ? '<em>This version</em>' : ''}</div>
+          <ul>${v.items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>
+        </div>`).join('');
+    } catch (e) {
+      body.innerHTML = '<p class="empty-state">Could not load the changelog.</p>';
+    }
+  };
+  ver.addEventListener('click', open);
+  ver.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  document.getElementById('close-changelog-btn').addEventListener('click', () => document.getElementById('changelog-modal').classList.add('hidden'));
+}
+
 // ---------- Theme picker ----------
 // 5 preset color themes, switchable from a header icon button on both pages
 // (see #theme-btn/#theme-modal in index.html/admin.html, wired up in

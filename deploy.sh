@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Syncs the current working tree to docker-host's build context, verifies every
+# Syncs the current working tree to hosted's build context, verifies every
 # transferred file byte-for-byte (checksum), then rebuilds and restarts the
 # container. Exists because a bare `scp` of multiple files to a directory was
 # observed to occasionally drop the largest file silently (no error, exit 0)
@@ -9,7 +9,7 @@
 # differ from what's already on the host.
 set -euo pipefail
 
-HOST=docker-host
+HOST=hosted
 DEST=/mnt/docker/skyn3t
 
 cd "$(dirname "$0")"
@@ -43,7 +43,14 @@ fi
 echo "==> All files verified"
 
 echo "==> Rebuilding and restarting"
+VERSION=$(node -p "require('./package.json').version")
 ssh "$HOST" "cd $DEST && docker compose build && docker compose up -d"
+
+# Keep each version's image under its own tag so ./rollback.sh vX.Y.Z can switch back in seconds
+# (git can't do this: commits are batched every 10 versions). Only the newest 20 are kept; they
+# share every layer except the app's own files, so the extra disk is small.
+echo "==> Tagging image as v$VERSION (keeping the newest 20 version tags)"
+ssh "$HOST" "docker tag skyn3t-marquee:latest skyn3t-marquee:v$VERSION && docker images skyn3t-marquee --format '{{.Tag}}' | grep '^v' | sort -rV | tail -n +21 | xargs -r -I{} docker rmi skyn3t-marquee:{} >/dev/null"
 
 echo "==> Done. Container status:"
 ssh "$HOST" "docker ps --filter name=skyn3t --format '{{.Names}}\t{{.Status}}'"

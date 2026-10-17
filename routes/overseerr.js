@@ -468,6 +468,27 @@ router.post('/issues/:id/resolve', requireAuth, requireOwner, async (req, res) =
   }
 });
 
+// The manual Auto Fix button (public/admin.js's runAutoFix) grabs a release,
+// then calls this so the server — not the open admin page — watches for the
+// replacement and resolves the issue when it lands (lib/autoFixIssue.js).
+router.post('/issues/:id/track', requireAuth, requireOwner, (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+  const { mediaType, tmdbId, tvdbId, season, episode, title, startedAt } = req.body || {};
+  const int = (v) => (Number.isInteger(v) && v > 0 ? v : null);
+  if (mediaType !== 'movie' && mediaType !== 'tv') return res.status(400).json({ error: 'Invalid mediaType' });
+  if (mediaType === 'movie' && !int(tmdbId)) return res.status(400).json({ error: 'Invalid tmdbId' });
+  if (mediaType === 'tv' && !(int(tvdbId) && int(season) && int(episode))) return res.status(400).json({ error: 'Invalid episode' });
+  // The grab happened moments ago in the browser; anything else is clamped so a
+  // bad clock can't make an older file count as the replacement.
+  const now = Date.now();
+  const since = Number.isFinite(startedAt) && startedAt <= now && now - startedAt < 10 * 60 * 1000 ? startedAt : now;
+  res.json({ status: 'tracking' });
+  autoFixIssue.trackManual({
+    issueId: Number(req.params.id), mediaType, tmdbId: int(tmdbId), tvdbId: int(tvdbId),
+    season: int(season), episode: int(episode), title: String(title || 'Unknown title').slice(0, 200), startedAt: since
+  }).catch(err => console.error('auto-fix track error', err.message));
+});
+
 // Called by Overseerr itself (Settings -> Notifications -> Webhook), not by a
 // signed-in browser — so this can't sit behind requireAuth's session check.
 // Overseerr doesn't sign its webhook payloads, so the shared secret configured

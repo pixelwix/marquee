@@ -287,6 +287,21 @@ body {
 .icon-btn svg { display: block; }
 
 .app-footer { text-align: center; font-family: var(--mono); font-size: 0.7rem; color: var(--muted); padding: 1.5rem 0 5rem; }
+/* Owner-only: the version opens What's new (see initVersionFooter in shared.js). */
+.footer-ver.link { cursor: pointer; color: var(--teal); }
+.footer-ver.link:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 4px; }
+.changelog-card { max-width: 640px; max-height: min(84vh, 900px); display: flex; flex-direction: column; }
+.changelog-sub { font-size: 0.78rem; color: var(--muted); margin: -0.4rem 0 0.8rem; }
+#changelog-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 0.25rem; }
+.changelog-row { padding: 0.7rem 0; border-top: 1px solid rgba(20,25,35,0.08); }
+.changelog-row:first-child { border-top: 0; padding-top: 0; }
+.changelog-head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+.changelog-head b { font-family: var(--mono); font-size: 0.82rem; }
+.changelog-head span { font-weight: 600; font-size: 0.88rem; flex: 1; min-width: 10rem; }
+.changelog-head em { font-style: normal; font-family: var(--mono); font-size: 0.66rem; color: var(--teal); border: 1px solid currentColor; border-radius: 999px; padding: 0.05rem 0.5rem; }
+.changelog-row.current .changelog-head b { color: var(--teal); }
+.changelog-row ul { margin: 0.35rem 0 0; padding-left: 1.1rem; font-size: 0.78rem; color: var(--muted); line-height: 1.45; }
+.changelog-row li { overflow-wrap: anywhere; }
 
 /* Floating request button — mobile only (see the media query below); desktop
    keeps the plain header icon button (.icon-btn above) instead. Styled to match
@@ -492,13 +507,15 @@ body {
 
 /* Top of the Month leaderboard — #1 gets the big medal frame, #2/#3 are compact
    ranked rows underneath, each color-coded gold/silver/bronze. */
-.top-month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; align-items: stretch; }
+/* minmax(0, 1fr), not plain 1fr: a 1fr track won't shrink below its widest nowrap
+   title, so one long name (e.g. a long anime title) stretched its column off-screen. */
+.top-month-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.2rem; align-items: stretch; }
 /* Flex column so .medal-rows (mt-auto below) can be pinned to the bottom of the
    card — grid's align-items:stretch already equalizes card height per row, this
    makes the runner-up list actually sit at that shared bottom edge instead of
    trailing the artwork, which is what let a short avatar's rows sit higher than
    a taller poster's rows in the same row of cards. */
-.top-month-tile { display: flex; flex-direction: column; text-align: center; }
+.top-month-tile { display: flex; flex-direction: column; text-align: center; min-width: 0; }
 .top-month-frame {
   position: relative; width: 100%; max-width: 92px; aspect-ratio: 2/3; border-radius: 12px; overflow: hidden; margin: 0 auto;
   background: linear-gradient(160deg,#E4E9F2,#CBD6E8);
@@ -526,12 +543,12 @@ body {
   font-family: var(--mono); font-size: 0.64rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
   margin-top: 0.65rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* Fixed to one line so a long title doesn't push that tile's medal rows down
-   relative to the other three — otherwise the silver/bronze rows drift out of
-   alignment across the row of tiles. */
+/* Full titles, wrapped and balanced (owner's pick over one-line "…" truncation).
+   The silver/bronze rows still line up across a row of tiles because .medal-rows
+   is pinned to the bottom of each tile (margin-top: auto), not stacked after the title. */
 .top-month-title {
   font-size: 0.85rem; font-weight: 600; margin-top: 0.2rem; line-height: 1.25;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-wrap: balance; overflow-wrap: anywhere;
 }
 .top-month-plays { font-family: var(--mono); font-size: 0.7rem; color: var(--gold); margin-top: 0.2rem; }
 
@@ -541,7 +558,7 @@ body {
    is what made them look out of place relative to each other. */
 .medal-rows { display: grid; grid-template-columns: 1.1em 1fr auto; align-items: center; column-gap: 0.4rem; row-gap: 0.4rem; font-size: 0.72rem; margin-top: auto; padding-top: 0.5rem; text-align: left; }
 .medal-badge { font-size: 0.85rem; text-align: center; }
-.medal-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.medal-name { min-width: 0; overflow-wrap: anywhere; line-height: 1.25; font-weight: 500; }
 .medal-plays { font-family: var(--mono); color: var(--muted); }
 .medal-name.silver { color: var(--silver); }
 .medal-name.bronze { color: var(--bronze); }
@@ -550,7 +567,7 @@ body {
    keeps the tile's own column layout so alignment across the four tiles is
    unchanged. */
 .tm-hit {
-  display: flex; flex-direction: column; align-items: stretch; width: 100%;
+  display: flex; flex-direction: column; align-items: stretch; width: 100%; min-width: 0;
   background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit;
   cursor: pointer; border-radius: 12px;
 }
@@ -561,7 +578,7 @@ body {
 .medal-name.tm-link:hover { text-decoration: underline; }
 
 @media (max-width: 900px) {
-  .top-month-grid { grid-template-columns: repeat(2, 1fr); row-gap: 1.5rem; }
+  .top-month-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 1.5rem; }
 }
 
 /* ---------- My Stats tab ---------- */
@@ -1047,9 +1064,24 @@ body {
    Issues rows get the same treatment now that Auto Fix made it a three-button
    row (Search/Auto Fix/Resolve) — same overflow risk as Alerts' two. */
 @media (max-width: 900px) {
-  #alerts-body .pending-row, #admin-issues-body .pending-row { flex-wrap: wrap; }
-  #alerts-body .pending-actions, #admin-issues-body .pending-actions { width: 100%; padding-top: 0.6rem; padding-left: calc(42px + 0.85rem); }
+  #alerts-body .pending-row, #admin-issues-body .pending-row, #import-issues-body .pending-row { flex-wrap: wrap; }
+  #alerts-body .pending-actions, #admin-issues-body .pending-actions, #import-issues-body .pending-actions { width: 100%; padding-top: 0.6rem; padding-left: calc(42px + 0.85rem); }
+  /* flex:1 alone is a 0% basis, so once long text can wrap the info column happily
+     shrinks to a sliver beside the buttons (one word per line). Give it the whole
+     line next to the poster so the buttons are what drops below. */
+  #alerts-body .result-info, #admin-issues-body .result-info, #import-issues-body .result-info { flex: 1 1 calc(100% - 42px - 0.85rem); }
 }
+
+/* Import Issues: Radarr/Sonarr messages carry download paths and release names with
+   no spaces (".../BLACK.TORCH.S01E03.1080p.CR.WEB-DL..."), which ran off the right
+   edge and pushed Remove off-screen. Break them anywhere, and clamp long messages to
+   three lines with a Show more toggle so one row can't fill the whole screen. */
+.pending-row .result-info { min-width: 0; }
+.result-title, .issue-message { overflow-wrap: anywhere; }
+#import-issues-body .issue-message { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+#import-issues-body .issue-message.expanded { display: block; -webkit-line-clamp: unset; }
+.msg-more { background: none; border: 0; padding: 0.3rem 0 0; font: 600 0.72rem var(--mono); color: var(--teal); cursor: pointer; }
+.msg-more:hover { text-decoration: underline; }
 
 /* "Request" — shown on the info modal when opened from a search/discover
    result (not yet in the library), so a title/poster click leads to details
@@ -1383,3 +1415,16 @@ body {
 .gap-collection-head[aria-expanded="true"] .gap-chevron { transform: rotate(90deg); }
 .gap-movies { margin-top: 0.3rem; }
 .gap-movie-card.release-card { padding: 0.5rem 0; }
+
+/* Settings > Scheduled Scripts (cards reuse .service-card / .service-badge) */
+.script-card { display: flex; flex-direction: column; }
+.script-desc { font-size: 0.8rem; color: var(--muted); margin: 0.4rem 0 0.5rem; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.script-times { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.75rem; color: var(--muted); margin-top: auto; }
+.script-card .service-card-foot { justify-content: flex-end; }
+.script-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; }
+.script-muted { color: var(--muted); font-size: 0.7rem; }
+.script-log { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; white-space: pre-wrap; word-break: break-word;
+  max-height: 9rem; overflow: auto; margin: 0; padding: 0.55rem 0.65rem; border-radius: 10px;
+  background: rgba(20,25,35,0.04); border: 1px solid rgba(20,25,35,0.08); }
+.pill-btn.danger-armed { color: var(--danger); border-color: rgba(214,69,69,0.45); background: rgba(214,69,69,0.08); }

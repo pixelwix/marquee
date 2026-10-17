@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="46%" r="72%"><stop offset="0" stop-color="#2a0d10"/><stop offset=".55" stop-color="#120a0d"/><stop offset="1" stop-color="#07080b"/></radialGradient>
+    <linearGradient id="steel" x1="0" y1="210" x2="0" y2="840" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f4f7fb"/><stop offset=".35" stop-color="#c3cad3"/><stop offset=".7" stop-color="#7d8692"/><stop offset="1" stop-color="#4a515b"/>
+    </linearGradient>
+    <linearGradient id="steelSide" x1="300" y1="0" x2="724" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#000" stop-opacity=".38"/><stop offset=".22" stop-color="#000" stop-opacity="0"/><stop offset=".78" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".45"/>
+    </linearGradient>
+    <linearGradient id="spec" x1="0" y1="214" x2="0" y2="420" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="socket" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050608"/><stop offset="1" stop-color="#1c1f26"/></linearGradient>
+    <radialGradient id="eye" cx="45%" cy="40%" r="60%"><stop offset="0" stop-color="#ffe0d6"/><stop offset=".25" stop-color="#ff5a3c"/><stop offset=".7" stop-color="#e3100b"/><stop offset="1" stop-color="#7a0000"/></radialGradient>
+    <radialGradient id="eyeglow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff2414" stop-opacity=".85"/><stop offset="1" stop-color="#ff2414" stop-opacity="0"/></radialGradient>
+    <radialGradient id="redhalo" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff1e10" stop-opacity=".22"/><stop offset="1" stop-color="#ff1e10" stop-opacity="0"/></radialGradient>
+    <filter id="drop" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="26" stdDeviation="28" flood-color="#000" flood-opacity=".65"/></filter>
+    <filter id="soft"><feGaussianBlur stdDeviation="22"/></filter>
+    <path id="skull" d="M300 548C286 336 384 214 512 214C640 214 738 336 724 548L708 618C700 656 680 674 656 680L644 770C638 812 604 840 560 842H464C420 840 386 812 380 770L368 680C344 674 324 656 316 618Z"/>
+    <clipPath id="sc"><use href="#skull"/></clipPath>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <circle cx="512" cy="540" r="400" fill="url(#redhalo)"/>
+
+  <!-- steel skull -->
+  <g filter="url(#drop)"><use href="#skull" fill="url(#steel)"/></g>
+  <g clip-path="url(#sc)">
+    <rect x="280" y="200" width="464" height="660" fill="url(#steelSide)"/>
+    <ellipse cx="452" cy="300" rx="120" ry="60" fill="#fff" opacity=".45" filter="url(#soft)"/>
+    <!-- plate seams -->
+    <path d="M512 214V440" stroke="#4b525c" stroke-opacity=".55" stroke-width="5"/>
+    <path d="M330 452Q512 420 694 452" fill="none" stroke="#3b4149" stroke-opacity=".7" stroke-width="7"/>
+    <path d="M340 640Q380 612 420 640M684 640Q644 612 604 640" fill="none" stroke="#3b4149" stroke-opacity=".7" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <path d="M330 420C340 300 420 232 512 230C604 232 684 300 694 420" fill="none" stroke="url(#spec)" stroke-width="6" stroke-linecap="round" opacity=".9"/>
+
+  <!-- eye sockets + red eyes -->
+  <path d="M344 484Q352 476 364 479L484 510Q495 514 493 525L486 566Q482 588 460 592Q408 600 372 582Q350 568 346 544Z" fill="url(#socket)"/>
+  <path d="M 680 484 Q 672 476 660 479 L 540 510 Q 529 514 531 525 L 538 566 Q 542 588 564 592 Q 616 600 652 582 Q 674 568 678 544 Z" fill="url(#socket)"/>
+  <circle cx="422" cy="546" r="70" fill="url(#eyeglow)"/>
+  <circle cx="602" cy="546" r="70" fill="url(#eyeglow)"/>
+  <circle cx="422" cy="546" r="27" fill="url(#eye)"/>
+  <circle cx="602" cy="546" r="27" fill="url(#eye)"/>
+  <circle cx="414" cy="537" r="7" fill="#fff" opacity=".9"/>
+  <circle cx="594" cy="537" r="7" fill="#fff" opacity=".9"/>
+
+  <path d="M352 606Q380 590 424 604" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="5" stroke-linecap="round"/>
+  <path d="M672 606Q644 590 600 604" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="5" stroke-linecap="round"/>
+  <path d="M352 478L486 506M672 478L538 506" stroke="#2a2f36" stroke-opacity=".8" stroke-width="9" stroke-linecap="round"/>
+  <!-- nasal cavity -->
+  <path d="M512 600Q522 600 528 614L546 656Q550 668 538 668H486Q474 668 478 656L496 614Q502 600 512 600Z" fill="url(#socket)"/>
+
+  <!-- mouth + teeth -->
+  <rect x="420" y="694" width="184" height="74" rx="16" fill="#0b0c10"/>
+  <g fill="url(#steel)">
+    <rect x="428" y="700" width="20" height="62" rx="7"/><rect x="454" y="700" width="20" height="62" rx="7"/>
+    <rect x="480" y="700" width="20" height="62" rx="7"/><rect x="506" y="700" width="20" height="62" rx="7"/>
+    <rect x="532" y="700" width="20" height="62" rx="7"/><rect x="558" y="700" width="20" height="62" rx="7"/>
+    <rect x="584" y="700" width="14" height="62" rx="6"/>
+  </g>
+  <path d="M420 731H604" stroke="#0b0c10" stroke-width="6"/>
+
+  <!-- jaw pistons -->
+  <g stroke-linecap="round">
+    <path d="M384 668L396 768" stroke="#2d3239" stroke-width="22"/><path d="M384 668L396 768" stroke="url(#steel)" stroke-width="12"/>
+    <path d="M640 668L628 768" stroke="#2d3239" stroke-width="22"/><path d="M640 668L628 768" stroke="url(#steel)" stroke-width="12"/>
+  </g>
+</svg>

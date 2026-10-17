@@ -100,6 +100,7 @@ function showDashboard(owner) {
   // Everything owner-only (sign-ins, pending requests, issues, system status,
   // stack management) lives on its own page now instead of crowding this one.
   document.getElementById('admin-link-btn').classList.toggle('hidden', !isOwner);
+  initVersionFooter(isOwner);
 }
 
 // Re-runs everything showDashboard() loads, minus the one-time setup calls —

@@ -9,9 +9,9 @@
 
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#12151A">
-<link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
-<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="{{ICON_BASE}}app-icon.svg" type="image/svg+xml">
+<link rel="icon" href="{{ICON_BASE}}app-icon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="{{ICON_BASE}}app-icon-180.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -147,7 +147,7 @@
       </section>
 
     </div>
-    <div class="app-footer">{{SITE_NAME}} v{{APP_VERSION}}<span id="plex-uptime-footer"></span> &middot; &copy; {{COPYRIGHT_YEAR}}</div>
+    <div class="app-footer">{{SITE_NAME}} <span id="footer-ver" class="footer-ver">v{{APP_VERSION}}</span><span id="plex-uptime-footer"></span> &middot; &copy; {{COPYRIGHT_YEAR}}</div>
   </div>
 
   <button id="fab-request-btn" class="fab" aria-label="Request something">
@@ -339,6 +339,16 @@
   </div>
 </div>
 
+<div id="changelog-modal" class="modal hidden">
+  <div class="modal-card changelog-card">
+    <div class="modal-head">
+      <h3>What&rsquo;s new</h3>
+      <button id="close-changelog-btn" class="pill-btn pill-btn-icon">&#10005;</button>
+    </div>
+    <p class="changelog-sub" id="changelog-sub"></p>
+    <div id="changelog-body"><p class="empty-state">Loading…</p></div>
+  </div>
+</div>
 <script src="shared.js?v={{ASSET_VERSION}}"></script>
 <script src="app.js?v={{ASSET_VERSION}}"></script>
 <script src="pull-to-refresh.js?v={{ASSET_VERSION}}"></script>

@@ -38,8 +38,8 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title || 'Marquee', {
       body: data.body || '',
-      icon: data.icon || '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
+      icon: data.icon || '{{ICON_BASE}}app-icon-192.png',
+      badge: '{{ICON_BASE}}app-icon-192.png',
       data: { url: data.url || '/admin' }
     })
   );
