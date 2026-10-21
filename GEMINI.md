@@ -2,7 +2,7 @@
 
 Instructions for AI coding agents (Claude Code, Codex, Gemini) working in this repo.
 `CLAUDE.md` and `GEMINI.md` are byte-identical copies of this file; edit `AGENTS.md`, then run
-`python3 ~/agent-toolkit/skills/session-closer/scripts/sync_context.py --sync AGENTS.md`.
+`python3 ~/Projects/agent-toolkit/skills/session-closer/scripts/sync_context.py --sync AGENTS.md`.
 Human-facing setup lives in `README.md`; shipped work, version by version, in `TODO.md`.
 
 ## What this is
