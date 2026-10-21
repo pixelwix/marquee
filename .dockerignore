@@ -3,3 +3,7 @@ node_modules
 .git
 *.log
 npm-debug.log*
+.env.bak*
+*.bak-*
+*.backup-*
+.agents

@@ -148,3 +148,43 @@ test('sync mirrors RMAB status and notifies each requester exactly once when ava
   await bookRequests.sync();
   assert.equal(calls.filter(c => c[0] === 'user').length, 0, 'nobody is notified twice');
 });
+
+test('toView reports grabbedEdition for available or downloading requests', () => {
+  const base = { id: 1, status: 'sent', rmab_status: 'available', created_at: Date.now() };
+  assert.equal(bookRequests.toView({ ...base, title: 'Dark Age [Dramatized Adaptation]', edition: 'any' }).grabbedEdition, 'produced');
+  assert.equal(bookRequests.toView({ ...base, title: 'Mythos', edition: 'narrated' }).grabbedEdition, 'narrated');
+  assert.equal(bookRequests.toView({ ...base, title: 'Mythos', edition: 'produced' }).grabbedEdition, 'produced');
+  assert.equal(bookRequests.toView({ ...base, title: 'Mythos', edition: 'any', grabbed_edition: 'narrated' }).grabbedEdition, 'narrated');
+  assert.equal(bookRequests.toView({ ...base, title: 'Mythos', edition: 'any' }).grabbedEdition, null);
+  // Not grabbed yet:
+  assert.equal(bookRequests.toView({ ...base, rmab_status: 'awaiting_search', title: 'Dark Age [Dramatized Adaptation]', edition: 'produced' }).grabbedEdition, null);
+});
+
+test('sync and listForUser resolve grabbedEdition from Audiobookshelf for "any" edition requests', async () => {
+  const abs = require('../lib/absClient');
+  abs.isConfigured = () => true;
+  abs.fetchLibrary = async () => [
+    { asin: 'ANY_STD', title: 'Mythos', narrator: 'Stephen Fry', produced: false },
+    { asin: 'ANY_PROD', title: 'Dark Age', narrator: 'Full Cast', produced: true }
+  ];
+
+  // Create an owner request with edition 'any'
+  rmab.createRequest = async b => ({ ok: true, requestId: 'req-' + b.asin, status: 'available' });
+  const req1 = await bookRequests.create(owner, { asin: 'ANY_STD', title: 'Mythos', edition: 'any' });
+  assert.equal(req1.edition, 'any');
+
+  // listForUser should resolve grabbedEdition from ABS
+  const userList = await bookRequests.listForUser(owner.id);
+  const found = userList.find(b => b.asin === 'ANY_STD');
+  assert.ok(found);
+  assert.equal(found.grabbedEdition, 'narrated');
+
+  // sync also resolves and notifies with edition note when available
+  rmab.listRequests = async () => [{ id: 'req-ANY_PROD', asin: 'ANY_PROD', status: 'available' }];
+  calls.length = 0;
+  const req2 = await bookRequests.create(owner, { asin: 'ANY_PROD', title: 'Dark Age', edition: 'any' });
+  await bookRequests.sync();
+  const notified = calls.filter(c => c[0] === 'user');
+  assert.ok(notified.length > 0);
+  assert.equal((await bookRequests.listForUser(owner.id)).find(b => b.asin === 'ANY_PROD').grabbedEdition, 'produced');
+});

@@ -313,7 +313,8 @@ async function loadPendingBookRequests() {
       img.classList.add('book');
       if (img.getAttribute('src') !== (r.cover || '')) img.src = r.cover || '';
       row.querySelector('.result-title').textContent = `${r.title}${r.author ? ' · ' + r.author : ''}`;
-      row.querySelector('.requester-text').textContent = `${r.requestedBy} · ${timeAgo(r.requestedAt)}`;
+      const edNote = r.edition && r.edition !== 'produced' ? ` · ${r.edition === 'narrated' ? 'Standard' : 'Either edition'}` : '';
+      row.querySelector('.requester-text').textContent = `${r.requestedBy} · ${timeAgo(r.requestedAt)}${edNote}`;
     });
   } catch (e) {
     wrap.classList.add('hidden');

@@ -1296,13 +1296,25 @@ const bookStateText = {
 const bookStateClass = { pending: 'pending', searching: 'approved', downloading: 'downloading', available: 'available', stuck: 'stuck', declined: 'declined', failed: 'declined' };
 function renderMyBookRequests(books, withLabel) {
   if (!books.length) return '';
+  const editionLabel = b => {
+    if (b.state === 'available' || b.state === 'downloading') {
+      const ed = b.grabbedEdition || (b.edition === 'any' ? null : b.edition);
+      if (ed === 'produced') return ' · Full cast';
+      if (ed === 'narrated') return ' · Standard';
+      return '';
+    }
+    if (b.edition && b.edition !== 'produced') {
+      return ` · ${b.edition === 'narrated' ? 'Standard' : 'Either edition'}`;
+    }
+    return '';
+  };
   return `${withLabel ? '<div class="subsection-label my-requests-books-label">Books</div>' : ''}${books.map(b => `
     <div class="my-request-row">
       <img class="result-poster book" src="${b.cover || ''}" loading="lazy" onerror="this.style.visibility='hidden'">
       <div class="result-info">
         <div class="result-title">${escapeHtml(b.title)}</div>
         <div class="my-request-status ${bookStateClass[b.state] || ''}">
-          <span class="status-dot"></span>${escapeHtml((bookStateText[b.state] || (() => b.state))(b))}${b.edition && b.edition !== 'produced' ? ` · ${b.edition === 'narrated' ? 'Standard' : 'Either edition'}` : ''}
+          <span class="status-dot"></span>${escapeHtml((bookStateText[b.state] || (() => b.state))(b))}${escapeHtml(editionLabel(b))}
         </div>
       </div>
     </div>
@@ -2113,7 +2125,7 @@ document.getElementById('recently-added-body').addEventListener('click', e => {
   if (cat === 'books') {
     const b = store.recentBooks[Number(card.dataset.idx)];
     if (!b) return;
-    const meta = [b.year, b.hours ? `${b.hours} h` : '', b.narrator ? `Narrated by ${b.narrator}` : ''].filter(Boolean).join(' · ');
+    const meta = [b.year, b.hours ? `${b.hours} h` : '', b.narrator ? `Narrated by ${b.narrator}` : '', b.produced ? 'Full cast' : ''].filter(Boolean).join(' · ');
     openInfo({
       poster: b.cover, title: b.title, badge: 'CH.04 · AUDIOBOOK',
       meta: `${b.author ? b.author + ' · ' : ''}${meta}`,

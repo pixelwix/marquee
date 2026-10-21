@@ -27,11 +27,10 @@ State in `data/` (SQLite and JSON, gitignored). Config only in `.env` (template 
   may `require` them at top level (CI broke on that once). Load them lazily and guarded.
 - **Versioning — every ship:** bump `package.json` (feature → minor, fix → patch) and add a
   matching section to `TODO.md`. `TODO.md` feeds the owner-only "What's new" in the footer.
-- **Commits are batched:** a git commit roughly every 10 versions (message lists the
-  version range), then push. `deploy.sh` keeps a per-version image, so rollback does not
-  depend on git.
+- **Commit when done:** create a git commit and push when the work/version is complete.
+  `deploy.sh` keeps a per-version image, so rollback does not depend on git.
 - **Tests:** `npm test` (node --test, `test/`). Add a test with every change to parsing,
-  matching or state logic. Baseline 2026-10-20: 353 tests, 351 pass, 2 skipped, 0 fail.
+  matching or state logic. Baseline 2026-10-20: 356 tests, 356 pass, 0 skipped, 0 fail.
 - Never read or print `.env`. Secrets are written to it without being displayed.
 - Changes must not affect Plex playback.
 

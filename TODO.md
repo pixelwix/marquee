@@ -3,11 +3,8 @@
 Every shipped feature or fix gets its own version bump now (`package.json`
 + `package-lock.json`) and its own section here — no more letting the
 version drift unversioned between batches. One bump per shipped unit of
-work: a new capability bumps minor, a fix bumps patch. `git commit`/push
-themselves now batch to every 10th shipped unit instead of running every
-time (version bumps, TODO.md sections, and live deploys still happen every
-time regardless — only the git commit action batches). **Current version:
- v1.76.2.**
+work: a new capability bumps minor, a fix bumps patch. Each version gets
+committed and pushed when done. **Current version: v1.77.0.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -70,6 +67,8 @@ gets versioned as it ships, not reconstructed later.
 - **v1.76.0** — Books For You: missing/next books in your series and more from your authors
 - **v1.76.1** — fix: For You preferred standard readings over dramatized parts; suggested other editions of books you own
 - **v1.76.2** — fix: For You no longer repeats a series suggestion under authors or treats UK/US titles as new books
+- **v1.76.3** — fix: settings backup files no longer copied to the server or built into the app image
+- **v1.77.0** — Audiobooks: show which edition was grabbed in My Requests, Recently Added, and admin pending requests
 
 ---
 
@@ -1016,5 +1015,18 @@ gets versioned as it ships, not reconstructed later.
 
 - [x] A book already suggested in Missing from your series isn't repeated (in another edition) under More from your authors.
 - [x] UK and US titles of the same book (Philosopher's / Sorcerer's Stone) count as the same book.
+
+## v1.76.3 - Backup files kept out of the app image
+
+- [x] Hotfix and settings backup files (`.env.bak*`, `*.bak-*`, `*.backup-*`) are no longer sent to the server on deploy or built into the image. Old copies on the server moved out of the build folder.
+- [x] Local agent-toolkit links (`.agents/`) are also kept out of deploys and the image.
+
+## v1.77.0 - Show grabbed audiobook edition
+
+- [x] My Requests shows which edition was actually grabbed (Full cast vs Standard) for downloaded/available audiobooks, instead of showing "Either edition".
+- [x] Audiobookshelf library matching automatically resolves the grabbed edition for requests where either edition was allowed.
+- [x] Push notification when a book is ready includes the edition when it's not already in the book title.
+- [x] Recently Added book details modal shows "Full cast" alongside narrator and duration for produced audiobooks.
+- [x] Admin pending requests card shows the requested edition when a family member requested Standard or Either edition.
 
 ## Ideas

@@ -21,7 +21,11 @@ rsync -av --checksum \
   --exclude '.DS_Store' \
   --exclude '._*' \
   --exclude '.env' \
+  --exclude '.env.bak*' \
+  --exclude '*.bak-*' \
+  --exclude '*.backup-*' \
   --exclude 'data' \
+  --exclude '.agents' \
   . "$HOST:$DEST/"
 
 echo "==> Verifying git-tracked files landed correctly"

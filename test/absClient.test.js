@@ -56,3 +56,17 @@ test('isConfigured needs URL, key and library id', () => {
 test('fetchCover rejects anything that is not an ABS item id (no arbitrary upstream paths)', async () => {
   await assert.rejects(abs.fetchCover('../api/users'), /Invalid id/);
 });
+
+test('mapItem and isProduced identify dramatized and multi-narrator editions', () => {
+  assert.equal(abs.isProduced('Dark Age [Dramatized Adaptation]', 'One'), true);
+  assert.equal(abs.isProduced('Harry Potter (Full-Cast Edition)', 'One'), true);
+  assert.equal(abs.isProduced('GraphicAudio Series', 'One'), true);
+  assert.equal(abs.isProduced('Standard Book', 'A, B, C, D'), true);
+  assert.equal(abs.isProduced('Standard Book', 'A, B, C'), false);
+  assert.equal(abs.isProduced('Standard Book', 'Stephen Fry'), false);
+
+  const prod = abs.mapItem({ id: '1', media: { metadata: { title: 'Book [Dramatized Adaptation]', narratorName: 'Solo' } } });
+  assert.equal(prod.produced, true);
+  const std = abs.mapItem({ id: '2', media: { metadata: { title: 'Standard Book', narratorName: 'Stephen Fry' } } });
+  assert.equal(std.produced, false);
+});

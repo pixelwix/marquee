@@ -67,6 +67,29 @@ function clearRows() {
   return withDb((db, done) => db.run('DELETE FROM stream_origins', (err) => done(err)));
 }
 
+function seedGeoCache(ip, geo) {
+  return withDb((db, done) => {
+    db.run(`CREATE TABLE IF NOT EXISTS geo_cache (
+      ip TEXT PRIMARY KEY,
+      found INTEGER NOT NULL,
+      city TEXT,
+      region TEXT,
+      country TEXT,
+      lat REAL,
+      lon REAL,
+      fetched_at INTEGER
+    )`, (err) => {
+      if (err) return done(err);
+      db.run(
+        `INSERT OR REPLACE INTO geo_cache (ip, found, city, region, country, lat, lon, fetched_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [ip, geo ? 1 : 0, geo?.city || '', geo?.region || '', geo?.country || '', geo?.lat || 0, geo?.lon || 0, Date.now()],
+        done
+      );
+    });
+  });
+}
+
 test('record() skips a missing or private-range IP without ever attempting a geo lookup', async () => {
   await clearRows();
   await streamOrigins.record('r1', undefined);
@@ -84,7 +107,8 @@ test('record() skips a missing or private-range IP without ever attempting a geo
   assert.equal(await countRows(), 0);
 });
 
-liveGeoTest('record() writes a row for a resolvable public IP, at an explicit timestamp', async () => {
+test('record() writes a row for a resolvable public IP, at an explicit timestamp', async () => {
+  await seedGeoCache('8.8.8.8', { city: 'Mountain View', region: 'CA', country: 'US', lat: 37.386, lon: -122.0838 });
   await clearRows();
   const at = Date.UTC(2026, 2, 3);
   await streamOrigins.record('r3', '8.8.8.8', 'Mike', at);
@@ -97,7 +121,8 @@ liveGeoTest('record() writes a row for a resolvable public IP, at an explicit ti
   assert.equal(rows[0].at, at);
 });
 
-liveGeoTest('record() is idempotent on a repeated reference_id (INSERT OR IGNORE)', async () => {
+test('record() is idempotent on a repeated reference_id (INSERT OR IGNORE)', async () => {
+  await seedGeoCache('8.8.8.8', { city: 'Mountain View', region: 'CA', country: 'US', lat: 37.386, lon: -122.0838 });
   await clearRows();
   await streamOrigins.record('r4', '8.8.8.8');
   await streamOrigins.record('r4', '8.8.8.8'); // syncFromHistory() re-scans the whole window every run
