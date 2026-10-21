@@ -3,6 +3,30 @@
 Newest first. One entry per working session: goal, changes, validation, handover.
 Per-version detail lives in `TODO.md`; this file is the handover between sessions.
 
+### Session 2026-10-21 (later) — v1.79.0 PR test copy and safe mode
+
+- **Goal**:
+  - A `pr` branch that deploys a separate, safe test copy for checking changes before `main`.
+- **Changes Completed**:
+  - `lib/safeMode.js` + `server.js`: MARQUEE_SAFE_MODE=1 installs a guard on axios (default and
+    every `axios.create` instance) and `fetch`: non-GET requests are refused except Plex PIN
+    sign-in, the qBittorrent login and CLIProxyAPI `/v1/`; Tautulli `cmd`s other than
+    get_*/status/pms_image_proxy and SABnzbd modes other than plain reads are refused; web
+    push is a no-op; issueFixSweep, recapReminder and dbBackup do not start.
+  - `docker-compose.pr.yml`: container `marquee-pr`, port 4101, no Traefik labels, own data,
+    .env and kometa-out under MARQUEE_PR_DIR, MARQUEE_SAFE_MODE=1.
+  - Branch `pr` created; AGENTS.md, TODO.md, .env.example updated.
+- **Validation**:
+  - `npm test`: 371 pass (6 new in test/safeMode.test.js). Compose rendered on the host as
+    intended.
+- **Next Steps / Handover**:
+  - Done after this session: host folder `/mnt/docker/marquee-pr` and Dockhand stack
+    `marquee-pr` exist; container `marquee-pr` on port 4101 logs "[safe mode] ON", has no
+    Traefik labels and mounts only its own data/.env/kometa-out (Kuma and media read-only).
+    Verified 2026-10-22. Push to `pr` to test, merge `pr` into `main` to ship.
+
+---
+
 ### Session 2026-10-21 — Deploy from GitHub with Dockhand (v1.78.1)
 
 - **Goal**:
