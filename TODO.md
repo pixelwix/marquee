@@ -4,7 +4,7 @@ Every shipped feature or fix gets its own version bump now (`package.json`
 + `package-lock.json`) and its own section here — no more letting the
 version drift unversioned between batches. One bump per shipped unit of
 work: a new capability bumps minor, a fix bumps patch. Each version gets
-committed and pushed when done. **Current version: v1.78.1.**
+committed and pushed when done. **Current version: v1.79.0.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -71,6 +71,7 @@ gets versioned as it ships, not reconstructed later.
 - **v1.77.0** — Audiobooks: show which edition was grabbed in My Requests, Recently Added, and admin pending requests
 - **v1.78.0** — Settings > Services: unified Audiobooks service card (Audiobookshelf, ReadMeABook, ABB bridge)
 - **v1.78.1** — Deploys from GitHub: a push to main goes live automatically
+- **v1.79.0** — PR test copy: `pr` branch deploys a safe, read-only copy for testing changes
 
 ---
 
@@ -1043,5 +1044,10 @@ gets versioned as it ships, not reconstructed later.
 - [x] The server deploys each push to main automatically (Dockhand Git stack `marquee`); deploy.sh/rollback.sh kept for emergencies and switched to the same compose project.
 - [x] `MARQUEE_DATA_DIR` / `MARQUEE_ENV_FILE` set absolute data and .env paths for Git-stack deploys.
 - [x] fix: a build without the deployment-local NAS storage module no longer crashes on start; `MEDIA_STORAGE_MODULE` loads it from the data folder.
+
+## v1.79.0 - PR test copy
+
+- [x] New `pr` branch deploys a separate test copy (LAN port, own data and settings) for checking changes before they go live.
+- [x] `MARQUEE_SAFE_MODE` keeps the test copy read-only: no changes to Sonarr/Radarr/Overseerr/qBittorrent/SABnzbd, no email or push, no fix/recap/backup jobs.
 
 ## Ideas

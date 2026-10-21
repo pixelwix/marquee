@@ -1,4 +1,7 @@
 require('dotenv').config();
+// Test copies (the `pr` branch deployment) set MARQUEE_SAFE_MODE=1: reads only, no outgoing
+// changes, email or push. Must install before any module creates an axios instance.
+require('./lib/safeMode').install();
 // Global default timeout for every outbound axios call in the app (Plex,
 // Tautulli, Overseerr, Sonarr, Radarr, Prowlarr, qBittorrent, SABnzbd, ...) —
 // axios has no timeout by default, so a hung upstream previously left a
@@ -137,9 +140,9 @@ app.use((req, res, next) => {
 
 require('./lib/nowPlaying').start();
 require('./lib/issueWatchdog').start();
-require('./lib/issueFixSweep').start();
-require('./lib/recapReminder').start();
-require('./lib/dbBackup').start();
+if (require('./lib/safeMode').shouldStart('issueFixSweep')) require('./lib/issueFixSweep').start();
+if (require('./lib/safeMode').shouldStart('recapReminder')) require('./lib/recapReminder').start();
+if (require('./lib/safeMode').shouldStart('dbBackup')) require('./lib/dbBackup').start();
 require('./lib/sceneReleases').start();
 require('./lib/mediaCache').start();
 require('./lib/diskSpaceHistory').start();

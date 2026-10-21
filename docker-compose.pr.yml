@@ -1,0 +1,26 @@
+# Test copy of Marquee, deployed from the `pr` branch (Dockhand Git stack "marquee-pr").
+# Separate from production on purpose: no Traefik labels (so it can never touch the live
+# route), its own container name, port, data folder and .env, and MARQUEE_SAFE_MODE=1 so it
+# only READS the real services: no outgoing changes, email, push or acting jobs
+# (see lib/safeMode.js). Every path is absolute because Dockhand builds from its own checkout.
+#
+#   MARQUEE_PR_DIR   host folder holding this copy's data/ and .env   (required)
+#   MARQUEE_PR_PORT  host port for the web UI                          (default 4101)
+#   MEDIA_MOUNT_DIR / UPTIME_KUMA_DATA_DIR  read-only, same as production (optional)
+services:
+  marquee:
+    build: .
+    container_name: marquee-pr
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+      - MARQUEE_SAFE_MODE=1
+    ports:
+      - "${MARQUEE_PR_PORT:-4101}:4000"
+    volumes:
+      - ${MARQUEE_PR_DIR:?set MARQUEE_PR_DIR}/data:/app/data
+      - ${MARQUEE_PR_DIR:?set MARQUEE_PR_DIR}/.env:/app/.env
+      - ${UPTIME_KUMA_DATA_DIR:-${MARQUEE_PR_DIR}/data}:/app/uptime-kuma-data:ro
+      - ${MEDIA_MOUNT_DIR:-${MARQUEE_PR_DIR}/data}:/app/media-mount:ro
+      # Its own Kometa folder, never production's: a notice posted here must not reach Plex.
+      - ${MARQUEE_PR_DIR:?set MARQUEE_PR_DIR}/kometa-out:/app/kometa-config:rw
