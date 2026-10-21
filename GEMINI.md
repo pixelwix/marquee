@@ -23,8 +23,11 @@ State in `data/` (SQLite and JSON, gitignored). Config only in `.env` (template 
   paths. `git config core.hooksPath githooks` enables the pre-commit hook that blocks
   RFC1918 addresses and the deployment's domain. Use `localhost` / `example.com` in
   tracked files.
-- `lib/mediaStorage.js` and its test are deployment-local and gitignored; nothing tracked
-  may `require` them at top level (CI broke on that once). Load them lazily and guarded.
+- `lib/mediaStorage.js` and its test are deployment-local and gitignored. Load it only via
+  `lib/loadMediaStorage.js` (a test enforces this): a direct `require('./mediaStorage')` broke
+  CI once and crashed the first Git-stack deploy (v1.78.1). Builds from GitHub get it from
+  `MEDIA_STORAGE_MODULE` (a copy in the host's `data/local/`); after editing the file on the
+  Mac, copy it there too.
 - **Versioning — every ship:** bump `package.json` (feature → minor, fix → patch) and add a
   matching section to `TODO.md`. `TODO.md` feeds the owner-only "What's new" in the footer.
 - **Commit and push every version.** A push to `main` is a deploy: Dockhand on the hosting

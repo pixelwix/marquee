@@ -1042,5 +1042,6 @@ gets versioned as it ships, not reconstructed later.
 
 - [x] The server deploys each push to main automatically (Dockhand Git stack `marquee`); deploy.sh/rollback.sh kept for emergencies and switched to the same compose project.
 - [x] `MARQUEE_DATA_DIR` / `MARQUEE_ENV_FILE` set absolute data and .env paths for Git-stack deploys.
+- [x] fix: a build without the deployment-local NAS storage module no longer crashes on start; `MEDIA_STORAGE_MODULE` loads it from the data folder.
 
 ## Ideas
