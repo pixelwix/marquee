@@ -15,8 +15,10 @@ Per-version detail lives in `TODO.md`; this file is the handover between session
   - Bumped version to `1.78.0` in `package.json`, `package-lock.json`, and `TODO.md`.
 - **Validation**:
   - `test/serviceRegistry.test.js`: 5 passed.
+  - Committed and pushed to GitHub `main` (`3cf9bd4`).
+  - Deployed to `hosted:/mnt/docker/skyn3t` via `./deploy.sh`; container running `v1.78.0` (healthy).
 - **Next Steps / Handover**:
-  - Ready for deployment via `./deploy.sh` when desired.
+  - Verify Audiobooks card live in Admin > Settings > Services and test credential updates when needed.
 
 ---
 
