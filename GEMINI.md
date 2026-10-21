@@ -27,8 +27,9 @@ State in `data/` (SQLite and JSON, gitignored). Config only in `.env` (template 
   may `require` them at top level (CI broke on that once). Load them lazily and guarded.
 - **Versioning — every ship:** bump `package.json` (feature → minor, fix → patch) and add a
   matching section to `TODO.md`. `TODO.md` feeds the owner-only "What's new" in the footer.
-- **Commit when done:** create a git commit and push when the work/version is complete.
-  `deploy.sh` keeps a per-version image, so rollback does not depend on git.
+- **Commit and push every version.** A push to `main` is a deploy: Dockhand on the hosting
+  box polls GitHub every 5 minutes and rebuilds the `skyn3t` stack from the new commit. Never
+  push unfinished work to `main`; use a branch.
 - **Tests:** `npm test` (node --test, `test/`). Add a test with every change to parsing,
   matching or state logic. Baseline 2026-10-21: 361 tests, 361 pass, 0 skipped, 0 fail.
 - Never read or print `.env`. Secrets are written to it without being displayed.
@@ -36,11 +37,15 @@ State in `data/` (SQLite and JSON, gitignored). Config only in `.env` (template 
 
 ## Deploy and rollback
 
-- `./deploy.sh`: rsync the working tree to the hosting box's build context (checksum
-  verified file by file), `docker compose build && up -d`, tag the image `vX.Y.Z`
-  (newest 20 kept). Host and paths are inside the script.
-- `./rollback.sh` lists versions; `./rollback.sh vX.Y.Z` switches back. Code only; `data/`
-  is shared.
+- **Normal deploy:** bump, commit, push `main`. Dockhand (Git stack `skyn3t`, compose
+  `docker-compose.yml`, env file = the host's `.env`) picks it up within ~5 minutes and runs
+  `docker compose up -d --build`. The host `.env` sets `MARQUEE_DATA_DIR` / `MARQUEE_ENV_FILE`
+  to absolute paths because Dockhand builds from its own checkout.
+- **Rollback:** revert the commit and push (or redeploy an earlier commit in Dockhand).
+- **Emergency only:** `./deploy.sh` (rsync the working tree to the host build context, build,
+  tag `vX.Y.Z`) and `./rollback.sh [vX.Y.Z]` (switch to a saved image tag) still work for a
+  hotfix from the Mac, but Dockhand's next sync replaces whatever they deployed with `main`.
+  Push the fix afterwards. Image tags only exist for versions deployed with `deploy.sh`.
 - Verify inside the running container (`docker exec`), not just on the host.
 
 ## Session routine

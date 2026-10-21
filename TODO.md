@@ -4,7 +4,7 @@ Every shipped feature or fix gets its own version bump now (`package.json`
 + `package-lock.json`) and its own section here — no more letting the
 version drift unversioned between batches. One bump per shipped unit of
 work: a new capability bumps minor, a fix bumps patch. Each version gets
-committed and pushed when done. **Current version: v1.78.0.**
+committed and pushed when done. **Current version: v1.78.1.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -70,6 +70,7 @@ gets versioned as it ships, not reconstructed later.
 - **v1.76.3** — fix: settings backup files no longer copied to the server or built into the app image
 - **v1.77.0** — Audiobooks: show which edition was grabbed in My Requests, Recently Added, and admin pending requests
 - **v1.78.0** — Settings > Services: unified Audiobooks service card (Audiobookshelf, ReadMeABook, ABB bridge)
+- **v1.78.1** — Deploys from GitHub: a push to main goes live automatically
 
 ---
 
@@ -1036,5 +1037,10 @@ gets versioned as it ships, not reconstructed later.
 - [x] Health checks report connectivity for configured audiobook services with latency measurement.
 - [x] Service configuration popup allows managing ABS, RMAB, and ABB bridge URLs and credentials directly from the admin UI.
 - [x] Documented audiobook environment variables in .env.example.
+
+## v1.78.1 - Deploys from GitHub
+
+- [x] The server deploys each push to main automatically (Dockhand Git stack); deploy.sh/rollback.sh kept for emergencies.
+- [x] `MARQUEE_DATA_DIR` / `MARQUEE_ENV_FILE` set absolute data and .env paths for Git-stack deploys.
 
 ## Ideas
