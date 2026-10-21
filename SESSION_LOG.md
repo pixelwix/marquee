@@ -3,6 +3,33 @@
 Newest first. One entry per working session: goal, changes, validation, handover.
 Per-version detail lives in `TODO.md`; this file is the handover between sessions.
 
+### Session 2026-10-21 — Deploy from GitHub with Dockhand (v1.78.1)
+
+- **Goal**:
+  - Make a push to `main` the deploy, via a Dockhand Git stack, with no hand-run deploys.
+- **Changes Completed**:
+  - `docker-compose.yml`: data and `.env` mounts take absolute paths from `MARQUEE_DATA_DIR` /
+    `MARQUEE_ENV_FILE` (Dockhand builds from its own checkout).
+  - `lib/loadMediaStorage.js`: the gitignored NAS module is loaded only through this guarded
+    loader (local file, then `MEDIA_STORAGE_MODULE`, else no NAS volumes). `lib/serviceHealth.js`
+    required it directly, which crashed the first Git deploy; a test now forbids that.
+  - `deploy.sh` / `rollback.sh`: emergency only, same compose project (`-p marquee`), image
+    `marquee-marquee`; rollback still finds the old `skyn3t-marquee:vX` images.
+  - Host: Dockhand Git stack `marquee` (repo `pixelwix/marquee`, `main`, every 5 min, build on
+    deploy, compose variables stored in the stack). Container name stays `skyn3t`.
+- **Validation**:
+  - `npm test`: 365 pass. Clean GitHub build on the host loaded all 95 modules offline.
+  - First cutover crashed (`Cannot find module './mediaStorage'`); old container restored
+    within minutes. Second cutover after the fix: Dockhand deploy Succeeded, v1.78.1 healthy,
+    0 restarts, NAS module loaded (7 volumes), data and mounts correct, site 200.
+- **Next Steps / Handover**:
+  - Remove the stopped `skyn3t-old` container once the owner is happy with 1.78.1.
+  - Dockhand still lists the old empty Internal stack `skyn3t`: never deploy it; remove the
+    record only, never its files.
+  - After editing `lib/mediaStorage.js` on the Mac, copy it to the host's `data/local/`.
+
+---
+
 ### Session 2026-10-21 — v1.78.0 Audiobooks service settings
 
 - **Goal**:
