@@ -11,6 +11,11 @@ set -euo pipefail
 
 HOST=hosted
 DEST=/mnt/docker/skyn3t
+# Emergency use only: normal deploys are a push to main (Dockhand Git stack "marquee"). Same
+# compose project as Dockhand, so this replaces the same container instead of fighting it;
+# Dockhand's next sync puts main back.
+COMPOSE="docker compose -p marquee"
+IMAGE=marquee-marquee
 
 cd "$(dirname "$0")"
 
@@ -48,13 +53,13 @@ echo "==> All files verified"
 
 echo "==> Rebuilding and restarting"
 VERSION=$(node -p "require('./package.json').version")
-ssh "$HOST" "cd $DEST && docker compose build && docker compose up -d"
+ssh "$HOST" "cd $DEST && $COMPOSE build && $COMPOSE up -d"
 
 # Keep each version's image under its own tag so ./rollback.sh vX.Y.Z can switch back in seconds
-# (git can't do this: commits are batched every 10 versions). Only the newest 20 are kept; they
+# (faster than redeploying an older commit). Only the newest 20 are kept; they
 # share every layer except the app's own files, so the extra disk is small.
 echo "==> Tagging image as v$VERSION (keeping the newest 20 version tags)"
-ssh "$HOST" "docker tag skyn3t-marquee:latest skyn3t-marquee:v$VERSION && docker images skyn3t-marquee --format '{{.Tag}}' | grep '^v' | sort -rV | tail -n +21 | xargs -r -I{} docker rmi skyn3t-marquee:{} >/dev/null"
+ssh "$HOST" "docker tag $IMAGE:latest $IMAGE:v$VERSION && docker images $IMAGE --format '{{.Tag}}' | grep '^v' | sort -rV | tail -n +21 | xargs -r -I{} docker rmi $IMAGE:{} >/dev/null"
 
 echo "==> Done. Container status:"
 ssh "$HOST" "docker ps --filter name=skyn3t --format '{{.Names}}\t{{.Status}}'"

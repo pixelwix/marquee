@@ -28,7 +28,7 @@ State in `data/` (SQLite and JSON, gitignored). Config only in `.env` (template 
 - **Versioning — every ship:** bump `package.json` (feature → minor, fix → patch) and add a
   matching section to `TODO.md`. `TODO.md` feeds the owner-only "What's new" in the footer.
 - **Commit and push every version.** A push to `main` is a deploy: Dockhand on the hosting
-  box polls GitHub every 5 minutes and rebuilds the `skyn3t` stack from the new commit. Never
+  box polls GitHub every 5 minutes and rebuilds the `marquee` stack from the new commit. Never
   push unfinished work to `main`; use a branch.
 - **Tests:** `npm test` (node --test, `test/`). Add a test with every change to parsing,
   matching or state logic. Baseline 2026-10-21: 361 tests, 361 pass, 0 skipped, 0 fail.
@@ -37,16 +37,22 @@ State in `data/` (SQLite and JSON, gitignored). Config only in `.env` (template 
 
 ## Deploy and rollback
 
-- **Normal deploy:** bump, commit, push `main`. Dockhand (Git stack `skyn3t`, compose
-  `docker-compose.yml`, env file = the host's `.env`) picks it up within ~5 minutes and runs
-  `docker compose up -d --build`. The host `.env` sets `MARQUEE_DATA_DIR` / `MARQUEE_ENV_FILE`
-  to absolute paths because Dockhand builds from its own checkout.
-- **Rollback:** revert the commit and push (or redeploy an earlier commit in Dockhand).
-- **Emergency only:** `./deploy.sh` (rsync the working tree to the host build context, build,
-  tag `vX.Y.Z`) and `./rollback.sh [vX.Y.Z]` (switch to a saved image tag) still work for a
-  hotfix from the Mac, but Dockhand's next sync replaces whatever they deployed with `main`.
-  Push the fix afterwards. Image tags only exist for versions deployed with `deploy.sh`.
-- Verify inside the running container (`docker exec`), not just on the host.
+- **Normal deploy:** bump, commit, push `main`. Dockhand on the hosting box (Git stack
+  `marquee`, compose `docker-compose.yml`, build on deploy) checks GitHub every 5 minutes and
+  runs `docker compose up -d --build` when `main` has a new commit. Compose variables
+  (`MARQUEE_DOMAIN`, `MARQUEE_DATA_DIR`, `MARQUEE_ENV_FILE` and the optional mount dirs) are
+  stored in that Dockhand stack as absolute host paths; app config stays in the host `.env`.
+- **Names (since 2026-10-21):** compose project `marquee`, image `marquee-marquee`, container
+  still `skyn3t`. Always pass `-p marquee` to `docker compose` on the host; a plain
+  `docker compose` in the old folder would start a second project and clash over the
+  container name. Dockhand still lists an old, empty `skyn3t` stack: never deploy it.
+- **Rollback:** revert the commit and push, or redeploy an earlier commit in Dockhand.
+- **Emergency only:** `./deploy.sh` (rsync the working tree to the host's old build folder,
+  build, tag `marquee-marquee:vX.Y.Z`) and `./rollback.sh [vX.Y.Z]` (switch to a saved image,
+  including pre-Dockhand `skyn3t-marquee` tags up to v1.78.0). Both use project `marquee`, so
+  they replace the same container. What they deploy stays live until the next push to `main`,
+  which Dockhand then deploys over it, so push the fix promptly.
+- Verify inside the running container (`docker exec skyn3t ...`), not just on the host.
 
 ## Session routine
 

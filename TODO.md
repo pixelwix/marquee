@@ -1040,7 +1040,7 @@ gets versioned as it ships, not reconstructed later.
 
 ## v1.78.1 - Deploys from GitHub
 
-- [x] The server deploys each push to main automatically (Dockhand Git stack); deploy.sh/rollback.sh kept for emergencies.
+- [x] The server deploys each push to main automatically (Dockhand Git stack `marquee`); deploy.sh/rollback.sh kept for emergencies and switched to the same compose project.
 - [x] `MARQUEE_DATA_DIR` / `MARQUEE_ENV_FILE` set absolute data and .env paths for Git-stack deploys.
 
 ## Ideas
