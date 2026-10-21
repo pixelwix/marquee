@@ -144,6 +144,8 @@ require('./lib/sceneReleases').start();
 require('./lib/mediaCache').start();
 require('./lib/diskSpaceHistory').start();
 require('./lib/streamOrigins').start();
+require('./lib/bookRequests').start();
+require('./lib/bookSuggestions').start();
 // One-shot, not a .start() scheduler like the above — see the function's own
 // comment in lib/recapSendLog.js for why this has to run once at boot,
 // before any real request can claim anything.
@@ -171,6 +173,8 @@ app.use('/api/scene-releases', require('./routes/sceneReleases'));
 app.use('/api/collection-gaps', require('./routes/collectionGaps'));
 app.use('/api/changelog', require('./routes/changelog'));
 app.use('/api/scripts', require('./routes/scripts'));
+app.use('/api/audiobooks', require('./routes/audiobooks'));
+app.use('/api/books', require('./routes/books'));
 // Deliberately mounted outside /api — sw.js's fetch handler only skips
 // caching requests under /api/, so keeping this bare lets the existing
 // service worker start caching these client-side too, for free.

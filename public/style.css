@@ -1418,9 +1418,22 @@ body {
 
 /* Settings > Scheduled Scripts (cards reuse .service-card / .service-badge) */
 .script-card { display: flex; flex-direction: column; }
+/* Cards size to their own content; a card beside a tall progress panel shouldn't stretch into empty space. */
+.scripts-grid { align-items: start; grid-auto-flow: row dense; }
+.script-card-main { display: flex; flex-direction: column; min-width: 0; }
+/* Cards with a progress panel take a full row: details on the left, the panel's stats laid out in two columns on the right. */
+.script-card-wide { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 1rem; align-items: start; }
+.script-card-wide .script-desc { -webkit-line-clamp: 5; line-clamp: 5; }
+.script-card-wide .movie-countdown { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1.25rem; align-content: start; }
+.script-card-wide .movie-countdown > .movie-countdown-total,
+.script-card-wide .movie-countdown > progress,
+.script-card-wide .movie-countdown > small { grid-column: 1 / -1; }
+@media (max-width: 600px) { .script-card-wide { grid-template-columns: 1fr; } .script-card-wide .movie-countdown { grid-template-columns: 1fr; } }
+.script-sched { display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+.script-sched code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.8; }
 .script-desc { font-size: 0.8rem; color: var(--muted); margin: 0.4rem 0 0.5rem; line-height: 1.35;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.script-times { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.75rem; color: var(--muted); margin-top: auto; }
+.script-times { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.75rem; color: var(--muted); margin-top: 0.6rem; }
 .script-card .service-card-foot { justify-content: flex-end; }
 .script-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; }
 .script-muted { color: var(--muted); font-size: 0.7rem; }
@@ -1428,3 +1441,36 @@ body {
   max-height: 9rem; overflow: auto; margin: 0; padding: 0.55rem 0.65rem; border-radius: 10px;
   background: rgba(20,25,35,0.04); border: 1px solid rgba(20,25,35,0.08); }
 .pill-btn.danger-armed { color: var(--danger); border-color: rgba(214,69,69,0.45); background: rgba(214,69,69,0.08); }
+
+.movie-countdown { margin: 0.5rem 0 0.8rem; padding: 0.75rem; border: 1px solid var(--muted); border-radius: 12px; font-size: 0.8rem; line-height: 1.6; }
+.movie-countdown-total { font-size: 1rem; }
+.movie-countdown-total strong { font-size: 1.6rem; }
+.movie-countdown progress { width: 100%; height: 0.6rem; accent-color: var(--accent); }
+.movie-countdown small { display: block; color: var(--muted); line-height: 1.4; margin-top: 0.3rem; }
+
+/* ---------- Audiobooks (Recently Added → Books) ---------- */
+.poster-frame.book { aspect-ratio: 1/1; }
+.poster-grid-scroll .poster-card.book-card { flex: 0 0 150px; }
+.poster-sub { font-size: 0.7rem; color: var(--muted); margin-top: 0.4rem; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.info-poster.book { aspect-ratio: 1/1; width: 170px; height: auto; align-self: flex-start; }
+.book-series { font-family: var(--mono); font-size: 0.74rem; color: var(--teal); margin: -0.5rem 0 0.85rem; }
+.info-listen { display: inline-flex; margin: 0 0 1rem; text-decoration: none; width: auto; padding: 0.6rem 1rem; font-size: 0.85rem; }
+
+/* ---------- Book requests (request modal → Books) ---------- */
+.kind-toggle { display: inline-flex; align-self: flex-start; padding: 3px; gap: 3px; border-radius: 999px; border: 1px solid var(--input-border); background: var(--input-bg); margin-bottom: 0.75rem; }
+.kind-toggle.hidden { display: none; }
+.kind-toggle button { font: 600 0.78rem var(--body); border: 0; background: transparent; color: var(--muted); padding: 0.35rem 0.85rem; border-radius: 999px; cursor: pointer; }
+.kind-toggle button[aria-pressed="true"] { background: var(--card); color: var(--text); box-shadow: 0 2px 8px -4px rgba(0,0,0,0.3); }
+.kind-toggle button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.result-poster.book { width: 54px; height: 54px; }
+.my-requests-books-label { margin-top: 0.75rem; }
+
+/* ---------- Book edition choice (request modal → Books) ---------- */
+.edition-toggle { display: flex; align-items: center; gap: 4px; margin: 0.5rem 0 0.25rem; flex-wrap: wrap; }
+.edition-toggle.hidden { display: none; }
+.edition-label { font-size: 0.72rem; color: var(--muted); font-family: var(--mono); margin-right: 4px; }
+.edition-toggle button { font: 500 0.74rem var(--body); border: 1px solid var(--input-border); background: transparent; color: var(--muted); padding: 0.25rem 0.65rem; border-radius: 999px; cursor: pointer; }
+.edition-toggle button[aria-pressed="true"] { background: var(--card); color: var(--text); border-color: var(--teal); }
+.edition-toggle button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+.edition-chip { color: var(--teal); font-weight: 600; }

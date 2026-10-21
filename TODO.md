@@ -7,7 +7,7 @@ work: a new capability bumps minor, a fix bumps patch. `git commit`/push
 themselves now batch to every 10th shipped unit instead of running every
 time (version bumps, TODO.md sections, and live deploys still happen every
 time regardless — only the git commit action batches). **Current version:
- v1.69.0.**
+ v1.76.2.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -53,6 +53,23 @@ gets versioned as it ships, not reconstructed later.
 - **v1.68.0** — Settings > Scheduled Scripts: every arr-stack cron job with last/next run,
   editable schedule and description, and Run now
 - **v1.69.0** — Scheduled Scripts: "Changes files" checkbox in Edit sets the Run now confirm
+- **v1.70.0** — Scheduled Scripts: live movie replacement countdown
+- **v1.71.0** — Scheduled Scripts: Reality TV HEVC campaign countdown
+- **v1.71.1** — Scheduled Scripts cards size to their content; cron no longer wraps
+- **v1.71.2** — Scheduled Scripts progress cards span two columns
+- **v1.71.3** — Scheduled Scripts progress cards take a full row
+- **v1.72.0** — Recently Added gets a Books row from Audiobookshelf; tap for details + Listen
+- **v1.72.1** — Listen button sits above the book description instead of below it
+- **v1.73.0** — Request audiobooks: Books toggle in the request modal (ReadMeABook), owner approval, status in My Requests
+- **v1.73.1** — fix: requesting a book ReadMeABook already has follows that request instead of showing a failure
+- **v1.73.2** — fix: retrying a book request that failed to send now actually resends it
+- **v1.73.3** — fix: a book request ReadMeABook has already searched for 3+ times shows as Stuck right away
+- **v1.73.4** — fix: book request status stopped updating once a book was downloading or done
+- **v1.74.0** — Stuck book requests say whether nothing was found or releases failed the quality check (needs a manual pick)
+- **v1.75.0** — Book requests: choose Full cast, Standard or Either edition
+- **v1.76.0** — Books For You: missing/next books in your series and more from your authors
+- **v1.76.1** — fix: For You preferred standard readings over dramatized parts; suggested other editions of books you own
+- **v1.76.2** — fix: For You no longer repeats a series suggestion under authors or treats UK/US titles as new books
 
 ---
 
@@ -921,5 +938,83 @@ gets versioned as it ships, not reconstructed later.
 
 - [x] Edit popup has a "Changes files" checkbox: ticked scripts need a second click on Run now. Saved in the scripts-agent catalog (new `PUT /jobs/:id/changes-files`), audit-logged.
 - [x] arr-stack scripts `AGENTS.md` now says every new scheduled script gets a catalog entry (description + changesFiles), so new jobs arrive described and flagged.
+
+## v1.70.0 - Movie replacement countdown in Scheduled Scripts
+
+- [x] Show live movie replacement countdown, daily verified goal, blocked count and file-size savings in Scheduled Scripts; refresh every minute with stale-report indicators.
+
+## v1.71.0 - Reality TV campaign countdown in Scheduled Scripts
+
+- [x] Add Reality TV campaign countdown with current smaller HEVC episode checks, waves, runner status and deduplicated file-size savings beside the maintenance script.
+
+## v1.71.1 - Scheduled Scripts card layout
+
+- [x] Cards no longer stretch to the tallest card in their row (blank space beside the progress panels); schedule shows plain English with the cron expression on its own unbroken line.
+- [x] Fixed the v1.70.0/v1.71.0 changelog headings so they appear in What's new.
+
+## v1.71.2 - Progress cards span two columns
+
+- [x] Scheduled Scripts cards with a progress panel (movie replacements, reality campaign) span two columns, details left and panel right, so short cards no longer leave holes in the grid.
+
+## v1.71.3 - Progress cards take a full row
+
+- [x] Scheduled Scripts progress cards now span the whole row (details left, panel stats in two columns right) instead of two columns, which still left holes beside them; checked with a headless-Chrome render of the live job data.
+
+## v1.72.0 - Books in Recently Added
+
+- [x] Recently Added has a Books row with the newest audiobooks from Audiobookshelf (square covers, author under each).
+- [x] Tapping a book shows narrator, listening time, series and description, with a Listen in Audiobookshelf button.
+- [x] Covers load through Marquee, so they work outside the house; the row stays hidden if Audiobookshelf isn't set up or is down.
+
+## v1.72.1 - Listen button up top
+
+- [x] On a book's card, Listen in Audiobookshelf now sits under the series line, so long descriptions no longer push it out of view.
+
+## v1.73.0 - Request a book
+
+- [x] The request modal has a Movies & TV | Books toggle; Books searches the Audible catalog through ReadMeABook and shows In Library / Requested / Request.
+- [x] Family book requests wait for the owner's approval under Admin → Pending book requests (push to the owner); the owner's own requests go straight through.
+- [x] My Requests lists book requests with their status (waiting for approval, searching, downloading, available, stuck after two days of no releases), and the requester gets a push when the book is ready.
+
+## v1.73.1 - Duplicate book requests
+
+- [x] Requesting a book that already has a ReadMeABook request now follows that request (real status, search count) instead of showing "Could not be requested".
+
+## v1.73.2 - Retry failed book requests
+
+- [x] If sending your book request to ReadMeABook failed, tapping Request again resends it instead of quietly keeping the stuck one.
+
+## v1.73.3 - Stuck book requests
+
+- [x] A book request that ReadMeABook has already searched for 3 or more times without finding a release shows as Stuck immediately, instead of waiting two days from when it was requested in Marquee.
+
+## v1.73.4 - Book status updates
+
+- [x] Book requests now keep updating through downloading and available (ReadMeABook errors when asked for a single finished request, so Marquee reads its request list instead, one call per check).
+
+## v1.74.0 - Why a book is stuck
+
+- [x] A stuck book request now says which kind of stuck: no releases found yet, or releases found that all failed ReadMeABook's quality check and need a manual pick.
+
+## v1.75.0 - Choose the book edition
+
+- [x] Books search has an Edition choice: Full cast (default), Standard reading, or Either. It's sent to the AudioBook Bay bridge just before the request reaches ReadMeABook, so that book's search follows it.
+- [x] My Requests shows the edition when it isn't Full cast.
+
+## v1.76.0 - Books For You
+
+- [x] With the Books search empty, the request modal suggests books from your Audiobookshelf library: gaps and the next book in every series you have, and more from your most-listened authors.
+- [x] Skips books you own or have requested, other languages, summaries and box sets; prefers full-cast / dramatized editions and requests every part of a split dramatization in one tap.
+- [x] Rebuilt every 6 hours in the background.
+
+## v1.76.1 - For You edition fixes
+
+- [x] An edition titled Dramatized / Full Cast now always beats a multi-narrator standard reading (Red Rising #5 suggested the plain Dark Age).
+- [x] A different edition of a book you already own (standard Harry Potter vs your full-cast set) is no longer suggested.
+
+## v1.76.2 - For You duplicates
+
+- [x] A book already suggested in Missing from your series isn't repeated (in another edition) under More from your authors.
+- [x] UK and US titles of the same book (Philosopher's / Sorcerer's Stone) count as the same book.
 
 ## Ideas

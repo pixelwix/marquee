@@ -439,8 +439,14 @@ function renderRecentlyWatched() {
 async function loadRecentlyAdded() {
   const body = document.getElementById('recently-added-body');
   try {
-    const data = await api('/api/tautulli/recently-added');
+    // Books (Audiobookshelf) load alongside but never block or break the
+    // Plex rows — an ABS outage or missing config just leaves the row out.
+    const [data, books] = await Promise.all([
+      api('/api/tautulli/recently-added'),
+      api('/api/audiobooks/recently-added').catch(() => null)
+    ]);
     store.recentlyAdded = data;
+    store.recentBooks = books?.items || [];
 
     const sections = data.all
       ? [{ key: 'all', label: null, items: data.all }]
@@ -472,10 +478,31 @@ async function loadRecentlyAdded() {
           </div>
         `).join('')}
       </div>
-    `).join('');
+    `).join('') + renderBooksRow(store.recentBooks, cap);
   } catch (e) {
     body.innerHTML = '<p class="empty-state">Could not reach Tautulli.</p>';
   }
+}
+
+// Audiobook covers are square, so the tiles are too; author sits under the
+// cover because a book title alone is often ambiguous.
+function renderBooksRow(books, cap) {
+  if (!books || !books.length) return '';
+  return `
+    <div class="subsection-label">Books</div>
+    <div class="poster-grid poster-grid-scroll" style="margin-bottom:1rem;">
+      ${books.slice(0, cap).map((b, idx) => `
+        <div class="poster-card book-card" data-cat="books" data-idx="${idx}">
+          <div class="poster-frame book">
+            <img class="poster-img" src="${b.cover || ''}" loading="lazy" onerror="this.style.visibility='hidden'">
+            ${b.addedAt ? `<span class="poster-badge">${timeAgo(b.addedAt)}</span>` : ''}
+            <div class="poster-overlay"><span class="poster-overlay-text">${escapeHtml(b.title)}</span></div>
+          </div>
+          <div class="poster-sub">${escapeHtml((b.author || '').split(',')[0])}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 // ---------- Airing Today ----------
@@ -995,8 +1022,151 @@ function openRequestModal() {
   const searchInput = document.getElementById('search-input');
   searchInput.value = '';
   searchInput.focus();
-  loadDiscover();
+  setRequestKind('video');
 }
+
+// ---------- Books (ReadMeABook) in the request modal ----------
+// The Movies & TV | Books toggle only appears when book requests are set up.
+// Books search ReadMeABook (Audible catalog) instead of Overseerr and render
+// into their own results list, so the video discover/search flow is untouched.
+let requestKind = 'video';
+let booksEnabled = false;
+let editionsEnabled = false;
+// Full cast / dramatized is the house default; Standard = single-narrator reading.
+let bookEdition = 'produced';
+api('/api/books/enabled').then(d => {
+  booksEnabled = !!d.enabled;
+  editionsEnabled = !!d.editions;
+  document.getElementById('kind-toggle').classList.toggle('hidden', !booksEnabled);
+}).catch(() => {});
+document.getElementById('edition-toggle').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-edition]');
+  if (!btn) return;
+  bookEdition = btn.dataset.edition;
+  document.querySelectorAll('#edition-toggle button').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+});
+
+function setRequestKind(kind) {
+  requestKind = kind;
+  const books = kind === 'books';
+  document.getElementById('kind-video-btn').setAttribute('aria-pressed', String(!books));
+  document.getElementById('kind-books-btn').setAttribute('aria-pressed', String(books));
+  const input = document.getElementById('search-input');
+  input.placeholder = books ? 'Search a book or author…' : 'Search a movie or show…';
+  document.getElementById('search-results').classList.toggle('hidden', books);
+  document.getElementById('book-results').classList.toggle('hidden', !books);
+  document.getElementById('edition-toggle').classList.toggle('hidden', !(books && editionsEnabled));
+  const label = document.getElementById('discover-label');
+  if (books) {
+    label.classList.add('hidden');
+    if (!input.value.trim()) loadBookSuggestions();
+    else runBookSearch(input.value.trim());
+  } else if (input.value.trim()) {
+    input.dispatchEvent(new Event('input'));
+  } else {
+    loadDiscover();
+  }
+}
+document.getElementById('kind-video-btn').addEventListener('click', () => setRequestKind('video'));
+document.getElementById('kind-books-btn').addEventListener('click', () => setRequestKind('books'));
+
+let bookResults = [];
+
+// ---------- For You (Books) ----------
+// Shown while the Books search box is empty: gaps and next books in the series
+// you have, and more from your most-listened authors (lib/bookSuggestions.js).
+let bookSuggestionsCache = null;
+async function loadBookSuggestions() {
+  const el = document.getElementById('book-results');
+  if (!bookSuggestionsCache) {
+    el.innerHTML = '<p class="empty-state">Loading suggestions…</p>';
+    try { bookSuggestionsCache = await api('/api/books/suggestions'); } catch (e) { bookSuggestionsCache = { series: [], authors: [] }; }
+  }
+  if (requestKind !== 'books' || document.getElementById('search-input').value.trim()) return;
+  const { series = [], authors = [] } = bookSuggestionsCache;
+  if (!series.length && !authors.length) {
+    el.innerHTML = '<p class="empty-state">Search for an audiobook by title or author. Suggestions from your library appear here once they’re ready.</p>';
+    bookResults = [];
+    return;
+  }
+  bookResults = [...series, ...authors];
+  const row = (b, idx) => `
+    <div class="result-item" data-idx="${idx}">
+      <img class="result-poster book" src="${b.cover || ''}" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div class="result-info">
+        <div class="result-title">${escapeHtml(b.title)}</div>
+        <div class="result-year">${escapeHtml(b.reason || '')}${b.produced ? ' · <span class="edition-chip">Full cast</span>' : ''}${b.parts && b.parts.length > 1 ? ` · ${b.parts.length} parts` : ''}</div>
+      </div>
+      <button class="request-btn pill-btn" data-idx="${idx}">
+        <span class="state-dot paused"></span><span class="btn-label">Request</span>
+      </button>
+    </div>`;
+  el.innerHTML =
+    (series.length ? '<div class="subsection-label">Missing from your series</div>' + series.map((b, i) => row(b, i)).join('') : '') +
+    (authors.length ? '<div class="subsection-label">More from your authors</div>' + authors.map((b, i) => row(b, series.length + i)).join('') : '');
+}
+const bookButtonLabel = a => (a === 'available' ? '✓ In Library' : a === 'requested' ? 'Requested' : 'Request');
+function renderBookResults(results, emptyMessage) {
+  bookResults = results;
+  const el = document.getElementById('book-results');
+  if (!results.length) { el.innerHTML = `<p class="empty-state">${emptyMessage}</p>`; return; }
+  el.innerHTML = results.map((b, idx) => `
+    <div class="result-item" data-idx="${idx}">
+      <img class="result-poster book" src="${b.cover || ''}" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div class="result-info">
+        <div class="result-title">${escapeHtml(b.title)}</div>
+        <div class="result-year">${escapeHtml([b.author.split(',')[0], b.year, b.hours ? b.hours + ' h' : ''].filter(Boolean).join(' · '))}</div>
+      </div>
+      <button class="request-btn pill-btn ${b.availability === 'available' ? 'available' : ''}" data-idx="${idx}" ${b.availability !== 'none' ? 'disabled' : ''}>
+        <span class="state-dot ${b.availability === 'available' ? '' : 'paused'}"></span>
+        <span class="btn-label">${bookButtonLabel(b.availability)}</span>
+      </button>
+    </div>
+  `).join('');
+}
+
+let bookSearchSeq = 0;
+async function runBookSearch(q) {
+  const seq = ++bookSearchSeq;
+  document.getElementById('book-results').innerHTML = '<p class="empty-state">Searching…</p>';
+  try {
+    const results = await api(`/api/books/search?q=${encodeURIComponent(q)}`);
+    if (seq === bookSearchSeq) renderBookResults(results, 'No audiobooks found.');
+  } catch (e) {
+    if (seq === bookSearchSeq) document.getElementById('book-results').innerHTML = '<p class="empty-state">Book search failed.</p>';
+  }
+}
+
+document.getElementById('book-results').addEventListener('click', async e => {
+  const btn = e.target.closest('.request-btn');
+  if (btn) {
+    if (btn.disabled) return;
+    const b = bookResults[Number(btn.dataset.idx)];
+    btn.disabled = true;
+    btn.querySelector('.btn-label').textContent = '…';
+    try {
+      // A suggestion can be a dramatized adaptation split into parts; request every part.
+      const parts = b.parts && b.parts.length ? b.parts : [b];
+      const edition = b.parts ? (b.produced ? 'produced' : 'any') : bookEdition;
+      let r;
+      for (const part of parts) r = await api('/api/books/request', { method: 'POST', body: JSON.stringify({ ...part, edition }) });
+      if (b.parts && bookSuggestionsCache) bookSuggestionsCache = null; // drop it from For You next time
+      b.availability = r.state === 'available' ? 'available' : 'requested';
+      btn.querySelector('.btn-label').textContent = r.state === 'pending' ? 'Sent for approval' : bookButtonLabel(b.availability);
+      myRequestsLoaded = false;
+    } catch (err) {
+      btn.disabled = false;
+      btn.querySelector('.btn-label').textContent = 'Failed — retry';
+    }
+    return;
+  }
+  const item = e.target.closest('.result-item');
+  if (!item) return;
+  const b = bookResults[Number(item.dataset.idx)];
+  if (!b) return;
+  const meta = [b.year, b.hours ? `${b.hours} h` : '', b.narrator ? `Narrated by ${b.narrator.split(',').slice(0, 3).join(',')}` : ''].filter(Boolean).join(' · ');
+  openInfo({ poster: b.cover, title: b.title, badge: 'AUDIOBOOK', meta: `${b.author ? b.author + ' · ' : ''}${meta}`, overview: b.overview || b.description, series: b.series, square: true });
+});
 // Header icon button on desktop, floating button on mobile (see CSS) — both
 // trigger the same modal.
 document.getElementById('search-btn').addEventListener('click', openRequestModal);
@@ -1074,8 +1244,13 @@ modalTabs[3].btn.addEventListener('click', () => {
 async function loadMyRequests() {
   const listEl = document.getElementById('my-requests-list');
   try {
-    const results = await api('/api/overseerr/requests/mine');
-    if (!results.length) {
+    // Book requests (if set up) load alongside; a ReadMeABook problem never
+    // hides the movie/TV list.
+    const [results, books] = await Promise.all([
+      api('/api/overseerr/requests/mine'),
+      booksEnabled ? api('/api/books/requests/mine').catch(() => []) : []
+    ]);
+    if (!results.length && !books.length) {
       listEl.innerHTML = '<p class="empty-state">No requests yet.</p>';
       return;
     }
@@ -1101,10 +1276,37 @@ async function loadMyRequests() {
         </div>
       </div>
     `;
-    }).join('');
+    }).join('') + renderMyBookRequests(books, results.length > 0);
   } catch (e) {
     listEl.innerHTML = '<p class="empty-state">Could not load requests.</p>';
   }
+}
+
+const bookStateText = {
+  pending: () => 'Waiting for approval',
+  searching: () => 'Searching',
+  downloading: () => 'Downloading',
+  available: () => 'Available in Audiobookshelf',
+  stuck: b => b.needsPick
+    ? 'Stuck — releases found, but none passed the quality check (needs a manual pick)'
+    : `Stuck — no releases found yet${b.searchAttempts ? ` (${b.searchAttempts} searches)` : ''}`,
+  declined: () => 'Declined',
+  failed: () => 'Could not be requested'
+};
+const bookStateClass = { pending: 'pending', searching: 'approved', downloading: 'downloading', available: 'available', stuck: 'stuck', declined: 'declined', failed: 'declined' };
+function renderMyBookRequests(books, withLabel) {
+  if (!books.length) return '';
+  return `${withLabel ? '<div class="subsection-label my-requests-books-label">Books</div>' : ''}${books.map(b => `
+    <div class="my-request-row">
+      <img class="result-poster book" src="${b.cover || ''}" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div class="result-info">
+        <div class="result-title">${escapeHtml(b.title)}</div>
+        <div class="my-request-status ${bookStateClass[b.state] || ''}">
+          <span class="status-dot"></span>${escapeHtml((bookStateText[b.state] || (() => b.state))(b))}${b.edition && b.edition !== 'produced' ? ` · ${b.edition === 'narrated' ? 'Standard' : 'Either edition'}` : ''}
+        </div>
+      </div>
+    </div>
+  `).join('')}`;
 }
 
 // Shared by the discover feed and actual search results — same item shape
@@ -1177,6 +1379,11 @@ let searchTimer;
 document.getElementById('search-input').addEventListener('input', e => {
   clearTimeout(searchTimer);
   const q = e.target.value.trim();
+  if (requestKind === 'books') {
+    if (q.length < 2) { setRequestKind('books'); return; }
+    searchTimer = setTimeout(() => runBookSearch(q), 400);
+    return;
+  }
   if (!q) { loadDiscover(); return; }
   document.getElementById('discover-label').classList.add('hidden');
   searchTimer = setTimeout(async () => {
@@ -1318,10 +1525,18 @@ const infoModal = document.getElementById('info-modal');
 let infoReportRatingKey = null;
 let infoRequestItem = null; // the search/discover result the info modal is currently showing, if any
 
-function openInfo({ poster, title, badge, meta, overview, stream, ratingKey, request, tabId }) {
+function openInfo({ poster, title, badge, meta, overview, stream, ratingKey, request, tabId, series, listenUrl, square }) {
   const posterEl = document.getElementById('info-poster');
   posterEl.style.visibility = ''; // undo a previous onerror hide before loading the next poster
   posterEl.src = poster || '';
+  posterEl.classList.toggle('book', !!square);
+  // Audiobook-only extras (Recently Added → Books): series line + Listen link.
+  const seriesEl = document.getElementById('info-series');
+  seriesEl.textContent = series || '';
+  seriesEl.classList.toggle('hidden', !series);
+  const listenEl = document.getElementById('info-listen-link');
+  listenEl.classList.toggle('hidden', !listenUrl);
+  listenEl.href = listenUrl || '#';
   document.getElementById('info-title').textContent = title || '';
   document.getElementById('info-badge').textContent = badge || '';
   document.getElementById('info-meta').textContent = meta || '';
@@ -1895,6 +2110,17 @@ document.getElementById('recently-added-body').addEventListener('click', e => {
   const card = e.target.closest('.poster-card');
   if (!card) return;
   const cat = card.dataset.cat;
+  if (cat === 'books') {
+    const b = store.recentBooks[Number(card.dataset.idx)];
+    if (!b) return;
+    const meta = [b.year, b.hours ? `${b.hours} h` : '', b.narrator ? `Narrated by ${b.narrator}` : ''].filter(Boolean).join(' · ');
+    openInfo({
+      poster: b.cover, title: b.title, badge: 'CH.04 · AUDIOBOOK',
+      meta: `${b.author ? b.author + ' · ' : ''}${meta}`,
+      overview: b.overview, series: b.series, listenUrl: b.link, square: true
+    });
+    return;
+  }
   const list = store.recentlyAdded.all || store.recentlyAdded[cat] || [];
   const i = list[Number(card.dataset.idx)];
   if (!i) return;

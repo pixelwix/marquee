@@ -182,9 +182,20 @@
     </div>
 
     <div id="search-tab">
+      <div id="kind-toggle" class="kind-toggle hidden" role="group" aria-label="What to request">
+        <button id="kind-video-btn" type="button" aria-pressed="true">Movies &amp; TV</button>
+        <button id="kind-books-btn" type="button" aria-pressed="false">Books</button>
+      </div>
       <input id="search-input" type="text" placeholder="Search a movie or show…" autocomplete="off">
       <div id="discover-label" class="discover-label">Trending &amp; new releases — not yet in your library</div>
       <div id="search-results" class="search-results"></div>
+      <div id="edition-toggle" class="edition-toggle hidden" role="group" aria-label="Which edition">
+        <span class="edition-label">Edition</span>
+        <button type="button" data-edition="produced" aria-pressed="true">Full cast</button>
+        <button type="button" data-edition="narrated" aria-pressed="false">Standard</button>
+        <button type="button" data-edition="any" aria-pressed="false">Either</button>
+      </div>
+      <div id="book-results" class="search-results hidden"></div>
     </div>
 
     <div id="myrequests-tab" class="hidden">
@@ -271,6 +282,8 @@
         <span id="info-badge" class="chan"></span>
         <h3 id="info-title"></h3>
         <p id="info-meta" class="info-meta"></p>
+        <p id="info-series" class="book-series hidden"></p>
+        <a id="info-listen-link" class="btn-primary info-listen hidden" href="#" target="_blank" rel="noopener">Listen in Audiobookshelf</a>
         <p id="info-overview" class="info-overview"></p>
         <dl id="info-stream" class="info-stream hidden"></dl>
 

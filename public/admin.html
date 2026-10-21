@@ -85,6 +85,10 @@
       <div id="wanted-body"><p class="empty-state">Loading…</p></div>
       <h4 class="admin-subhead">Pending requests</h4>
       <div id="admin-requests-body"><p class="empty-state">Loading…</p></div>
+      <div id="admin-book-requests-wrap" class="hidden">
+        <h4 class="admin-subhead">Pending book requests</h4>
+        <div id="admin-book-requests-body"><p class="empty-state">Loading…</p></div>
+      </div>
       <h4 class="admin-subhead">Open issues</h4>
       <div id="admin-issues-body"><p class="empty-state">Loading…</p></div>
     </section>
@@ -400,7 +404,7 @@
         <button id="refresh-scripts-btn" class="pill-btn"><span class="state-dot"></span>Refresh</button>
       </div>
       <p class="settings-field-block-desc">Every scheduled job in <code>/mnt/docker/scripts</code>: when it last ran, when it runs next, and what it does. Edit changes the schedule or description; Run now starts it immediately, the same way cron would. Schedule changes are backed up first and every action is recorded in the Audit Log.</p>
-      <div id="scripts-grid" class="service-grid"><p class="empty-state">Loading…</p></div>
+      <div id="scripts-grid" class="service-grid scripts-grid"><p class="empty-state">Loading…</p></div>
     </div>
 
     <div id="settings-audit-tab" class="settings-body hidden">

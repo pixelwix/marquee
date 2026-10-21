@@ -39,6 +39,8 @@
   fetchCollectionGaps();
   loadPendingRequests();
   setInterval(loadPendingRequests, 30000);
+  loadPendingBookRequests();
+  setInterval(loadPendingBookRequests, 30000);
   loadAdminIssues();
   setInterval(loadAdminIssues, 30000);
   loadDiskSpace();
@@ -291,6 +293,49 @@ document.getElementById('admin-requests-body').addEventListener('click', async e
   } catch (e) {
     row.querySelectorAll('button').forEach(b => b.disabled = false);
     btn.querySelector('.btn-label').textContent = action === 'approve' ? 'Approve' : 'Decline';
+  }
+});
+
+// ---------- Pending book requests (ReadMeABook) ----------
+// Family book requests wait in Marquee until approved here; approving sends
+// them to ReadMeABook. The whole section stays hidden when book requests
+// aren't set up (503) or nothing is waiting.
+async function loadPendingBookRequests() {
+  const wrap = document.getElementById('admin-book-requests-wrap');
+  const body = document.getElementById('admin-book-requests-body');
+  try {
+    const rows = await api('/api/books/requests/pending');
+    wrap.classList.toggle('hidden', !rows.length);
+    if (!rows.length) return;
+    reconcileList(body, rows, r => r.id, createPendingRequestRow, (row, r) => {
+      row.dataset.id = r.id;
+      const img = row.querySelector('.result-poster');
+      img.classList.add('book');
+      if (img.getAttribute('src') !== (r.cover || '')) img.src = r.cover || '';
+      row.querySelector('.result-title').textContent = `${r.title}${r.author ? ' · ' + r.author : ''}`;
+      row.querySelector('.requester-text').textContent = `${r.requestedBy} · ${timeAgo(r.requestedAt)}`;
+    });
+  } catch (e) {
+    wrap.classList.add('hidden');
+  }
+}
+
+document.getElementById('admin-book-requests-body').addEventListener('click', async e => {
+  const btn = e.target.closest('.approve-btn, .decline-btn');
+  if (!btn) return;
+  const row = btn.closest('.pending-row');
+  const action = btn.classList.contains('approve-btn') ? 'approve' : 'decline';
+  row.querySelectorAll('button').forEach(b => b.disabled = true);
+  btn.querySelector('.btn-label').textContent = '…';
+  try {
+    await api(`/api/books/requests/${row.dataset.id}/${action}`, { method: 'POST' });
+    row.remove();
+    if (!document.getElementById('admin-book-requests-body').children.length) {
+      document.getElementById('admin-book-requests-wrap').classList.add('hidden');
+    }
+  } catch (e) {
+    row.querySelectorAll('button').forEach(b => b.disabled = false);
+    btn.querySelector('.btn-label').textContent = action === 'approve' ? 'Retry' : 'Decline';
   }
 });
 
@@ -2595,6 +2640,41 @@ async function loadScripts() {
   }
 }
 
+function movieProgressHtml(p) {
+  if (!p) return '';
+  if (!p.available) return '<p class="script-muted">Movie progress temporarily unavailable.</p>';
+  const number = v => v == null ? '—' : Number(v).toLocaleString();
+  const percent = p.enrolled > 0 ? Math.min(100, Math.max(0, 100 * p.completed / p.enrolled)) : 0;
+  const updated = p.updated ? new Date(p.updated).toLocaleString(undefined, { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' Central' : 'unknown';
+  return `<section class="movie-countdown" aria-label="Movie replacement progress">
+    <div class="movie-countdown-total"><strong>${number(p.remaining)}</strong> movies left</div>
+    <progress max="100" value="${percent}" aria-label="Library replacements completed">${percent.toFixed(1)}%</progress>
+    <div>${number(p.completed)} of ${number(p.enrolled)} completed · ${number(p.blocked)} blocked</div>
+    <div><strong>Today: ${number(p.successfulToday)} / ${number(p.successTarget)}</strong> verified upgrades${p.statusStale ? ' (last report)' : ''}</div>
+    <div>File-size savings: ${number(p.savedActiveGB)} GB</div>
+    <small>Retained originals and seeding copies may still occupy disk space.</small>
+    <small class="${p.stale ? 'settings-status error' : ''}">${p.stale ? 'Stale report · ' : ''}Updated ${escapeHtml(updated)}</small>
+  </section>`;
+}
+
+function realityProgressHtml(p) {
+  if (!p) return '';
+  if (!p.available) return '<p class="script-muted">Reality TV progress is loading. Refresh shortly.</p>';
+  const n = v => Number(v).toLocaleString();
+  const percent = p.enrolled ? Math.min(100, Math.max(0, 100 * p.completed / p.enrolled)) : 0;
+  const updated = new Date(p.updated).toLocaleString(undefined, { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return `<section class="movie-countdown" aria-label="Reality TV replacement progress">
+    <div class="movie-countdown-total"><strong>${n(p.remaining)}</strong> episodes left</div>
+    <progress max="100" value="${percent}" aria-label="Reality TV replacements completed">${percent.toFixed(1)}%</progress>
+    <div>${n(p.completed)} of ${n(p.enrolled)} replaced with smaller HEVC files</div>
+    <div><strong>Waves: ${n(p.wavesCompleted)} / ${n(p.wavesTotal)}</strong> · ${p.running ? 'Runner active' : 'Runner stopped'}</div>
+    <div>File-size savings: ${n(p.savedGB)} GB</div>
+    <small>Remaining includes unavailable or unresolved replacements${p.missing ? `; ${n(p.missing)} missing or unreadable` : ''}. Completed waves may still have episodes left.</small>
+    <small>Retained originals and download copies may still occupy disk space.</small>
+    <small class="${p.stale ? 'settings-status error' : ''}">${p.stale ? 'Stale report · ' : ''}Updated ${escapeHtml(updated)} Central · checked every 5 minutes while viewed</small>
+  </section>`;
+}
+
 function renderScripts() {
   const grid = document.getElementById('scripts-grid');
   if (!scriptJobs.length) { grid.innerHTML = '<p class="empty-state">No scheduled scripts found.</p>'; return; }
@@ -2602,13 +2682,15 @@ function renderScripts() {
     const last = j.lastRun
       ? `${timeAgo(j.lastRun)}${j.lastRunSource === 'log' ? ' <span class="script-muted" title="From the log file\'s last write; cron\'s own record doesn\'t go back that far">(log)</span>' : ''}`
       : 'never';
+    const progress = movieProgressHtml(j.movieProgress) + realityProgressHtml(j.realityProgress);
     return `
-      <div class="service-card script-card">
+      <div class="service-card script-card${progress ? ' script-card-wide' : ''}">
+        <div class="script-card-main">
         <div class="service-card-head">
           <span class="service-card-name" title="${escapeHtml(j.script)}">${escapeHtml(j.name)}</span>
           ${scriptBadge(j)}
         </div>
-        <div class="service-card-meta">${escapeHtml(j.scheduleText || j.schedule)} &middot; <span class="script-mono">${escapeHtml(j.schedule)}</span></div>
+        <div class="script-sched"><span>${escapeHtml(j.scheduleText || j.schedule)}</span><code class="script-mono">${escapeHtml(j.schedule)}</code></div>
         <p class="script-desc" title="${escapeHtml(j.description || '')}">${escapeHtml(j.description || 'No description yet.')}</p>
         <div class="script-times">
           <span>Last: ${last}</span>
@@ -2618,6 +2700,8 @@ function renderScripts() {
           <button class="pill-btn" data-script-run="${j.id}" ${j.running ? 'disabled' : ''}>${j.running ? 'Running…' : 'Run now &#9654;'}</button>
           <button class="pill-btn" data-script-edit="${j.id}">Edit &#9998;</button>
         </div>
+        </div>
+        ${progress}
       </div>`;
   }).join('');
 }
@@ -2632,6 +2716,10 @@ function pollScriptsFor(ms) {
 }
 
 document.getElementById('refresh-scripts-btn').addEventListener('click', loadScripts);
+// Keep the countdown current while this settings tab is visible.
+setInterval(() => {
+  if (!document.hidden && !document.getElementById('settings-scripts-tab').classList.contains('hidden')) loadScripts();
+}, 60000);
 
 document.getElementById('scripts-grid').addEventListener('click', async e => {
   const runBtn = e.target.closest('[data-script-run]');
