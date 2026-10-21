@@ -30,7 +30,7 @@ State in `data/` (SQLite and JSON, gitignored). Config only in `.env` (template 
 - **Commit when done:** create a git commit and push when the work/version is complete.
   `deploy.sh` keeps a per-version image, so rollback does not depend on git.
 - **Tests:** `npm test` (node --test, `test/`). Add a test with every change to parsing,
-  matching or state logic. Baseline 2026-10-20: 356 tests, 356 pass, 0 skipped, 0 fail.
+  matching or state logic. Baseline 2026-10-21: 361 tests, 361 pass, 0 skipped, 0 fail.
 - Never read or print `.env`. Secrets are written to it without being displayed.
 - Changes must not affect Plex playback.
 

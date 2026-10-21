@@ -3,6 +3,23 @@
 Newest first. One entry per working session: goal, changes, validation, handover.
 Per-version detail lives in `TODO.md`; this file is the handover between sessions.
 
+### Session 2026-10-21 — v1.78.0 Audiobooks service settings
+
+- **Goal**:
+  - Add unified Audiobooks service configuration and health check card to Admin Settings > Services.
+- **Changes Completed**:
+  - `lib/serviceRegistry.js`: registered `audiobooks` service with fields for Audiobookshelf (`ABS_URL`, `ABS_API_KEY`, `ABS_LIBRARY_ID`, `ABS_PUBLIC_URL`), ReadMeABook (`RMAB_URL`, `RMAB_API_TOKEN`), and AudioBook Bay bridge (`ABB_BRIDGE_URL`, `ABB_BRIDGE_TOKEN`).
+  - `lib/serviceHealth.js`: implemented `checkAudiobooks` health check to test latency and connectivity of configured audiobook services in parallel.
+  - `.env.example`: documented all audiobook environment variables.
+  - `test/serviceRegistry.test.js`: added 5 tests verifying service registration, field masking for secrets, unconfigured handling, and validation errors.
+  - Bumped version to `1.78.0` in `package.json`, `package-lock.json`, and `TODO.md`.
+- **Validation**:
+  - `test/serviceRegistry.test.js`: 5 passed.
+- **Next Steps / Handover**:
+  - Ready for deployment via `./deploy.sh` when desired.
+
+---
+
 ### Session 2026-10-20 (late night) — v1.77.0 Show grabbed audiobook edition
 
 - **Goal**:

@@ -4,7 +4,7 @@ Every shipped feature or fix gets its own version bump now (`package.json`
 + `package-lock.json`) and its own section here — no more letting the
 version drift unversioned between batches. One bump per shipped unit of
 work: a new capability bumps minor, a fix bumps patch. Each version gets
-committed and pushed when done. **Current version: v1.77.0.**
+committed and pushed when done. **Current version: v1.78.0.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -69,6 +69,7 @@ gets versioned as it ships, not reconstructed later.
 - **v1.76.2** — fix: For You no longer repeats a series suggestion under authors or treats UK/US titles as new books
 - **v1.76.3** — fix: settings backup files no longer copied to the server or built into the app image
 - **v1.77.0** — Audiobooks: show which edition was grabbed in My Requests, Recently Added, and admin pending requests
+- **v1.78.0** — Settings > Services: unified Audiobooks service card (Audiobookshelf, ReadMeABook, ABB bridge)
 
 ---
 
@@ -1028,5 +1029,12 @@ gets versioned as it ships, not reconstructed later.
 - [x] Push notification when a book is ready includes the edition when it's not already in the book title.
 - [x] Recently Added book details modal shows "Full cast" alongside narrator and duration for produced audiobooks.
 - [x] Admin pending requests card shows the requested edition when a family member requested Standard or Either edition.
+
+## v1.78.0 - Audiobooks service settings
+
+- [x] Settings > Services: added unified Audiobooks service card covering Audiobookshelf, ReadMeABook, and AudioBook Bay bridge.
+- [x] Health checks report connectivity for configured audiobook services with latency measurement.
+- [x] Service configuration popup allows managing ABS, RMAB, and ABB bridge URLs and credentials directly from the admin UI.
+- [x] Documented audiobook environment variables in .env.example.
 
 ## Ideas
