@@ -4,7 +4,7 @@ Every shipped feature or fix gets its own version bump now (`package.json`
 + `package-lock.json`) and its own section here — no more letting the
 version drift unversioned between batches. One bump per shipped unit of
 work: a new capability bumps minor, a fix bumps patch. Each version gets
-committed and pushed when done. **Current version: v1.79.0.**
+committed and pushed when done. **Current version: v1.80.0.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -757,7 +757,13 @@ gets versioned as it ships, not reconstructed later.
 
 ## v1.57.3 — Code review hardening for the v1.57.1/v1.57.2 recap fixes
 
-- [x] **Fix**: a careless global `sed` while hand-editing a "Current version" mention had also corrupted the real `## v1.57.0` changelog heading further down into a mangled duplicate `## v1.57.2.—`, and the three newest version entries had landed after the trailing `## Ideas` section instead of before it. Restored the correct heading and file ordering
+- [x] **Fix**: a careless global `sed` while hand-editing a "Current version" mention had also corrupted the real `## v1.57.0` changelog heading further down into a mangled duplicate `## v1.57.2.—`, and the three newest version entries had landed after the trailing `## v1.80.0 - Current space-saving campaign trackers
+
+- [x] Scheduled Scripts shows separate progress for the scoped oversized-movie batch, Reality HEVC, and four-show Library HEVC.
+- [x] Verified completions, queued imports, pending searches, retries, review holds, exclusions, savings and stale reports are distinguished.
+- [x] The movie card follows the selected batch instead of the historical full-library backlog.
+
+## Ideas` section instead of before it. Restored the correct heading and file ordering
 - [x] The background recap-send job now has a startup-time reconciliation sweep (`recapSendLog.reconcileAbandoned()`, called once in `server.js` before any request can claim anything) — if a redeploy interrupts a batch mid-send, every recipient still marked `sending` from a dead process is immediately flipped to `failed` with a clear reason, instead of sitting silently until some unrelated later attempt happens to reclaim it (which, for a given month, might never happen)
 - [x] A failed Uptime Kuma lookup mid-batch now logs plainly which batch and how many recipients will render without the Service Status section, instead of silently falling back to `null` with zero record anywhere that content was dropped
 - [x] The background job's final summary log now counts a recipient who failed during data-fetch/render the same as one who failed at the actual send step — previously only the latter were counted as "failed", understating real failures in the operator-facing log line (the per-attempt DB record was always correct either way)
@@ -1049,5 +1055,11 @@ gets versioned as it ships, not reconstructed later.
 
 - [x] New `pr` branch deploys a separate test copy (LAN port, own data and settings) for checking changes before they go live.
 - [x] `MARQUEE_SAFE_MODE` keeps the test copy read-only: no changes to Sonarr/Radarr/Overseerr/qBittorrent/SABnzbd, no email or push, no fix/recap/backup jobs.
+
+## v1.80.0 - Current space-saving campaign trackers
+
+- [x] Scheduled Scripts shows separate progress for the scoped oversized-movie batch, Reality HEVC, and four-show Library HEVC.
+- [x] Verified completions, queued imports, pending searches, retries, review holds, exclusions, savings and stale reports are distinguished.
+- [x] The movie card follows the selected batch instead of the historical full-library backlog.
 
 ## Ideas

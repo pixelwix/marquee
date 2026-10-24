@@ -2676,6 +2676,27 @@ function realityProgressHtml(p) {
   </section>`;
 }
 
+function campaignProgressHtml(p) {
+  if (!p) return '';
+  const title = escapeHtml(p.title || 'Campaign');
+  if (!p.available) return `<section class="movie-countdown"><strong>${title}</strong><p class="script-muted">Progress temporarily unavailable.</p></section>`;
+  const n = v => v == null ? '—' : Number(v).toLocaleString();
+  const percent = p.enrolled > 0 ? Math.min(100, Math.max(0, 100 * p.completed / p.enrolled)) : 0;
+  const updated = p.updated ? new Date(p.updated).toLocaleString(undefined, { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' Central' : 'unknown';
+  return `<section class="movie-countdown" aria-label="${title} progress">
+    <strong>${title}</strong>
+    <div class="movie-countdown-total"><strong>${n(p.remaining)}</strong> ${escapeHtml(p.unit)} left</div>
+    <progress max="100" value="${percent}" aria-label="${title} completed">${percent.toFixed(1)}%</progress>
+    <div>${n(p.completed)} of ${n(p.enrolled)} verified complete</div>
+    <div>${n(p.queued)} queued / awaiting import</div>
+    <div>${n(p.pending)} pending search · ${n(p.waiting)} waiting for retry</div>
+    <div>${n(p.held)} held for review${p.excluded ? ` · ${n(p.excluded)} excluded` : ''}</div>
+    <div>Verified file-size savings: ${n(p.savedGB)} GB</div>
+    <small>Waiting and held items remain unfinished. Retained originals and seeding copies may still occupy disk space.</small>
+    <small class="${p.stale ? 'settings-status error' : ''}">${p.stale ? 'Stale report · ' : ''}Updated ${escapeHtml(updated)} · refreshes every minute while viewed</small>
+  </section>`;
+}
+
 function renderScripts() {
   const grid = document.getElementById('scripts-grid');
   if (!scriptJobs.length) { grid.innerHTML = '<p class="empty-state">No scheduled scripts found.</p>'; return; }
@@ -2683,7 +2704,7 @@ function renderScripts() {
     const last = j.lastRun
       ? `${timeAgo(j.lastRun)}${j.lastRunSource === 'log' ? ' <span class="script-muted" title="From the log file\'s last write; cron\'s own record doesn\'t go back that far">(log)</span>' : ''}`
       : 'never';
-    const progress = movieProgressHtml(j.movieProgress) + realityProgressHtml(j.realityProgress);
+    const progress = j.campaignProgress ? campaignProgressHtml(j.campaignProgress) : movieProgressHtml(j.movieProgress) + realityProgressHtml(j.realityProgress);
     return `
       <div class="service-card script-card${progress ? ' script-card-wide' : ''}">
         <div class="script-card-main">
