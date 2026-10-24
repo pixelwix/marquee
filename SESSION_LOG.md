@@ -16,8 +16,10 @@ Per-version detail lives in `TODO.md`; this file is the handover between session
 - Validation: 374 tests pass, including snapshot-bound completion, field allowlist,
   missing/stale reports, count partitions and escaped UI rendering. Browser access
   to the test-copy origin was declined; no visual inspection was performed.
-- Release: package and footer What's new updated to 1.80.0. Test-copy/container
-  verification and main deployment are recorded in this session's final handover.
+- Release: package and footer What's new updated to 1.80.0. Test container verified
+  at 1.80.0 with safe mode enabled; its scripts-agent client returned all three
+  live aggregate summaries (78 movies, 453 Library episodes, 188 Reality episodes).
+  Production deploy follows the tested pr-to-main fast-forward workflow.
 
 ---
 
