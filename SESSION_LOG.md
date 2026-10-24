@@ -3,6 +3,24 @@
 Newest first. One entry per working session: goal, changes, validation, handover.
 Per-version detail lives in `TODO.md`; this file is the handover between sessions.
 
+### Session 2026-10-24 — v1.80.0 Current space-saving trackers
+
+- Added owner-only Scheduled Scripts progress cards for the scoped oversized-movie
+  batch, Reality HEVC, and four-show Library HEVC. Completion, queued imports,
+  pending searches, retry waits, review holds, exclusions and verified savings are
+  separate; stale/missing reports are explicit. Historical movie totals are replaced
+  while a search scope is active.
+- Companion collector source lives in tools/scripts-agent/campaign-progress.mjs;
+  installed alongside the live scripts agent with agent/catalog backups. Only
+  aggregates leave the host. No campaign/media/schedule changes.
+- Validation: 374 tests pass, including snapshot-bound completion, field allowlist,
+  missing/stale reports, count partitions and escaped UI rendering. Browser access
+  to the test-copy origin was declined; no visual inspection was performed.
+- Release: package and footer What's new updated to 1.80.0. Test-copy/container
+  verification and main deployment are recorded in this session's final handover.
+
+---
+
 ### Session 2026-10-21 (later) — v1.79.0 PR test copy and safe mode
 
 - **Goal**:
