@@ -4,7 +4,7 @@ Every shipped feature or fix gets its own version bump now (`package.json`
 + `package-lock.json`) and its own section here — no more letting the
 version drift unversioned between batches. One bump per shipped unit of
 work: a new capability bumps minor, a fix bumps patch. Each version gets
-committed and pushed when done. **Current version: v1.80.0.**
+committed and pushed when done. **Current version: v1.81.0.**
 
 Condensed to a real changelog as of `v1.42.0` — it had grown to 2650 lines of
 prose-with-rationale per bullet. Every entry from here forward stays terse:
@@ -1061,5 +1061,9 @@ gets versioned as it ships, not reconstructed later.
 - [x] Scheduled Scripts shows separate progress for the scoped oversized-movie batch, Reality HEVC, and four-show Library HEVC.
 - [x] Verified completions, queued imports, pending searches, retries, review holds, exclusions, savings and stale reports are distinguished.
 - [x] The movie card follows the selected batch instead of the historical full-library backlog.
+
+## v1.81.0 - Hidden torrent categories
+
+- [x] The download queue and seeding stats leave out qBittorrent categories listed in `QBITTORRENT_HIDDEN_CATEGORIES` (default `race`, for ratio-racing torrents).
 
 ## Ideas
