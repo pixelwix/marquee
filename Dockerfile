@@ -3,7 +3,7 @@ FROM node:20-alpine
 # fontconfig + a real font are needed at runtime (not just build time) for
 # sharp's SVG rendering (the Kometa announcement poster, lib/notice.js) —
 # without them librsvg has no glyphs and text renders as empty boxes.
-RUN apk add --no-cache tzdata fontconfig ttf-dejavu
+RUN apk add --no-cache tzdata fontconfig ttf-dejavu su-exec
 
 WORKDIR /app
 
@@ -29,4 +29,6 @@ EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD wget -qO- http://localhost:4000/api/auth/me >/dev/null 2>&1 || exit 0
 
+# Runs as root only to chown the writable mounts, then drops to `node` (docker-entrypoint.sh).
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["node", "server.js"]
