@@ -57,22 +57,13 @@ State in `data/` (SQLite and JSON, gitignored). Config only in `.env` (template 
   which Dockhand then deploys over it, so push the fix promptly.
 - Verify inside the running container (`docker exec skyn3t ...`), not just on the host.
 
-## PR test copy (since 2026-10-21)
+## No PR test copy (removed 2026-11-20)
 
-- Branch **`pr`** is the test branch: push changes there, check them on the test copy, then
-  merge `pr` into `main` to go live. Dockhand Git stack `marquee-pr` (compose
-  `docker-compose.pr.yml`) redeploys it within ~5 minutes; container `marquee-pr`, LAN port
-  4101, its own `data/` (copied from production) and `.env` on the host.
-- The test copy runs with `MARQUEE_SAFE_MODE=1` (`lib/safeMode.js`): it reads every real
-  service but blocks outgoing changes (non-GET requests except Plex sign-in, the qBittorrent
-  login and CLIProxyAPI chat; Tautulli `cmd`s other than get_*/status; SABnzbd actions), web
-  push, email (Tautulli notify) and the acting jobs (issue fix sweep, recap reminder,
-  database backup). Any new code that changes something outside Marquee must go through
-  axios or fetch so the guard sees it, or check `safeMode.enabled()` itself; a new background
-  job that acts must be added to `SKIPPED_JOBS`. Never point the test copy at production's
-  Traefik route, Kometa folder or data.
-- `pr` may be reset to `main` with `git push --force-with-lease origin main:pr` (the only
-  branch where force-pushing is allowed).
+- The `pr` branch, Dockhand stack `marquee-pr` and the `marquee-pr` container were retired at the
+  owner's word; work goes straight to `main`. `lib/safeMode.js` (`MARQUEE_SAFE_MODE=1`) and its tests
+  stay in the code for any future test copy: new code that changes something outside Marquee must go
+  through axios or fetch, or check `safeMode.enabled()`, and a new acting background job belongs in
+  `SKIPPED_JOBS`.
 
 ## Session routine
 

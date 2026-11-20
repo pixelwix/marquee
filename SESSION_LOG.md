@@ -3,6 +3,13 @@
 Newest first. One entry per working session: goal, changes, validation, handover.
 Per-version detail lives in `TODO.md`; this file is the handover between sessions.
 
+### Session 2026-11-20 — Non-root container; PR test copy retired
+
+- `22567d6`: container now drops to the unprivileged `node` user (entrypoint chowns data, .env, kometa-config first, then su-exec). Live on `skyn3t`: `node server.js` runs as node, data/.env owned by 1000, healthy, Plex notifications connected. Rollback: revert the commit and push (files stay owned by 1000; root can still read them).
+- Owner: retire the PR test copy. Deleted branch `pr` (origin and local; it held nothing `main` lacked), removed the `marquee-pr` container, deleted `docker-compose.pr.yml`, replaced the AGENTS.md section. LEFT for the owner: remove the Dockhand stack `marquee-pr`, and decide on the host folders `/mnt/docker/marquee-pr` and `/mnt/docker/marquee-pr-backups` (copies of production data, not deleted).
+
+---
+
 ### Session 2026-10-24 — v1.80.0 Current space-saving trackers
 
 - Added owner-only Scheduled Scripts progress cards for the scoped oversized-movie
