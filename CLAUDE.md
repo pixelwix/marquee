@@ -3,7 +3,7 @@
 Instructions for AI coding agents (Claude Code, Codex, Gemini) working in this repo.
 `CLAUDE.md` and `GEMINI.md` are byte-identical copies of this file; edit `AGENTS.md`, then run
 `python3 ~/Projects/agent-toolkit/skills/session-closer/scripts/sync_context.py --sync AGENTS.md`.
-Human-facing setup lives in `README.md`; shipped work, version by version, in `TODO.md`.
+Human-facing setup lives in `README.md`; shipped work, version by version, in `TODO.md`. **`TODO.md` is about 27,000 tokens and feeds the app's "What's new", so never read or restructure it whole.** List versions with `grep -n '^## v' TODO.md`, read the "Versions at a glance" table, and read only the section you need (`sed -n 'START,ENDp' TODO.md`).
 
 ## What this is
 
